@@ -62,6 +62,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .fish.bite{background:var(--macaw);animation:pulse .35s infinite alternate;font-size:26px}
 @keyframes pulse{to{transform:scale(1.1)}}
 .ctx{background:var(--gold);padding:12px 20px;font-size:22px}
+.baitbtn{background:var(--paper);min-height:60px;padding:8px 18px;font-size:20px}
 .hint-joy{position:fixed;left:calc(max(16px,env(safe-area-inset-left,0px)) + 10px);bottom:calc(env(safe-area-inset-bottom,0px) + 26px);
   width:120px;height:120px;border-radius:50%;border:3px dashed rgba(255,255,255,.7);display:grid;place-items:center;color:#fff;font-weight:800;
   text-align:center;font-size:14px;text-shadow:0 1px 2px rgba(0,0,0,.6);pointer-events:none}
@@ -134,6 +135,10 @@ button.bk:active{border-color:var(--ink)}
 .rosa .face{width:54px;height:54px;flex:none;border-radius:50%;background:#8d5524;border:3px solid var(--ink);position:relative}
 .rosa .face::before,.rosa .face::after{content:"";position:absolute;top:20px;width:7px;height:7px;border-radius:50%;background:#1a1a1a}
 .rosa .face::before{left:14px}.rosa .face::after{right:14px}
+.rosa .face.tiago{background:#c98b5e}
+.rosa .face .beard{position:absolute;left:7px;right:7px;bottom:-5px;height:22px;background:#f3f3f3;border:3px solid var(--ink);border-top:none;border-radius:0 0 22px 22px}
+.tabs.four button{font-size:16px;padding:6px 2px}
+.havecount{font-weight:800;color:var(--ink)}
 .empty{color:var(--muted);text-align:center;padding:14px;font-weight:700}
 .sum{font-variant-numeric:tabular-nums}
 
@@ -161,6 +166,7 @@ button.bk:active{border-color:var(--ink)}
   <div class="hint-joy" id="hintJoy">Hier wischen<br>zum Laufen</div>
   <div class="actions">
     <button class="act ctx" id="btnCtx" hidden></button>
+    <button class="act baitbtn" id="btnBait" hidden aria-label="Köder wechseln"></button>
     <button class="act fish" id="btnFish"><span class="ico">🎣</span><span id="fishLbl">Angeln</span></button>
   </div>
   <div id="joyBase" hidden><div id="joyKnob"></div></div>
@@ -174,6 +180,7 @@ button.bk:active{border-color:var(--ink)}
   <div class="row"><span class="lbl">T-Shirt</span><div class="sw" id="swShirt"></div></div>
   <div class="row"><span class="lbl">Hose</span><div class="sw" id="swPants"></div></div>
   <div class="row"><span class="lbl">Hut</span><div class="opts" id="opHat"></div></div>
+  <div class="row" id="rowVest" hidden><span class="lbl">Schwimmweste</span><div class="opts" id="opVest"></div></div>
   <button class="big" id="btnGo">Los geht's!</button>
   <div class="small-note">Laufen: links auf dem Bildschirm wischen · Umschauen: rechts wischen · Am Computer: Pfeiltasten oder WASD, Leertaste zum Angeln</div>
 </div>
@@ -211,13 +218,42 @@ const FOTOS={};
 // Solange ein Fisch noch kein echtes Foto hat, kommt dieses Bild.
 const PLATZHALTER={src:'fotos/platzhalter.jpg',platzhalter:true};
 const FISH_BY={};FISH.forEach(f=>FISH_BY[f.id]=f);
-const SHOP=[
- {id:'rod',name:'Profi-Angel',price:120,ico:'🎣',desc:'Die Fische beißen schneller, und seltene Fische kommen öfter.'},
- {id:'bucket',name:'Großer Eimer',price:80,ico:'🪣',desc:'Jetzt passen 30 statt 15 Fische hinein.'},
- {id:'boat',name:'Boot',price:300,ico:'🛶',desc:'Fahr auf den Fluss! Nur dort leben die Riesenfische.'},
- {id:'motor',name:'Motorboot',price:600,ico:'🚤',desc:'Rosa baut einen Motor an dein Boot. Dann fährst du doppelt so schnell!',needs:'hasBoat'},
- {id:'sonar',name:'Echolot',price:200,ico:'📡',desc:'Ein Bildschirm im Boot zeigt dir, wo die Fische schwimmen. Dort beißen sie schneller!',needs:'hasBoat'}
-];
+// Angeln: je besser, desto schneller beißen die Fische und desto öfter kommen seltene
+const RODS=[
+ {name:'Bambus-Angel',col:'#c9a45a',bite:[2.2,3.8],win:1.5,rare:1},
+ {name:'Profi-Angel',col:'#7a4b2a',bite:[1.3,2.5],win:1.9,rare:2},
+ {name:'Gold-Angel',col:'#f0b429',bite:[0.8,1.6],win:2.3,rare:3}];
+// Köder: manche Fische mögen bestimmte Köder lieber (x = so viel öfter beißen sie)
+const BAITS={
+ wurm:{name:'Wurm',ico:'🪱',like:[],x:1},
+ frucht:{name:'Früchte',ico:'🍒',like:['tambaqui','pacu'],x:4},
+ blinker:{name:'Blinker',ico:'✨',like:['pfauen','dorado','arowana'],x:3}};
+// Opa Tiagos Angelladen
+const TIAGO_TABS=[['angeln','Angeln'],['koeder','Köder'],['boot','Boot'],['kleidung','Kleidung']];
+const needBoat=()=>!state.hasBoat&&'Erst das Boot';
+const TIAGO=[
+ {tab:'angeln',name:'Bambus-Angel',price:0,ico:'🎋',desc:'Deine erste Angel. Mit ihr fängt jeder an.',owned:()=>true},
+ {tab:'angeln',name:'Profi-Angel',price:120,ico:'🎣',desc:'Die Fische beißen schneller, und seltene Fische kommen öfter.',owned:()=>state.rod>=1,
+  buy:()=>{state.rod=1;state.hasRod=true;rebuildPlayer();},msg:'Super! Mit der Profi-Angel beißen die Fische schneller.'},
+ {tab:'angeln',name:'Gold-Angel',price:500,ico:'🏆',desc:'Die beste Angel! Die Fische beißen blitzschnell, und seltene Fische kommen noch öfter.',owned:()=>state.rod>=2,
+  lock:()=>state.rod<1&&'Erst die Profi-Angel',buy:()=>{state.rod=2;rebuildPlayer();},msg:'Wow, eine goldene Angel!'},
+ {tab:'angeln',name:'Großer Eimer',price:80,ico:'🪣',desc:'Jetzt passen 30 statt 15 Fische hinein.',owned:()=>state.hasBucket,
+  buy:()=>{state.hasBucket=true;},msg:'Jetzt passen 30 Fische in deinen Eimer!'},
+ {tab:'koeder',name:'Würmer',price:0,ico:'🪱',desc:'Die mögen fast alle Fische. Davon hast du immer genug.',owned:()=>true},
+ {tab:'koeder',name:'Früchte (10 Stück)',price:15,ico:'🍒',desc:'Tambaqui und Pacu fressen Früchte und Nüsse, die von den Bäumen ins Wasser fallen. Mit Früchten beißen sie viel öfter!',
+  count:()=>state.baits.frucht,buy:()=>{state.baits.frucht+=10;state.bait='frucht';},msg:'10 Früchte! Mit dem Köder-Knopf unten rechts wechselst du den Köder.'},
+ {tab:'koeder',name:'Blinker',price:60,ico:'✨',desc:'Glänzt im Wasser wie ein kleiner Fisch. Räuber wie Pfauenbarsch, Dorado und Arowana schnappen danach. Hält für immer.',
+  owned:()=>state.baits.blinker>0,buy:()=>{state.baits.blinker=1;state.bait='blinker';},msg:'Dein Blinker glänzt! Damit beißen die Räuber öfter.'},
+ {tab:'boot',name:'Boot',price:300,ico:'🛶',desc:'Fahr auf den Fluss! Nur dort leben die Riesenfische.',owned:()=>state.hasBoat,
+  buy:()=>{state.hasBoat=true;},msg:'Dein Boot wartet am Steg!'},
+ {tab:'boot',name:'Motorboot',price:600,ico:'🚤',desc:'Opa Tiago baut einen Motor an dein Boot. Dann fährst du doppelt so schnell!',owned:()=>state.hasMotor,lock:needBoat,
+  buy:()=>{state.hasMotor=true;},msg:'Brumm! Dein Boot hat jetzt einen Motor.'},
+ {tab:'boot',name:'Echolot',price:200,ico:'📡',desc:'Ein Bildschirm im Boot zeigt dir, wo die Fische schwimmen. Dort beißen sie schneller!',owned:()=>state.hasSonar,lock:needBoat,
+  buy:()=>{state.hasSonar=true;},msg:'Das Echolot ist im Boot. Fahr los und such die Fische!'},
+ {tab:'kleidung',name:'Anglerhut',price:40,ico:'👒',desc:'Ein richtiger Anglerhut gegen die Sonne am Fluss.',owned:()=>state.clothes.anglerhut,
+  buy:()=>{state.clothes.anglerhut=true;state.avatar.hat='angler';rebuildPlayer();},msg:'Steht dir gut! In der Avatar-Werkstatt (👕) kannst du die Hüte wechseln.'},
+ {tab:'kleidung',name:'Schwimmweste',price:60,ico:'🦺',desc:'Auf dem Boot gilt: Sicher ist sicher! Echte Angler tragen eine Schwimmweste.',owned:()=>state.clothes.weste,
+  buy:()=>{state.clothes.weste=true;state.avatar.vest=true;rebuildPlayer();},msg:'Sicher unterwegs! In der Avatar-Werkstatt (👕) kannst du sie an- und ausziehen.'}];
 const SKINS=['#f6d2b8','#eab48c','#c98b5e','#9a6440','#6e4429','#4a2c1b'];
 const HAIRS=[['kurz','Kurz'],['lang','Lang'],['locken','Locken'],['keine','Keine']];
 const HAIRCOLS=['#1d1611','#5a3720','#a8652e','#e3b85a','#c2401f','#7a4fb8'];
@@ -227,9 +263,14 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 
 /* =================== Speicherstand =================== */
 const KEY='amazonas-angler-1';
-const state={ludins:0,bucket:[],book:{},hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasSonar:false,sonarFound:false,usedBoat:false,
+const state={ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasSonar:false,sonarFound:false,usedBoat:false,
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s){Object.assign(state,s);state.avatar=Object.assign({},state.avatar,s.avatar||{});}}catch(e){}
+// Ältere Spielstände: Profi-Angel hieß früher hasRod; Köder und Kleidung gab es noch nicht
+if(state.hasRod&&!state.rod)state.rod=1;
+state.baits=Object.assign({frucht:0,blinker:0},state.baits);state.clothes=Object.assign({anglerhut:false,weste:false},state.clothes);
+if(!BAITS[state.bait])state.bait='wurm';
+const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
 function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
 const bucketMax=()=>state.hasBucket?30:15;
 
@@ -392,7 +433,7 @@ for(let i=0;i<4000&&trees[0].length+trees[1].length+trees[2].length<430;i++){
 })();
 
 /* =================== Avatar =================== */
-function buildAvatar(a){
+function buildAvatar(a,rodCol){
   const g=new THREE.Group();
   const skin=mat(a.skin),shirt=mat(a.shirt),pants=mat(a.pants),hairM=mat(a.hairColor),dark=mat('#1a1a1a');
   const legGeo=new THREE.CylinderGeometry(0.13,0.12,0.72,10);legGeo.translate(0,-0.36,0);
@@ -425,10 +466,16 @@ function buildAvatar(a){
     const visor=new THREE.Mesh(new THREE.CylinderGeometry(0.26,0.26,0.03,16,1,false,-Math.PI/2,Math.PI),mat('#c3301d'));visor.position.set(0,HY+0.1,0.22);g.add(visor);}
   if(a.hat==='blumen'){const fc=['#ef6fa5','#f6c13b','#ffffff','#e2412b'];for(let i=0;i<9;i++){const an=i/9*Math.PI*2;
     const f=new THREE.Mesh(new THREE.SphereGeometry(0.07,8,6),mat(fc[i%4]));f.position.set(Math.cos(an)*0.29,HY+0.17,Math.sin(an)*0.29);g.add(f);}}
+  if(a.hat==='angler'){const brim=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.52,0.05,22),mat('#6b7d3a'));brim.position.y=HY+0.17;g.add(brim);
+    const cr=new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.33,0.26,18),mat('#6b7d3a'));cr.position.y=HY+0.32;g.add(cr);
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(0.335,0.335,0.06,18),mat('#3e4a22'));band.position.y=HY+0.23;g.add(band);}
+  if(a.vest){const v=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.29,0.62,14),mat('#f57c1f'));v.position.y=1.1;g.add(v);
+    const st=new THREE.Mesh(new THREE.CylinderGeometry(0.325,0.31,0.06,14),mat('#e8e8e8'));st.position.y=0.98;g.add(st);
+    for(const s of[-1,1]){const sh=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.08,0.34),mat('#f57c1f'));sh.position.set(0.17*s,1.43,0);g.add(sh);}}
   // Angel
   const rod=new THREE.Group();rod.position.set(-0.39,1.07,0.55);rod.rotation.x=0.93;
   const rg=new THREE.CylinderGeometry(0.02,0.035,2.3,6);rg.translate(0,1.15,0);
-  rod.add(new THREE.Mesh(rg,mat('#7a4b2a')));
+  rod.add(new THREE.Mesh(rg,mat(rodCol||'#7a4b2a')));
   const reel=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,0.08,10),mat('#cfd3d6'));reel.rotation.z=Math.PI/2;reel.position.y=0.25;rod.add(reel);
   const tip=new THREE.Object3D();tip.position.y=2.3;rod.add(tip);rod.visible=false;g.add(rod);
   return {group:g,legs,arms,rod,tip};
@@ -440,7 +487,7 @@ player.y=heightAt(player.pos.x,player.pos.z);
 scene.add(player.root);
 const blob=new THREE.Mesh(new THREE.CircleGeometry(0.45,16),new THREE.MeshBasicMaterial({color:'#000',transparent:true,opacity:0.25,depthWrite:false}));
 blob.rotation.x=-Math.PI/2;scene.add(blob);
-function rebuildPlayer(){if(player.av)player.root.remove(player.av.group);player.av=buildAvatar(state.avatar);player.root.add(player.av.group);}
+function rebuildPlayer(){if(player.av)player.root.remove(player.av.group);player.av=buildAvatar(state.avatar,rodNow().col);player.root.add(player.av.group);}
 rebuildPlayer();
 
 /* ---- Rosa ---- */
@@ -448,6 +495,31 @@ const ROSA={x:VX+1,z:-2.6};
 const rosa=buildAvatar({skin:'#8d5524',hair:'lang',hairColor:'#1b1b1b',shirt:'#e2412b',pants:'#2f4a7a',hat:'blumen'});
 rosa.group.position.set(ROSA.x,heightAt(ROSA.x,ROSA.z),ROSA.z);rosa.group.rotation.y=-Math.PI/2;scene.add(rosa.group);
 colliders.push({x:ROSA.x,z:ROSA.z,r:0.6});
+/* ---- Opa Tiago und sein Angelladen ---- */
+const TIAGO_AT={x:VX+1.4,z:4.6};
+(function(){
+  const HX=VX+5.4,HZ=9;const hut=new THREE.Group();
+  const wall=new THREE.Mesh(new THREE.BoxGeometry(4.4,2.6,4.4),mat('#3c8f86'));wall.position.y=1.3;hut.add(wall);
+  const roof=new THREE.Mesh(new THREE.ConeGeometry(3.7,2.2,4),mat('#c2401f'));roof.rotation.y=Math.PI/4;roof.position.y=3.7;hut.add(roof);
+  const door=new THREE.Mesh(new THREE.BoxGeometry(0.12,1.8,1.1),mat('#3b2a1c'));door.position.set(-2.22,0.9,0);hut.add(door);
+  // Schild
+  const cv=document.createElement('canvas');cv.width=512;cv.height=160;const x=cv.getContext('2d');
+  x.fillStyle='#fbf3df';x.fillRect(0,0,512,160);x.strokeStyle='#1b2a20';x.lineWidth=14;x.strokeRect(7,7,498,146);
+  x.fillStyle='#1b2a20';x.font='800 54px "Trebuchet MS",sans-serif';x.textAlign='center';x.fillText('Opa Tiagos',256,68);x.fillStyle='#2f7fd8';x.fillText('Angelladen',256,130);
+  const sign=new THREE.Mesh(new THREE.PlaneGeometry(3.2,1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv)}));
+  sign.position.set(-2.3,2.95,0);sign.rotation.y=-Math.PI/2;hut.add(sign);
+  // Angeln lehnen an der Wand
+  ['#c9a45a','#7a4b2a','#f0b429'].forEach((c,i)=>{const r=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.05,2.6,6),mat(c));r.position.set(-2.4,1.3,-1.1-i*0.35);r.rotation.x=0.12;r.rotation.z=-0.18;hut.add(r);});
+  // Köder-Fass
+  const barrel=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.4,0.9,12),mat('#8a6340'));barrel.position.set(-2.8,0.45,1.5);hut.add(barrel);
+  hut.position.set(HX,heightAt(HX,HZ),HZ);scene.add(hut);
+  colliders.push({x:HX,z:HZ,r:3.2},{x:HX-2.8,z:HZ+1.5,r:0.5});
+})();
+const tiago=buildAvatar({skin:'#c98b5e',hair:'kurz',hairColor:'#e8e8e8',shirt:'#2f7fd8',pants:'#7a5a3a',hat:'stroh'},'#7a4b2a');
+{const beard=new THREE.Mesh(new THREE.SphereGeometry(0.2,12,10),mat('#f3f3f3'));beard.scale.set(1.15,1.1,0.7);beard.position.set(0,1.62,0.2);tiago.group.add(beard);}
+tiago.rod.visible=true;tiago.rod.rotation.x=0.35;
+tiago.group.position.set(TIAGO_AT.x,heightAt(TIAGO_AT.x,TIAGO_AT.z),TIAGO_AT.z);tiago.group.rotation.y=-Math.PI/2;scene.add(tiago.group);
+colliders.push({x:TIAGO_AT.x,z:TIAGO_AT.z,r:0.6});
 // Ausrufezeichen über Rosa
 const markCv=document.createElement('canvas');markCv.width=markCv.height=64;{const x=markCv.getContext('2d');x.fillStyle='#f6c13b';x.beginPath();x.arc(32,32,28,0,7);x.fill();
   x.lineWidth=5;x.strokeStyle='#1b2a20';x.stroke();x.fillStyle='#1b2a20';x.font='900 40px sans-serif';x.textAlign='center';x.fillText('L',32,46);}
@@ -609,12 +681,24 @@ function findWater(){
   for(const d of ds){const x=player.pos.x+dx*d,z=player.pos.z+dz*d;if(heightAt(x,z)<-0.35&&!onDock(x,z)&&inBounds(x,z))return new THREE.Vector3(x,0.05,z);}
   return null;
 }
+// Köder für einen Wurf nehmen (Früchte werden weniger, Blinker und Würmer bleiben)
+function useBait(){const b=state.bait;
+  if(b==='frucht'){if(state.baits.frucht<=0){state.bait='wurm';refreshHud();return 'wurm';}
+    state.baits.frucht--;if(state.baits.frucht<=0){state.bait='wurm';toast('Das war deine letzte Frucht. Jetzt angelst du wieder mit Wurm.');}
+    save();refreshHud();return 'frucht';}
+  if(b==='blinker'&&state.baits.blinker>0)return 'blinker';
+  return 'wurm';}
+function baitList(){const l=['wurm'];if(state.baits.frucht>0)l.push('frucht');if(state.baits.blinker>0)l.push('blinker');return l;}
+function updateBaitBtn(){const l=baitList(),b=$('#btnBait');b.hidden=l.length<2;if(!l.includes(state.bait))state.bait='wurm';
+  const bt=BAITS[state.bait];b.textContent=bt.ico+' '+bt.name+(state.bait==='frucht'?' ×'+state.baits.frucht:'');}
+$('#btnBait').onclick=()=>{const l=baitList();state.bait=l[(l.indexOf(state.bait)+1)%l.length];save();updateBaitBtn();
+  toast('Köder: '+BAITS[state.bait].name);};
 function fishPress(){
   audio();
   if(fishing.state==='idle'){
     if(state.bucket.length>=bucketMax()){toast('Dein Eimer ist voll! Bring die Fische zu Rosa.');return;}
     const w=findWater();if(!w){toast(player.inBoat?'Hier ist es zu flach. Fahr weiter in den Fluss!':'Hier ist kein Wasser. Stell dich ans Ufer oder auf den Steg!');return;}
-    fishing.state='cast';fishing.t=0;fishing.target.copy(w);player.av.rod.visible=true;
+    fishing.state='cast';fishing.t=0;fishing.target.copy(w);fishing.bait=useBait();player.av.rod.visible=true;
     player.av.tip.getWorldPosition(fishing.from);tone(300,0.25,'sine',0.08);
   }else if(fishing.state==='bite'){catchFish();}
   else{stopFishing();}
@@ -639,11 +723,11 @@ function updateFishing(dt,t){
     bobber.visible=k>0.3;
     const kk=Math.max(0,(k-0.3)/0.7);
     bobber.position.lerpVectors(fishing.from,fishing.target,kk);bobber.position.y=fishing.from.y*(1-kk)+0.05+Math.sin(kk*Math.PI)*2.5;
-    if(k>=1){fishing.state='wait';fishing.t=0;fishing.biteAt=(state.hasRod?1.3+Math.random()*2.5:2.2+Math.random()*3.8)*(schoolAt(fishing.target.x,fishing.target.z)?0.5:1);splash(fishing.target.x,fishing.target.z);sfxSplash();updateFishBtn();}
+    if(k>=1){fishing.state='wait';fishing.t=0;fishing.biteAt=(rodNow().bite[0]+Math.random()*rodNow().bite[1])*(schoolAt(fishing.target.x,fishing.target.z)?0.5:1);splash(fishing.target.x,fishing.target.z);sfxSplash();updateFishBtn();}
   }else if(fishing.state==='wait'){
     av.rod.rotation.x=0.93;
     bobber.position.copy(fishing.target);bobber.position.y=0.05+Math.sin(t*3)*0.03;
-    if(fishing.t>fishing.biteAt){fishing.state='bite';fishing.t=0;fishing.win=state.hasRod?1.9:1.5;sfxBite();splash(fishing.target.x,fishing.target.z);updateFishBtn();
+    if(fishing.t>fishing.biteAt){fishing.state='bite';fishing.t=0;fishing.win=rodNow().win;sfxBite();splash(fishing.target.x,fishing.target.z);updateFishBtn();
       if(navigator.vibrate)try{navigator.vibrate(120)}catch(e){}}
   }else if(fishing.state==='bite'){
     av.rod.rotation.x=0.93+Math.sin(t*30)*0.05;
@@ -660,7 +744,8 @@ function updateFishing(dt,t){
 function chooseFish(){
   const pool=FISH.filter(f=>!f.boat||player.inBoat);
   const sc=schoolAt(fishing.target.x,fishing.target.z);
-  const wt=f=>{let w=f.w;if(state.hasRod&&f.price>=40)w*=2;if(player.inBoat&&f.price>=40)w*=1.5;
+  const bt=BAITS[fishing.bait]||BAITS.wurm;
+  const wt=f=>{let w=f.w;if(f.price>=40)w*=rodNow().rare;if(bt.like.includes(f.id))w*=bt.x;if(player.inBoat&&f.price>=40)w*=1.5;
     if(sc&&f.price>=40)w*=2;if(sc&&sc.big&&f.boat)w*=3;return w;};
   let sum=0;pool.forEach(f=>sum+=wt(f));let r=Math.random()*sum;
   for(const f of pool){r-=wt(f);if(r<=0)return f;}return pool[0];
@@ -754,7 +839,7 @@ function updateSonar(dt){
 let toastT=null;
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2600);}
 function refreshHud(bump){
-  $('#hudLudins').textContent=state.ludins;$('#hudBucket').textContent=state.bucket.length+'/'+bucketMax();$('#hudName').textContent=state.avatar.name||'';
+  $('#hudLudins').textContent=state.ludins;updateBaitBtn();$('#hudBucket').textContent=state.bucket.length+'/'+bucketMax();$('#hudName').textContent=state.avatar.name||'';
   if(bump){const p=$('#pillLudins');p.classList.remove('bump');void p.offsetWidth;p.classList.add('bump');}
 }
 const card=$('#card');
@@ -831,17 +916,38 @@ function showFishPage(f){
   card.appendChild(el('p',null,esc(f.fact)));
   const z=el('button','b','Zurück zum Fischbuch');z.onclick=showBook;const bt=el('div','btns');bt.appendChild(z);card.appendChild(bt);
 }
-let shopTab='sell';
+let tiagoTab='angeln';
+function showTiago(){
+  if(!state.metTiago){state.metTiago=true;save();}
+  openModal();card.className='card';card.innerHTML='';
+  const head=el('div','rosa');const face=el('div','face tiago');face.appendChild(el('div','beard'));head.appendChild(face);
+  head.appendChild(el('div',null,'<h2>Opa Tiagos Angelladen</h2><p>Olá, '+esc(state.avatar.name||'du')+'! Ich habe alles, was ein Angler braucht.</p>'));
+  card.appendChild(head);
+  const tabs=el('div','tabs four');
+  TIAGO_TABS.forEach(([id,lb])=>{const b=el('button',null,lb);b.setAttribute('aria-pressed',tiagoTab===id);b.onclick=()=>{tiagoTab=id;showTiago();};tabs.appendChild(b);});
+  card.appendChild(tabs);
+  const l=el('div','list');
+  TIAGO.filter(it=>it.tab===tiagoTab).forEach(it=>{const owned=it.owned&&it.owned(),lock=it.lock&&it.lock();
+    const row=el('div','item shopitem');row.appendChild(el('div','shopicon',it.ico));
+    row.appendChild(el('div','t','<b>'+it.name+'</b><span>'+it.desc+(it.count?' <span class="havecount">Du hast '+it.count()+'.</span>':'')+'</span>'));
+    const b=el('button','b',owned?(it.price?'Gekauft':'Hast du'):it.price+' L');
+    if(owned)b.disabled=true;
+    else if(lock){b.disabled=true;b.textContent=lock;}
+    else if(state.ludins<it.price){b.disabled=true;b.textContent='Noch '+(it.price-state.ludins)+' L';}
+    b.onclick=()=>{if((it.owned&&it.owned())||(it.lock&&it.lock())||state.ludins<it.price)return;
+      state.ludins-=it.price;it.buy();save();sfxCatch();refreshHud(true);toast(it.msg);showTiago();};
+    row.appendChild(b);l.appendChild(row);});
+  card.appendChild(l);
+  const bt=el('div','btns');const c=el('button','b alt','Tschüss, Opa Tiago');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
+}
 function showShop(){
   openModal();card.className='card';card.innerHTML='';
   const head=el('div','rosa');head.appendChild(el('div','face'));
   head.appendChild(el('div',null,'<h2>Rosas Fischhandel</h2><p>Hallo '+esc(state.avatar.name||'du')+'! Zeig mal, was du gefangen hast.</p>'));
   card.appendChild(head);
-  const tabs=el('div','tabs');
-  [['sell','Verkaufen'],['buy','Kaufen']].forEach(([id,lb])=>{const b=el('button',null,lb);b.setAttribute('aria-pressed',shopTab===id);b.onclick=()=>{shopTab=id;showShop();};tabs.appendChild(b);});
-  card.appendChild(tabs);
+  card.appendChild(el('p',null,'Angeln, Köder und Boote gibt es bei Opa Tiago nebenan.'));
   const l=el('div','list');
-  if(shopTab==='sell'){
+  {
     if(!state.bucket.length)l.appendChild(el('div','empty','Dein Eimer ist leer. Fang erst ein paar Fische!'));
     state.bucket.forEach((it,i)=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishCanvas(f,144,80));
       row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm · '+it.value+' Ludins</span>'));
@@ -852,25 +958,6 @@ function showShop(){
     const bt=el('div','btns');
     if(total){const all=el('button','b go','Alles verkaufen (+'+total+' Ludins)');all.onclick=()=>{state.ludins+=total;state.bucket=[];save();sfxCoins();refreshHud(true);toast('+'+total+' Ludins!');showShop();};bt.appendChild(all);}
     const c=el('button','b alt','Tschüss');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
-  }else{
-    const OWN={rod:'hasRod',boat:'hasBoat',bucket:'hasBucket',motor:'hasMotor',sonar:'hasSonar'};
-    SHOP.forEach(s=>{const owned=state[OWN[s.id]];
-      const row=el('div','item shopitem');row.appendChild(el('div','shopicon',s.ico));
-      row.appendChild(el('div','t','<b>'+s.name+'</b><span>'+s.desc+'</span>'));
-      const b=el('button','b',owned?'Gekauft':s.price+' L');
-      if(owned)b.disabled=true;
-      else if(s.needs&&!state[s.needs]){b.disabled=true;b.textContent='Erst das Boot';}
-      else if(state.ludins<s.price){b.disabled=true;b.textContent='Noch '+(s.price-state.ludins)+' L';}
-      b.onclick=()=>{if(owned||state.ludins<s.price||(s.needs&&!state[s.needs]))return;state.ludins-=s.price;
-        if(s.id==='rod'){state.hasRod=true;toast('Super! Mit der Profi-Angel beißen die Fische schneller.');}
-        if(s.id==='bucket'){state.hasBucket=true;toast('Jetzt passen 30 Fische in deinen Eimer!');}
-        if(s.id==='boat'){state.hasBoat=true;toast('Dein Boot wartet am Steg!');}
-        if(s.id==='motor'){state.hasMotor=true;toast('Brumm! Dein Boot hat jetzt einen Motor.');}
-        if(s.id==='sonar'){state.hasSonar=true;toast('Das Echolot ist im Boot. Fahr los und such die Fische!');}
-        save();sfxCatch();refreshHud(true);showShop();};
-      row.appendChild(b);l.appendChild(row);});
-    card.appendChild(l);
-    const bt=el('div','btns');const c=el('button','b alt','Tschüss');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
   }
 }
 
@@ -885,13 +972,15 @@ function updateCtx(){
   let a=null;const p=player.pos;
   if(!player.inBoat){
     if(Math.hypot(p.x-ROSA.x,p.z-ROSA.z)<4.2)a='shop';
+    else if(Math.hypot(p.x-TIAGO_AT.x,p.z-TIAGO_AT.z)<4.2)a='tiago';
     else if(state.hasBoat&&Math.hypot(p.x-boat.pos.x,p.z-boat.pos.z)<BOAT_REACH)a='board';
   }else{exitSpot=findExit();if(exitSpot)a='exit';}
   if(a!==ctxAction){ctxAction=a;const b=$('#btnCtx');b.hidden=!a;
-    b.textContent=a==='shop'?'🐟 Zu Rosa':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
+    b.textContent=a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
 $('#btnCtx').onclick=()=>{audio();
-  if(ctxAction==='shop'){stopFishing();shopTab=state.bucket.length?'sell':'buy';showShop();}
+  if(ctxAction==='shop'){stopFishing();showShop();}
+  else if(ctxAction==='tiago'){stopFishing();showTiago();}
   else if(ctxAction==='board'){stopFishing();player.inBoat=true;state.usedBoat=true;save();player.pos.copy(boat.pos);player.facing=boat.yaw;toast('Leinen los! Im tiefen Fluss leben die Riesenfische.');}
   else if(ctxAction==='exit'&&exitSpot){stopFishing();player.inBoat=false;player.pos.x=exitSpot.x;player.pos.z=exitSpot.z;player.y=groundY(exitSpot.x,exitSpot.z);
     player.av.legs.forEach(l=>l.rotation.x=0);}
@@ -910,12 +999,13 @@ function tipText(){
   if(fishing.state!=='idle')return '';
   if(found===0)return 'Lauf über den Holzsteg bis ans Wasser. Dann tippe auf „Angeln“.';
   if(state.bucket.length>=bucketMax())return 'Dein Eimer ist voll! Bring die Fische zu Rosa an die Hütte.';
-  if(!state.hasBoat&&state.ludins>=300)return 'Du hast genug Ludins! Kauf dir bei Rosa ein Boot.';
-  if(!state.hasBoat&&state.bucket.length>=4)return 'Verkaufe deine Fische bei Rosa. Für 300 Ludins bekommst du ein Boot!';
+  if(!state.metTiago&&state.ludins>=40)return 'Neu: Opa Tiago hat einen Angelladen neben Rosas Hütte!';
+  if(!state.hasBoat&&state.ludins>=300)return 'Du hast genug Ludins! Kauf dir bei Opa Tiago ein Boot.';
+  if(!state.hasBoat&&state.bucket.length>=4)return 'Verkaufe deine Fische bei Rosa. Für 300 Ludins gibt es bei Opa Tiago ein Boot!';
   if(state.hasBoat&&!state.usedBoat)return 'Dein Boot liegt am Steg. Geh hin und steig ein!';
   if(player.inBoat&&state.hasSonar&&!state.sonarFound)return 'Fahr langsam herum, bis das Echolot piept!';
-  if(state.hasBoat&&!state.hasSonar&&state.ludins>=200)return 'Mit einem Echolot findest du die Fische. Rosa hat eins für 200 Ludins!';
-  if(state.hasBoat&&!state.hasMotor&&state.ludins>=600)return 'Du hast genug Ludins! Bei Rosa gibt es jetzt ein Motorboot.';
+  if(state.hasBoat&&!state.hasSonar&&state.ludins>=200)return 'Mit einem Echolot findest du die Fische. Opa Tiago hat eins für 200 Ludins!';
+  if(state.hasBoat&&!state.hasMotor&&state.ludins>=600)return 'Du hast genug Ludins! Bei Opa Tiago gibt es ein Motorboot.';
   if(found>=FISH.length)return 'Wow! Du hast alle '+FISH.length+' Fischarten gefunden!';
   return '';
 }
@@ -929,12 +1019,23 @@ function buildCreator(){
   function options(id,list,key){const box=$(id);box.innerHTML='';list.forEach(([v,l])=>{const b=el('button',null,l);b.setAttribute('aria-pressed',a[key]===v);
     b.onclick=()=>{a[key]=v;buildCreator();rebuildPlayer();};box.appendChild(b);});}
   swatches('#swSkin',SKINS,'skin');options('#opHair',HAIRS,'hair');swatches('#swHair',HAIRCOLS,'hairColor');
-  swatches('#swShirt',SHIRTS,'shirt');swatches('#swPants',PANTS,'pants');options('#opHat',HATS,'hat');
+  swatches('#swShirt',SHIRTS,'shirt');swatches('#swPants',PANTS,'pants');
+  options('#opHat',state.clothes.anglerhut?HATS.concat([['angler','Anglerhut']]):HATS,'hat');
+  $('#rowVest').hidden=!state.clothes.weste;
+  const vb=$('#opVest');vb.innerHTML='';[[true,'An'],[false,'Aus']].forEach(([v,l])=>{const b=el('button',null,l);b.setAttribute('aria-pressed',!!a.vest===v);
+    b.onclick=()=>{a.vest=v;buildCreator();rebuildPlayer();};vb.appendChild(b);});
 }
 $('#nameIn').addEventListener('input',e=>{state.avatar.name=e.target.value.trim();});
 let creatorSpin=0;
+// In der Werkstatt schaut die Kamera von vorn auf den Avatar. Wir drehen ihn so, dass davor nichts im Weg steht.
+function faceFreeSide(){const p=player.pos;
+  for(let k=0;k<16;k++){const a=player.facing+(k%2?1:-1)*Math.ceil(k/2)*Math.PI/8;let free=true;
+    for(const d of[1.2,2.4,3.6,4.4]){const x=p.x+Math.sin(a)*d,z=p.z+Math.cos(a)*d;
+      if(hitsCollider(x,z,0.7)||heightAt(x,z)>player.y+1.2){free=false;break;}}
+    if(free){player.facing=a;return;}}}
 function openCreator(){mode='creator';$('#hud').hidden=true;$('#creator').hidden=false;$('#modal').hidden=true;buildCreator();creatorSpin=0;
-  if(player.inBoat){player.inBoat=false;player.pos.set(VX-6,0,2);player.y=groundY(player.pos.x,player.pos.z);}}
+  if(player.inBoat){player.inBoat=false;player.pos.set(VX-6,0,2);player.y=groundY(player.pos.x,player.pos.z);}
+  faceFreeSide();}
 $('#btnGo').onclick=()=>{audio();if(!state.avatar.name)state.avatar.name='Angler';
   if(boardOnStart){boardOnStart=false;player.inBoat=true;player.pos.copy(boat.pos);player.facing=boat.yaw;}
   save();$('#creator').hidden=true;$('#hud').hidden=false;mode='play';
@@ -999,6 +1100,7 @@ function loop(){
   engineSound(tuckern?0.15+fahrt*0.85:0);
   // Rosa winkt
   rosa.arms[1].rotation.z=-0.3-Math.abs(Math.sin(t*2))*0.9;rosa.arms[1].rotation.x=-0.2;
+  tiago.arms[1].rotation.z=-0.2-Math.abs(Math.sin(t*1.2))*0.6;tiago.rod.rotation.x=0.35+Math.sin(t*0.8)*0.08;
   mark.position.set(ROSA.x,heightAt(ROSA.x,ROSA.z)+2.8+Math.sin(t*3)*0.12,ROSA.z);mark.visible=state.bucket.length>0||mode==='creator';
   // Aras
   parrots.forEach(p=>{p.a+=p.sp*dt;const x=p.cx+Math.cos(p.a)*p.r,z=p.cz+Math.sin(p.a)*p.r;
@@ -1019,7 +1121,7 @@ function loop(){
   renderer.render(scene,camera);
 }
 $('#loading').remove();
-$('#creator').hidden=false;buildCreator();refreshHud();
+$('#creator').hidden=false;buildCreator();refreshHud();faceFreeSide();
 player.root.position.set(player.pos.x,player.y,player.pos.z);
 loop();
 })();

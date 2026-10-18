@@ -16,6 +16,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - **Ab 7 Jahren**: nichts Gruseliges, keine Gewalt, kein Blut
 - Eigener **Avatar** (Name, Haut, Haare, T-Shirt, Hose, Hut)
 - Fische **verkaufen** bei Händlerin Rosa
+- **Angelladen** von Opa Tiago neben Rosa: Angeln, Köder, Boot-Sachen, Kleidung
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - Wunsch: **echte Fotos** von den Fischen zeigen (noch offen)

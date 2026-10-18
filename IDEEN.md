@@ -10,6 +10,7 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [x] Fischbuch: Fisch antippen zeigt eine eigene Seite
 - [x] Motorboot (600 Ludins, doppelt so schnell)
 - [x] Echolot fürs Boot (200 Ludins, zeigt Fischschwärme)
+- [x] Angelladen von Opa Tiago (Angeln, Köder, Boot-Sachen, Anglerhut, Schwimmweste)
 
 ## Als Nächstes
 - [ ] Echte Fotos von den Fischen
