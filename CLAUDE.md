@@ -30,6 +30,18 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - Testen: `index.html` im Browser öffnen. Für das iPad: lokalen Server starten
   (`python3 -m http.server 8000`) und auf dem iPad `http://<IP-des-Computers>:8000` öffnen.
 
+## Skills (in `.claude/skills/`, Quellen in `QUELLEN.md`)
+Die Skills sind Wissen aus dem Internet. **Diese Datei hier gilt immer zuerst.**
+- Three.js bleibt **r128** als globales `THREE`. Kein `import`, kein npm, kein Vite, kein TypeScript, nicht auf eine neuere Version umbauen.
+- Die Three.js-Skills sind für neuere Versionen geschrieben. In r128 heißt es anders:
+  `renderer.outputEncoding = THREE.sRGBEncoding` (nicht `outputColorSpace`),
+  `texture.encoding = THREE.sRGBEncoding` (nicht `colorSpace`),
+  kein `CapsuleGeometry`, kein `THREE.Timer`, keine `three/addons`.
+  Lichtstärken aus den Skills sind für r128 viel zu hell.
+- Knöpfe mindestens 60 px (auch wenn ein Skill weniger sagt).
+- „Game Feel“ (wie gut sich etwas anfühlt) sanft halten: kein starkes Bildschirm-Wackeln, kein Kampf, keine Schadenszahlen.
+- Keine bezahlten Dienste und keine KI-erzeugten Bilder oder Töne.
+
 ## Regeln für Änderungen
 - Kleine Schritte: lieber eine Sache fertig machen als viele halb.
 - Nach jeder Änderung prüfen, dass das Spiel noch startet (keine Fehler in der Konsole).
