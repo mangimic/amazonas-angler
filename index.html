@@ -299,16 +299,30 @@ const bucketMax=()=>state.hasBucket?30:15;
 /* =================== Welt-Formeln =================== */
 const smooth=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t)};
 const RIVER_HALF=11, WORLD=240, BOUND=112;
+// Die Welt ist 240 m breit und über 2 km lang: der Fluss fließt von Norden (großes z) nach Süden (kleines z)
+const Z_MIN=-120,Z_MAX=2120;
+// Die Insel: der Fluss wird breiter und teilt sich in zwei Arme
+const ISLE={z:750,a:16,b:120};
+// Stromschnellen: Felsen und schnelles Wasser
+const RAPIDS=[{z:420,len:50},{z:1150,len:60},{z:1800,len:50}];
 const riverX=z=>25*Math.sin(z*0.018)+10*Math.sin(z*0.047+1);
 const VX=riverX(0)+24, VZ=0;
+const riverHalf=z=>RIVER_HALF+22*(1-smooth(ISLE.b,ISLE.b+70,Math.abs(z-ISLE.z)));
 function heightAt(x,z){
-  const d=Math.abs(x-riverX(z));
+  const rx=riverX(z),d=Math.abs(x-rx),RH=riverHalf(z);
   let land=1.6+0.7*(1.2*Math.sin(x*0.05)*Math.cos(z*0.04)+0.6*Math.sin(x*0.13+z*0.07));
   const dv=Math.hypot(x-VX,z-VZ);
   land=land+(1.0-land)*(1-smooth(10,16,dv));
-  const t=smooth(RIVER_HALF-3,RIVER_HALF+4,d);
-  return -2.5+(land+2.5)*t;
+  const t=smooth(RH-3,RH+4,d);
+  let h=-2.5+(land+2.5)*t;
+  const ez=(z-ISLE.z)/ISLE.b;
+  if(Math.abs(ez)<1){const r=Math.hypot((x-rx)/ISLE.a,ez);if(r<1)h=Math.max(h,-2.5+4.2*(1-smooth(0.55,1,r)));}
+  return h;
 }
+// Wie stark die Stromschnelle an dieser Stelle ist (0 = gar nicht, 1 = voll)
+function rapidAt(x,z){for(const r of RAPIDS){const dz=Math.abs(z-r.z);if(dz<r.len/2&&Math.abs(x-riverX(z))<riverHalf(z)-1)return 1-smooth(r.len/2-12,r.len/2,dz);}return 0;}
+// Richtung flussabwärts an der Stelle z
+function downstream(z){const dx=(riverX(z+1)-riverX(z-1))/2,l=Math.hypot(dx,1);return {x:-dx/l,z:-1/l};}
 const DOCK={x0:riverX(0)+5,x1:riverX(0)+16.4,z0:-1.3,z1:1.3,y:0.6};
 const onDock=(x,z)=>x>=DOCK.x0&&x<=DOCK.x1&&z>=DOCK.z0&&z<=DOCK.z1;
 // Bauplatz für das eigene Pfahlhaus am Fluss: 5×5 Felder, jedes 2 m groß
@@ -352,29 +366,6 @@ function merge(parts){
 }
 const vcMat=new THREE.MeshLambertMaterial({vertexColors:true});
 
-/* ---- Boden ---- */
-(function(){
-  const tg=new THREE.PlaneGeometry(WORLD,WORLD,150,150);tg.rotateX(-Math.PI/2);
-  const tp=tg.attributes.position;
-  for(let i=0;i<tp.count;i++)tp.setY(i,heightAt(tp.getX(i),tp.getZ(i)));
-  const g=tg.toNonIndexed();g.computeVertexNormals();
-  const P=g.attributes.position,cols=new Float32Array(P.count*3),c=new THREE.Color();
-  const GREENS=['#3d7a35','#467f2f','#356d33','#55893a'];
-  for(let i=0;i<P.count;i+=3){
-    const cx=(P.getX(i)+P.getX(i+1)+P.getX(i+2))/3,cy=(P.getY(i)+P.getY(i+1)+P.getY(i+2))/3,cz=(P.getZ(i)+P.getZ(i+1)+P.getZ(i+2))/3;
-    const n=hash(Math.round(cx*3),Math.round(cz*3)),dv=Math.hypot(cx-VX,cz-VZ);
-    let col;
-    if(cy<-0.4)col='#5c5034';
-    else if(cy<0.45)col=n<.5?'#c79d5f':'#bb9154';
-    else if(dv<8||(Math.abs(cz)<1.6&&cx>DOCK.x1-4&&cx<VX))col=n<.5?'#b48f5a':'#a8834f';
-    else col=GREENS[Math.floor(n*4)];
-    c.set(col);
-    for(let k=0;k<3;k++){cols[(i+k)*3]=c.r;cols[(i+k)*3+1]=c.g;cols[(i+k)*3+2]=c.b;}
-  }
-  g.setAttribute('color',new THREE.BufferAttribute(cols,3));
-  scene.add(new THREE.Mesh(g,vcMat));
-})();
-
 /* ---- Wasser ---- */
 const waterTex=(function(){
   const cv=document.createElement('canvas');cv.width=cv.height=128;const x=cv.getContext('2d');
@@ -382,9 +373,9 @@ const waterTex=(function(){
   const r=rng(3);
   for(let i=0;i<40;i++){x.strokeStyle='rgba(255,255,255,'+(0.3+r()*0.5)+')';x.lineWidth=1+r()*1.5;x.beginPath();
     const px=r()*128,py=r()*128;x.moveTo(px,py);x.quadraticCurveTo(px+8,py-3,px+16+r()*10,py);x.stroke();}
-  const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(30,30);return t;
+  const t=new THREE.CanvasTexture(cv);t.wrapS=t.wrapT=THREE.RepeatWrapping;t.repeat.set(30,60);return t;
 })();
-const water=new THREE.Mesh(new THREE.PlaneGeometry(WORLD,WORLD),new THREE.MeshPhongMaterial({color:'#7aae95',map:waterTex,transparent:true,opacity:0.9,shininess:70,specular:'#445555'}));
+const water=new THREE.Mesh(new THREE.PlaneGeometry(WORLD,480),new THREE.MeshPhongMaterial({color:'#7aae95',map:waterTex,transparent:true,opacity:0.9,shininess:70,specular:'#445555'}));
 water.rotation.x=-Math.PI/2;scene.add(water);
 
 /* ---- Pflanzen ---- */
@@ -400,40 +391,115 @@ for(let i=0;i<3;i++)palmParts.push(part(new THREE.SphereGeometry(0.22,6,5),'#5a3
 const treeB=merge(palmParts);
 const treeC=merge([part(new THREE.CylinderGeometry(0.25,0.35,2.6,6),'#5e4128',M(0,1.3,0)),
   part(new THREE.IcosahedronGeometry(2.1,0),'#4c8a34',M(0,3.6,0,0,0,0,1.2,0.85,1.2))]);
-const trees=[[],[],[]];
-for(let i=0;i<4000&&trees[0].length+trees[1].length+trees[2].length<430;i++){
-  const x=(R()*2-1)*BOUND,z=(R()*2-1)*BOUND,h=heightAt(x,z);
-  if(h<0.8)continue;
-  if(Math.hypot(x-VX,z-VZ)<14||nearPlot(x,z,3))continue;
-  if(Math.abs(z)<4&&x>DOCK.x0-2&&x<VX+6)continue;
-  let ok=true;for(const c of colliders){if((c.x-x)**2+(c.z-z)**2<9){ok=false;break;}}
-  if(!ok)continue;
-  const d=Math.abs(x-riverX(z));
-  const type=d<20&&R()<0.5?1:(R()<0.6?0:2);
-  const s=0.8+R()*0.6;
-  trees[type].push(M(x,h-0.2,z,0,R()*6.28,0,s,s*(0.9+R()*0.3),s));
-  colliders.push({x,z,r:(type===1?0.4:0.65)*s});
-}
-[treeA,treeB,treeC].forEach((g,i)=>{const im=new THREE.InstancedMesh(g,vcMat,trees[i].length);trees[i].forEach((m,k)=>im.setMatrixAt(k,m));scene.add(im);});
-(function(){
-  const bushes=[],flowers=[];
-  for(let i=0;i<5000&&bushes.length<520;i++){const x=(R()*2-1)*BOUND,z=(R()*2-1)*BOUND,h=heightAt(x,z);
-    if(h<0.4||Math.hypot(x-VX,z-VZ)<9||nearPlot(x,z,1.5)||(Math.abs(z)<2.5&&x>DOCK.x1-4&&x<VX))continue;const s=0.5+R()*0.9;bushes.push(M(x,h,z,0,R()*6,0,s,s*0.7,s));}
-  const bm=new THREE.InstancedMesh(merge([part(new THREE.IcosahedronGeometry(1,0),'#3f8236')]),vcMat,bushes.length);
-  bushes.forEach((m,k)=>bm.setMatrixAt(k,m));scene.add(bm);
-  const FC=['#e2412b','#f6c13b','#ef6fa5','#ffffff','#8e44c4'];
-  const fm=new THREE.InstancedMesh(new THREE.SphereGeometry(0.16,6,5),new THREE.MeshLambertMaterial(),420);
-  let n=0;const col=new THREE.Color();
-  for(let i=0;i<5000&&n<420;i++){const x=(R()*2-1)*BOUND,z=(R()*2-1)*BOUND,h=heightAt(x,z);if(h<0.5)continue;
-    fm.setMatrixAt(n,M(x,h+0.25,z));fm.setColorAt(n,col.set(FC[Math.floor(R()*5)]));n++;}
-  fm.count=n;scene.add(fm);
-  // Riesenseerosen
+/* ---- Welt in Stücken: Boden, Bäume, Büsche, Blumen, Seerosen ----
+   Der Fluss ist über 2 km lang. Damit das iPad flüssig bleibt, baut das Spiel nur die Stücke in deiner Nähe. */
+const CHUNK=160,CHUNKS=Math.ceil((Z_MAX-Z_MIN)/CHUNK),chunks={};
+const chunkOf=z=>Math.floor((z-Z_MIN)/CHUNK);
+const GREENS=['#3d7a35','#467f2f','#356d33','#55893a'],FLOWER_COLS=['#e2412b','#f6c13b','#ef6fa5','#ffffff','#8e44c4'];
+const padGeo=merge([part(new THREE.CylinderGeometry(1,1,0.06,14),'#4f8a3a'),part(new THREE.CylinderGeometry(1.04,1.04,0.18,14,1,true),'#8a3f3a',M(0,0.05,0))]);
+const bushGeo=merge([part(new THREE.IcosahedronGeometry(1,0),'#3f8236')]),flowerGeo=new THREE.SphereGeometry(0.16,6,5),flowerMat=new THREE.MeshLambertMaterial();
+// Ein Stück wird in kleinen Schritten gebaut (yield = Pause bis zum nächsten Bild), damit das Spiel nicht ruckelt
+function* chunkSteps(k,g,cols){
+  const z0=Z_MIN+k*CHUNK,R=rng(1000+k*7919);
+  const rx=()=>(R()*2-1)*BOUND,rz=()=>z0+R()*CHUNK;
+  // Boden in 4 Streifen
+  for(let strip=0;strip<4;strip++){
+  const tg=new THREE.PlaneGeometry(WORLD,CHUNK/4,150,25);tg.rotateX(-Math.PI/2);tg.translate(0,0,z0+CHUNK/8+strip*CHUNK/4);
+  const tp=tg.attributes.position;
+  for(let i=0;i<tp.count;i++)tp.setY(i,heightAt(tp.getX(i),tp.getZ(i)));
+  const tgn=tg.toNonIndexed();tg.dispose();tgn.computeVertexNormals();
+  const P=tgn.attributes.position,tc=new Float32Array(P.count*3),c=new THREE.Color();
+  for(let i=0;i<P.count;i+=3){
+    const cx=(P.getX(i)+P.getX(i+1)+P.getX(i+2))/3,cy=(P.getY(i)+P.getY(i+1)+P.getY(i+2))/3,cz=(P.getZ(i)+P.getZ(i+1)+P.getZ(i+2))/3;
+    const n=hash(Math.round(cx*3),Math.round(cz*3)),dv=Math.hypot(cx-VX,cz-VZ);
+    let col;
+    if(cy<-0.4)col='#5c5034';
+    else if(cy<0.45)col=n<.5?'#c79d5f':'#bb9154';
+    else if(dv<8||(Math.abs(cz)<1.6&&cx>DOCK.x1-4&&cx<VX))col=n<.5?'#b48f5a':'#a8834f';
+    else col=GREENS[Math.floor(n*4)];
+    c.set(col);
+    for(let q=0;q<3;q++){tc[(i+q)*3]=c.r;tc[(i+q)*3+1]=c.g;tc[(i+q)*3+2]=c.b;}
+  }
+  tgn.setAttribute('color',new THREE.BufferAttribute(tc,3));
+  const ground=new THREE.Mesh(tgn,vcMat);ground.userData.own=true;g.add(ground);
+  yield;}
+  // Bäume
+  const trees=[[],[],[]];
+  for(let i=0;i<2700&&trees[0].length+trees[1].length+trees[2].length<290;i++){
+    const x=rx(),z=rz(),h=heightAt(x,z);
+    if(h<0.8)continue;
+    if(Math.hypot(x-VX,z-VZ)<14||nearPlot(x,z,3))continue;
+    if(Math.abs(z)<4&&x>DOCK.x0-2&&x<VX+6)continue;
+    let ok=true;for(const o of cols){if((o.x-x)**2+(o.z-z)**2<9){ok=false;break;}}
+    if(!ok)continue;
+    const d=Math.abs(x-riverX(z));
+    const type=d<20+riverHalf(z)-RIVER_HALF&&R()<0.5?1:(R()<0.6?0:2);
+    const sc=0.8+R()*0.6;
+    trees[type].push(M(x,h-0.2,z,0,R()*6.28,0,sc,sc*(0.9+R()*0.3),sc));
+    cols.push({x,z,r:(type===1?0.4:0.65)*sc});
+  }
+  [treeA,treeB,treeC].forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,vcMat,trees[i].length);trees[i].forEach((m,q)=>im.setMatrixAt(q,m));g.add(im);});
+  yield;
+  // Büsche und Blumen
+  const bushes=[];
+  for(let i=0;i<3400&&bushes.length<350;i++){const x=rx(),z=rz(),h=heightAt(x,z);
+    if(h<0.4||Math.hypot(x-VX,z-VZ)<9||nearPlot(x,z,1.5)||(Math.abs(z)<2.5&&x>DOCK.x1-4&&x<VX))continue;const sc=0.5+R()*0.9;bushes.push(M(x,h,z,0,R()*6,0,sc,sc*0.7,sc));}
+  const bm=new THREE.InstancedMesh(bushGeo,vcMat,bushes.length);bushes.forEach((m,q)=>bm.setMatrixAt(q,m));g.add(bm);
+  const fm=new THREE.InstancedMesh(flowerGeo,flowerMat,280);let n=0;const fc=new THREE.Color();
+  for(let i=0;i<3400&&n<280;i++){const x=rx(),z=rz(),h=heightAt(x,z);if(h<0.5)continue;
+    fm.setMatrixAt(n,M(x,h+0.25,z));fm.setColorAt(n,fc.set(FLOWER_COLS[Math.floor(R()*5)]));n++;}
+  fm.count=n;g.add(fm);
+  yield;
+  // Riesenseerosen am Rand des Flusses (nicht in Stromschnellen)
   const pads=[];
-  for(let i=0;i<3000&&pads.length<60;i++){const z=(R()*2-1)*BOUND,side=R()<.5?-1:1,x=riverX(z)+side*(6+R()*3),h=heightAt(x,z);
-    if(h>-0.6||Math.abs(x)>BOUND||nearPlot(x,z,2.5))continue;if(Math.abs(z)<5&&x>DOCK.x0-4)continue;const s=0.8+R()*0.9;pads.push(M(x,0.05,z,0,R()*6,0,s,1,s));}
-  const pg=merge([part(new THREE.CylinderGeometry(1,1,0.06,14),'#4f8a3a'),part(new THREE.CylinderGeometry(1.04,1.04,0.18,14,1,true),'#8a3f3a',M(0,0.05,0))]);
-  const pm=new THREE.InstancedMesh(pg,vcMat,pads.length);pads.forEach((m,k)=>pm.setMatrixAt(k,m));scene.add(pm);
+  for(let i=0;i<2000&&pads.length<40;i++){const z=rz(),side=R()<.5?-1:1,x=riverX(z)+side*(riverHalf(z)-5+R()*3),h=heightAt(x,z);
+    if(h>-0.6||Math.abs(x)>BOUND||nearPlot(x,z,2.5)||rapidAt(x,z)>0)continue;if(Math.abs(z)<5&&x>DOCK.x0-4)continue;const sc=0.8+R()*0.9;pads.push(M(x,0.05,z,0,R()*6,0,sc,1,sc));}
+  const pm=new THREE.InstancedMesh(padGeo,vcMat,pads.length);pads.forEach((m,q)=>pm.setMatrixAt(q,m));g.add(pm);
+}
+function buildChunk(k){const g=new THREE.Group(),cols=[];scene.add(g);chunks[k]={g,cols,steps:chunkSteps(k,g,cols)};}
+function dropChunk(k){const ch=chunks[k];scene.remove(ch.g);
+  ch.g.children.forEach(o=>{if(o.userData.own)o.geometry.dispose();if(o.isInstancedMesh&&o.dispose)o.dispose();});delete chunks[k];}
+// Stücke um z herum bauen (eins pro Bild, damit nichts ruckelt; „alle“ baut sofort alle nötigen)
+function updateChunks(z,alle){const k=chunkOf(z);
+  for(const key in chunks)if(Math.abs(key-k)>2)dropChunk(+key);
+  // das eigene Stück zuerst, dann die Nachbarn
+  for(const i of[k,k+1,k-1]){if(i<0||i>=CHUNKS)continue;if(!chunks[i])buildChunk(i);const ch=chunks[i];
+    if(ch.steps){if(alle){while(!ch.steps.next().done);ch.steps=null;}else{if(ch.steps.next().done)ch.steps=null;return;}}}}
+
+/* ---- Stromschnellen: Felsen und Schaum ---- */
+const rocks=[];const foam=[];
+(function(){const R=rng(42),rockGeo=new THREE.DodecahedronGeometry(1,0),rockMat=mat('#7c7a72');
+  const fGeo=new THREE.SphereGeometry(0.5,7,5);
+  RAPIDS.forEach(rp=>{
+    for(let z=rp.z-rp.len/2+4;z<rp.z+rp.len/2-3;z+=7){const W=riverHalf(z)-3,placed=[];
+      for(let tries=0;tries<12&&placed.length<2;tries++){const off=(R()*2-1)*W;if(placed.some(o=>Math.abs(o-off)<8))continue;placed.push(off);
+        const x=riverX(z)+off,zz=z+(R()-0.5)*3,sc=0.7+R()*0.8;const m=new THREE.Mesh(rockGeo,rockMat);
+        m.position.set(x,-0.1+sc*0.3,zz);m.scale.set(sc*1.3,sc,sc);m.rotation.set(R()*3,R()*3,R()*3);scene.add(m);rocks.push({x,z:zz,r:sc*1.2});}}
+    const im=new THREE.InstancedMesh(fGeo,new THREE.MeshLambertMaterial({color:'#ffffff'}),90);
+    const parts=[];for(let i=0;i<90;i++)parts.push({u:R()*2-1,v:R(),s:0.5+R()*1.1,sp:0.8+R()*0.6});
+    scene.add(im);foam.push({rp,im,parts});});
 })();
+const hitsRock=(x,z)=>rocks.some(o=>(o.x-x)**2+(o.z-z)**2<(o.r+1.1)**2);
+const tmpM=new THREE.Matrix4();
+function updateFoam(dt,t){for(const f of foam){const near=Math.abs(player.pos.z-f.rp.z)<230;f.im.visible=near;if(!near)continue;
+  f.parts.forEach((q,i)=>{q.v=(q.v-dt*0.12*q.sp+1)%1;const z=f.rp.z-f.rp.len/2+q.v*f.rp.len,W=riverHalf(z)-2,x=riverX(z)+q.u*W;
+    const k=Math.sin(q.v*Math.PI),sc=q.s*k;tmpM.compose(tmpV.set(x,0.08+Math.sin(t*6+i)*0.05,z),tmpQ,tmpS.set(sc*1.6,0.25*sc,sc));f.im.setMatrixAt(i,tmpM);});
+  f.im.instanceMatrix.needsUpdate=true;}}
+const tmpV=new THREE.Vector3(),tmpQ=new THREE.Quaternion(),tmpS=new THREE.Vector3();
+
+/* ---- Schilder am Ufer: wie weit bist du gefahren? ---- */
+function makeSign(text,sub,x,z,col){const cv=document.createElement('canvas');cv.width=512;cv.height=220;const c=cv.getContext('2d');
+  c.fillStyle='#fbf3df';c.fillRect(0,0,512,220);c.strokeStyle='#1b2a20';c.lineWidth=14;c.strokeRect(7,7,498,206);
+  c.fillStyle=col||'#1b2a20';c.font='800 70px "Trebuchet MS",sans-serif';c.textAlign='center';c.fillText(text,256,sub?100:135);
+  if(sub){c.fillStyle='#1b2a20';c.font='700 40px "Trebuchet MS",sans-serif';c.fillText(sub,256,170);}
+  const y=heightAt(x,z),g=new THREE.Group();
+  const sign=new THREE.Mesh(new THREE.PlaneGeometry(2.3,1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));sign.position.y=1.9;g.add(sign);
+  const post=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1.9,6),mat('#5e4128'));post.position.y=0.95;g.add(post);
+  g.position.set(x,y,z);g.rotation.y=-Math.PI/2;scene.add(g);colliders.push({x,z,r:0.3});}
+const bankX=z=>riverX(z)+riverHalf(z)+5;
+[500,1000,1500,2000].forEach(z=>makeSign(z<1000?z+' m':(z/1000+'').replace('.',',')+' km','vom Dorf',bankX(z),z));
+RAPIDS.forEach(r=>makeSign('Achtung!','Stromschnellen',bankX(r.z-r.len/2-14),r.z-r.len/2-14,'#c2401f'));
+makeSign('Insel','Urwald im Fluss',bankX(ISLE.z-ISLE.b-30),ISLE.z-ISLE.b-30,'#2f7fd8');
 
 /* ---- Dorf: Steg, Hütte, Rosa ---- */
 (function(){
@@ -666,6 +732,13 @@ function tone(f,d,type,vol,delay){if(!ac)return;const t=ac.currentTime+(delay||0
 function sfxSplash(){if(!ac)return;const n=ac.sampleRate*0.3,b=ac.createBuffer(1,n,ac.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n)**2;
   const s=ac.createBufferSource();s.buffer=b;const f=ac.createBiquadFilter();f.type='lowpass';f.frequency.value=1200;const g=ac.createGain();g.gain.value=0.35;s.connect(f);f.connect(g);g.connect(ac.destination);s.start();}
 const sfxCoins=()=>{tone(988,0.12,'square',0.08);tone(1319,0.25,'square',0.08,0.09);};
+let rush=null;
+function rapidSound(x,z){if(!ac)return;let near=0;for(const r of RAPIDS)near=Math.max(near,1-smooth(r.len/2,r.len/2+70,Math.abs(z-r.z)));
+  if(!rush&&near<=0)return;
+  if(!rush){const n=ac.sampleRate*2,b=ac.createBuffer(1,n,ac.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=Math.random()*2-1;
+    const s=ac.createBufferSource();s.buffer=b;s.loop=true;const f=ac.createBiquadFilter();f.type='lowpass';f.frequency.value=700;const g=ac.createGain();g.gain.value=0;
+    s.connect(f);f.connect(g);g.connect(ac.destination);s.start();rush={g};}
+  rush.g.gain.setTargetAtTime(mode==='play'?near*0.12:0,ac.currentTime,0.3);}
 let engine=null;
 function engineSound(level){if(!ac)return;
   if(!engine){const o=ac.createOscillator(),o2=ac.createOscillator(),f=ac.createBiquadFilter(),g=ac.createGain();
@@ -704,13 +777,15 @@ addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;input.keys[e
 addEventListener('keyup',e=>{input.keys[e.code]=false;});
 
 /* =================== Bewegung =================== */
-const inBounds=(x,z)=>Math.abs(x)<BOUND&&Math.abs(z)<BOUND;
-function hitsCollider(x,z,r){for(const c of colliders){const rr=c.r+r;if((c.x-x)**2+(c.z-z)**2<rr*rr)return true;}return false;}
+const inBounds=(x,z)=>Math.abs(x)<BOUND&&z>Z_MIN+8&&z<Z_MAX-8;
+function hitsList(list,x,z,r){for(const c of list){const rr=c.r+r;if((c.x-x)**2+(c.z-z)**2<rr*rr)return true;}return false;}
+function hitsCollider(x,z,r){if(hitsList(colliders,x,z,r))return true;const k=chunkOf(z);
+  for(let i=k-1;i<=k+1;i++){const ch=chunks[i];if(ch&&hitsList(ch.cols,x,z,r))return true;}return false;}
 function hitsWall(x,z,r){for(const s of houseSegs){const dx=s.bx-s.ax,dz=s.bz-s.az,l=dx*dx+dz*dz;
     const k=Math.max(0,Math.min(1,((x-s.ax)*dx+(z-s.az)*dz)/l));if((s.ax+dx*k-x)**2+(s.az+dz*k-z)**2<r*r)return true;}return false;}
 const walkable=(x,z)=>inBounds(x,z)&&(onDock(x,z)||onPlot(x,z)||heightAt(x,z)>0.15)&&!hitsCollider(x,z,0.35)&&!hitsWall(x,z,0.33);
 const nearDock=(x,z)=>x>DOCK.x0-1.6&&x<DOCK.x1+1&&z>DOCK.z0-1.8&&z<DOCK.z1+1.8;
-const boatable=(x,z)=>inBounds(x,z)&&heightAt(x,z)<-0.6&&!nearDock(x,z)&&!nearPlot(x,z,1.8);
+const boatable=(x,z)=>inBounds(x,z)&&heightAt(x,z)<-0.6&&!nearDock(x,z)&&!nearPlot(x,z,1.8)&&!hitsRock(x,z);
 function groundY(x,z){const h=heightAt(x,z);return onDock(x,z)?Math.max(h,DOCK.y):onPlot(x,z)?Math.max(h,PLOT.y):h;}
 function angleLerp(a,b,t){let d=((b-a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI;return a+d*t;}
 
@@ -734,6 +809,10 @@ function updatePlayer(dt,t){
     else if(ok(p.x+dx,p.z)){p.x+=dx;moving=true;}
     else if(ok(p.x,p.z+dz)){p.z+=dz;moving=true;}
   }
+  if(player.inBoat){const rp=rapidAt(player.pos.x,player.pos.z);
+    if(rp>0){const dir=downstream(player.pos.z),push=6*rp*dt,nx=player.pos.x+dir.x*push,nz=player.pos.z+dir.z*push;
+      if(boatable(nx,nz)){player.pos.x=nx;player.pos.z=nz;}
+      if(!state.sawRapids){state.sawRapids=true;save();toast('Stromschnellen! Das schnelle Wasser schiebt dein Boot. Mit Motor kommst du leichter hindurch.');}}}
   player.speed=moving?mag:0;
   const av=player.av;
   if(player.inBoat){
@@ -755,10 +834,10 @@ function updatePlayer(dt,t){
 
 /* ---- Fischschwärme (unsichtbar – das Echolot zeigt sie) ---- */
 const SCHOOL_R=7;const schools=[];
-function placeSchool(sc){for(let i=0;i<200;i++){const z=(Math.random()*2-1)*(BOUND-12),x=riverX(z)+(Math.random()*2-1)*5;
+function placeSchool(sc){for(let i=0;i<200;i++){const z=Z_MIN+12+Math.random()*(Z_MAX-Z_MIN-24),x=riverX(z)+(Math.random()*2-1)*5;
     if(boatable(x,z)&&heightAt(x,z)<-1.4&&schools.every(o=>o===sc||o.n<=0||Math.hypot(o.x-x,o.z-z)>18)){sc.x=x;sc.z=z;sc.n=3+Math.floor(Math.random()*3);return;}}
   sc.n=0;}
-for(let i=0;i<9;i++){const sc={x:0,z:0,n:0,big:i<3};placeSchool(sc);schools.push(sc);}
+for(let i=0;i<30;i++){const sc={x:0,z:0,n:0,big:i<10};placeSchool(sc);schools.push(sc);}
 const schoolAt=(x,z)=>schools.find(sc=>sc.n>0&&Math.hypot(sc.x-x,sc.z-z)<SCHOOL_R)||null;
 
 /* =================== Angeln =================== */
@@ -834,7 +913,7 @@ function chooseFish(){
   const sc=schoolAt(fishing.target.x,fishing.target.z);
   const bt=BAITS[fishing.bait]||BAITS.wurm;
   const wt=f=>{let w=f.w;if(f.price>=40)w*=rodNow().rare;if(bt.like.includes(f.id))w*=bt.x;if(player.inBoat&&f.price>=40)w*=1.5;
-    if(sc&&f.price>=40)w*=2;if(sc&&sc.big&&f.boat)w*=3;return w;};
+    if(sc&&f.price>=40)w*=2;if(f.id==='dorado'&&rapidAt(fishing.target.x,fishing.target.z)>0.2)w*=5;if(sc&&sc.big&&f.boat)w*=3;return w;};
   let sum=0;pool.forEach(f=>sum+=wt(f));let r=Math.random()*sum;
   for(const f of pool){r-=wt(f);if(r<=0)return f;}return pool[0];
 }
@@ -1229,12 +1308,15 @@ function loop(){
   requestAnimationFrame(loop);
   const dt=Math.min(0.05,clock.getDelta());elapsed+=dt;const t=elapsed;
   updateSonar(dt);
+  const focusZ=mode==='build'?PLOT.z0:player.pos.z;updateChunks(focusZ,false);
+  water.position.z=Math.round(focusZ/8)*8;updateFoam(dt,t);rapidSound(player.pos.x,player.pos.z);
   if(mode==='play'){updatePlayer(dt,t);updateFishing(dt,t);
     slowT+=dt;if(slowT>0.2){slowT=0;updateCtx();updateTip();}
     whereT+=dt;if(whereT>3){whereT=0;saveWhere();}}
   // Boot
   boat.mesh.visible=state.hasBoat;
-  if(state.hasBoat){boat.mesh.position.set(boat.pos.x,BOAT_Y+Math.sin(t*2)*0.05,boat.pos.z);boat.mesh.rotation.set(Math.sin(t*1.7)*0.03,boat.yaw,Math.sin(t*2.1)*0.04);}
+  if(state.hasBoat){boat.mesh.position.set(boat.pos.x,BOAT_Y+Math.sin(t*2)*0.05,boat.pos.z);const rw=rapidAt(boat.pos.x,boat.pos.z);boat.mesh.rotation.set(Math.sin(t*1.7)*0.03+Math.sin(t*7)*0.05*rw,boat.yaw,Math.sin(t*2.1)*0.04+Math.sin(t*9)*0.07*rw);
+    if(rw>0.3&&Math.random()<dt*6)wakePuff(boat.pos.x+(Math.random()-0.5)*3,boat.pos.z+(Math.random()-0.5)*4);}
   // Motorboot
   boat.motor.visible=state.hasMotor;
   const fahrt=mode==='play'&&player.inBoat&&state.hasMotor?player.speed||0:0;
@@ -1274,6 +1356,7 @@ function loop(){
   renderer.render(scene,camera);
 }
 $('#loading').remove();
+updateChunks(player.pos.z,true);
 $('#creator').hidden=false;buildCreator();refreshHud();faceFreeSide();
 player.root.position.set(player.pos.x,player.y,player.pos.z);
 loop();

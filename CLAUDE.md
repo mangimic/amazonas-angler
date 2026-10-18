@@ -12,6 +12,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 ## Die Spielidee (vom Kind)
 - Wie Minecraft, aber **ohne Blöcke**: offene 3D-Welt
 - Spielt am **Amazonas** (Fluss, Urwald, Riesenseerosen, Aras)
+- Der Fluss ist über **2 km** lang, mit einer **Insel** und **Stromschnellen** (die schieben das Boot)
 - Man kann **angeln**, es gibt **viele Fische** (echte Amazonas-Fische)
 - **Ab 7 Jahren**: nichts Gruseliges, keine Gewalt, kein Blut
 - Eigener **Avatar** (Name, Haut, Haare, T-Shirt, Hose, Hut)
@@ -27,6 +28,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Große Knöpfe (mindestens 60 px), alles muss mit dem Finger gehen.
 - Spielstand liegt im `localStorage` (Schlüssel `amazonas-angler-1`).
   Wenn sich das Format ändert: alte Spielstände weiter laden können.
+- Die Welt wird in Stücken (`CHUNK`, 160 m) gebaut, nur in der Nähe des Spielers. Höhe überall: `heightAt(x,z)`.
 - Fischdaten stehen in der Liste `FISH` (Name, Fakt, Seltenheit `w`, Preis, Größe, Farben, Form).
 - Testen: `index.html` im Browser öffnen. Für das iPad: lokalen Server starten
   (`python3 -m http.server 8000`) und auf dem iPad `http://<IP-des-Computers>:8000` öffnen.

@@ -12,6 +12,7 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [x] Echolot fürs Boot (200 Ludins, zeigt Fischschwärme)
 - [x] Angelladen von Opa Tiago (Angeln, Köder, Boot-Sachen, Anglerhut, Schwimmweste)
 - [x] Eigenes Pfahlhaus am Fluss bauen (Wände, Fenster, Türen, Dach, Farben)
+- [x] Fluss 2 km länger, mit Insel und 3 Stromschnellen
 
 ## Als Nächstes
 - [ ] Echte Fotos von den Fischen
