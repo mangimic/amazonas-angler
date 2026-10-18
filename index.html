@@ -93,12 +93,11 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .card h2{font:800 28px/1.05 var(--display);margin:0;text-wrap:balance}
 .card p{margin:0;font-size:17px;line-height:1.4}
 .catch{align-items:center;text-align:center}
-.catch canvas{width:min(320px,100%);height:auto;background:radial-gradient(ellipse at center,#d6efe6,#a9d6c9);border-radius:16px;border:3px solid var(--ink)}
 .badge{display:inline-block;background:var(--macaw);color:#fff;font:800 15px var(--display);padding:2px 12px;border-radius:999px;transform:rotate(-3deg)}
 .stats{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
 .stat{background:#efe4c6;border-radius:12px;padding:6px 12px;font-weight:800;font-variant-numeric:tabular-nums}
 .btns{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
-.b{border:3px solid var(--ink);border-radius:14px;box-shadow:0 4px 0 var(--ink);padding:9px 16px;font:800 19px var(--display);background:var(--gold)}
+.b{border:3px solid var(--ink);border-radius:14px;box-shadow:0 4px 0 var(--ink);padding:9px 16px;min-height:60px;font:800 19px var(--display);background:var(--gold)}
 .b.alt{background:#e9dfc5}
 .b.go{background:#5fb36a;color:#fff}
 .b:disabled{opacity:.5;cursor:default}
@@ -119,6 +118,13 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .bk canvas{width:100%;height:auto}
 .bk b{font:800 15px/1.1 var(--display)}
 .bk span{font-size:12px;color:var(--muted)}
+button.bk{font:inherit;color:inherit;border:3px solid transparent;cursor:pointer}
+button.bk:active{border-color:var(--ink)}
+.pic{width:min(320px,100%);margin:0;display:flex;flex-direction:column;gap:4px;align-items:center}
+.pic canvas,.pic img{width:100%;height:auto;border-radius:16px;border:3px solid var(--ink);background:radial-gradient(ellipse at center,#d6efe6,#a9d6c9)}
+.pic img{aspect-ratio:4/3;object-fit:cover}
+.pic figcaption{font-size:12px;color:var(--muted);line-height:1.3}
+.pic figcaption a{color:inherit}
 .rosa{display:flex;gap:12px;align-items:center}
 .rosa .face{width:54px;height:54px;flex:none;border-radius:50%;background:#8d5524;border:3px solid var(--ink);position:relative}
 .rosa .face::before,.rosa .face::after{content:"";position:absolute;top:20px;width:7px;height:7px;border-radius:50%;background:#1a1a1a}
@@ -193,6 +199,9 @@ const FISH=[
  {id:'piraiba',name:'Piraíba-Wels',fact:'Ein Riesenwels! Er lebt nur mitten im tiefen Fluss.',w:2.5,price:180,cm:[150,300],shape:'cat',c1:'#5e6670',c2:'#d9d4c4',pat:'belly',boat:true},
  {id:'arapaima',name:'Arapaima',fact:'Einer der größten Süßwasserfische der Welt. Lebt nur im tiefen Fluss.',w:1.6,price:250,cm:[180,300],shape:'long',c1:'#4a5a4a',c2:'#c9302c',pat:'tailred',boat:true}
 ];
+// Echte Fotos (nur frei lizenzierte, z. B. Wikimedia Commons). Dateien liegen im Ordner fotos/.
+// Eintrag: id:{src:'fotos/<id>.jpg',von:'Fotograf',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:...'}
+const FOTOS={};
 const FISH_BY={};FISH.forEach(f=>FISH_BY[f.id]=f);
 const SHOP=[
  {id:'rod',name:'Profi-Angel',price:120,ico:'🎣',desc:'Die Fische beißen schneller, und seltene Fische kommen öfter.'},
@@ -683,11 +692,30 @@ function closeModal(){$('#modal').hidden=true;mode='play';}
 function el(tag,cls,html){const e=document.createElement(tag);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e;}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
+// Bild eines Fisches: gemalt, oder echtes Foto mit Angabe, wer es gemacht hat.
+const hasFoto=f=>!!FOTOS[f.id]&&!FOTOS[f.id].kaputt;
+function fishPic(f,foto,onFail){
+  const fig=el('figure','pic');const ft=foto&&hasFoto(f)&&FOTOS[f.id];
+  if(!ft){fig.appendChild(fishCanvas(f,640,340));return fig;}
+  const img=el('img');img.alt='Foto: '+f.name;img.src=ft.src;
+  img.onerror=()=>{ft.kaputt=true;fig.innerHTML='';fig.appendChild(fishCanvas(f,640,340));if(onFail)onFail();};
+  fig.appendChild(img);
+  fig.appendChild(el('figcaption',null,'Foto: '+esc(ft.von)+' · <a href="'+esc(ft.link)+'" target="_blank" rel="noopener">'+esc(ft.lizenz)+'</a> · Wikimedia Commons'));
+  return fig;
+}
+// Bild mit Knopf zum Wechseln zwischen Foto und gemaltem Fisch.
+function fishPicSwitch(f,startFoto){
+  const box=el('div','pic');let foto=startFoto&&hasFoto(f);const sw=el('button','b alt');const fail=()=>sw.remove();
+  let pic=fishPic(f,foto,fail);box.appendChild(pic);
+  if(hasFoto(f)){const lbl=()=>sw.textContent=foto?'🎨 Gemalt':'📷 Echtes Foto';lbl();
+    sw.onclick=()=>{foto=!foto;const n=fishPic(f,foto,fail);box.replaceChild(n,pic);pic=n;lbl();};box.appendChild(sw);}
+  return box;
+}
 function showCatch(f,cm,value,isNew){
   openModal();card.className='card catch';card.innerHTML='';
   if(isNew)card.appendChild(el('span','badge','NEU im Fischbuch!'));
   card.appendChild(el('h2',null,'Du hast einen '+esc(f.name)+' gefangen!'));
-  card.appendChild(fishCanvas(f,640,340));
+  card.appendChild(fishPicSwitch(f,false));
   card.appendChild(el('div','stats','<span class="stat">'+cm+' cm</span><span class="stat">Wert: '+value+' Ludins</span>'));
   card.appendChild(el('p',null,esc(f.fact)));
   const bt=el('div','btns');
@@ -713,12 +741,22 @@ function showBook(){
   card.appendChild(el('h2',null,'Fischbuch'));
   card.appendChild(el('p',null,'Du hast '+n+' von '+FISH.length+' Fischarten gefunden.'));
   const g=el('div','book');
-  FISH.forEach(f=>{const b=state.book[f.id];const c=el('div','bk');c.appendChild(fishCanvas(f,240,130,!b));
+  FISH.forEach(f=>{const b=state.book[f.id];const c=el(b?'button':'div','bk');c.appendChild(fishCanvas(f,240,130,!b));
+    if(b)c.onclick=()=>showFishPage(f);
     if(b)c.appendChild(el('b',null,esc(f.name))),c.appendChild(el('span',null,b.n+'× gefangen · größter: '+b.best+' cm'));
     else c.appendChild(el('b',null,'???')),c.appendChild(el('span',null,f.boat?'Nur vom Boot aus':'Noch nicht gefangen'));
     g.appendChild(c);});
   card.appendChild(g);
   const c=el('button','b','Fertig');c.onclick=closeModal;const bt=el('div','btns');bt.appendChild(c);card.appendChild(bt);
+}
+function showFishPage(f){
+  const b=state.book[f.id];
+  openModal();card.className='card catch';card.innerHTML='';
+  card.appendChild(el('h2',null,esc(f.name)));
+  card.appendChild(fishPicSwitch(f,true));
+  card.appendChild(el('div','stats','<span class="stat">'+b.n+'× gefangen</span><span class="stat">Größter: '+b.best+' cm</span>'));
+  card.appendChild(el('p',null,esc(f.fact)));
+  const z=el('button','b','Zurück zum Fischbuch');z.onclick=showBook;const bt=el('div','btns');bt.appendChild(z);card.appendChild(bt);
 }
 let shopTab='sell';
 function showShop(){
