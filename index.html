@@ -195,7 +195,7 @@ const FISH=[
  {id:'rochen',name:'Süßwasserrochen',fact:'Liegt ganz flach im Sand am Flussboden.',w:6,price:55,cm:[40,80],shape:'ray',c1:'#6a5236',c2:'#e8c870',pat:'dots'},
  {id:'arowana',name:'Arowana',fact:'Springt aus dem Wasser und schnappt Käfer von den Ästen.',w:5,price:70,cm:[60,100],shape:'long',c1:'#cfd8d6',c2:'#7aa6a0',pat:'scales'},
  {id:'zitter',name:'Zitteraal',fact:'Kann Strom machen! Und eigentlich ist er gar kein Aal.',w:4,price:90,cm:[100,200],shape:'eel',c1:'#3b3f2d',c2:'#d98a2e',pat:'belly'},
- {id:'dorado',name:'Goldener Dorado',fact:'Glänzt golden in der Sonne und ist sehr stark.',w:3,price:120,cm:[50,90],shape:'normal',c1:'#f0b429',c2:'#c56a12',pat:'lines'},
+ {id:'dorado',name:'Goldener Dorado',akk:'Goldenen Dorado',fact:'Glänzt golden in der Sonne und ist sehr stark.',w:3,price:120,cm:[50,90],shape:'normal',c1:'#f0b429',c2:'#c56a12',pat:'lines'},
  {id:'piraiba',name:'Piraíba-Wels',fact:'Ein Riesenwels! Er lebt nur mitten im tiefen Fluss.',w:2.5,price:180,cm:[150,300],shape:'cat',c1:'#5e6670',c2:'#d9d4c4',pat:'belly',boat:true},
  {id:'arapaima',name:'Arapaima',fact:'Einer der größten Süßwasserfische der Welt. Lebt nur im tiefen Fluss.',w:1.6,price:250,cm:[180,300],shape:'long',c1:'#4a5a4a',c2:'#c9302c',pat:'tailred',boat:true}
 ];
@@ -718,7 +718,7 @@ function fishPicSwitch(f,startFoto){
 function showCatch(f,cm,value,isNew){
   openModal();card.className='card catch';card.innerHTML='';
   if(isNew)card.appendChild(el('span','badge','NEU im Fischbuch!'));
-  card.appendChild(el('h2',null,'Du hast einen '+esc(f.name)+' gefangen!'));
+  card.appendChild(el('h2',null,'Du hast einen '+esc(f.akk||f.name)+' gefangen!'));
   card.appendChild(fishPicSwitch(f,false));
   card.appendChild(el('div','stats','<span class="stat">'+cm+' cm</span><span class="stat">Wert: '+value+' Ludins</span>'));
   card.appendChild(el('p',null,esc(f.fact)));
