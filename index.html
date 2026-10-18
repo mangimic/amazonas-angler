@@ -935,8 +935,26 @@ $('#nameIn').addEventListener('input',e=>{state.avatar.name=e.target.value.trim(
 let creatorSpin=0;
 function openCreator(){mode='creator';$('#hud').hidden=true;$('#creator').hidden=false;$('#modal').hidden=true;buildCreator();creatorSpin=0;
   if(player.inBoat){player.inBoat=false;player.pos.set(VX-6,0,2);player.y=groundY(player.pos.x,player.pos.z);}}
-$('#btnGo').onclick=()=>{audio();if(!state.avatar.name)state.avatar.name='Angler';save();$('#creator').hidden=true;$('#hud').hidden=false;mode='play';
+$('#btnGo').onclick=()=>{audio();if(!state.avatar.name)state.avatar.name='Angler';
+  if(boardOnStart){boardOnStart=false;player.inBoat=true;player.pos.copy(boat.pos);player.facing=boat.yaw;}
+  save();$('#creator').hidden=true;$('#hud').hidden=false;mode='play';
   camera.clearViewOffset();player.root.rotation.y=player.facing;refreshHud();updateFishBtn();};
+
+/* ---- Ort merken: wo man steht, ob man im Boot sitzt, wo das Boot liegt ---- */
+const r2=v=>Math.round(v*100)/100;
+function saveWhere(){if(mode==='creator')return;
+  state.where={x:r2(player.pos.x),z:r2(player.pos.z),f:r2(player.facing),boat:player.inBoat};
+  if(state.hasBoat)state.boatAt={x:r2(boat.pos.x),z:r2(boat.pos.z),yaw:r2(boat.yaw)};
+  save();}
+addEventListener('pagehide',saveWhere);
+document.addEventListener('visibilitychange',()=>{if(document.hidden)saveWhere();});
+let boardOnStart=false;
+(function(){const w=state.where,b=state.boatAt;
+  if(state.hasBoat&&b&&boatable(b.x,b.z)){boat.pos.set(b.x,0,b.z);boat.yaw=b.yaw||0;}
+  if(!w)return;
+  if(w.boat&&state.hasBoat&&b&&boatable(b.x,b.z))boardOnStart=true; // erst nach „Los geht's!“ einsteigen
+  else if(walkable(w.x,w.z)){player.pos.set(w.x,0,w.z);player.facing=w.f||0;player.y=groundY(w.x,w.z);}
+})();
 
 /* =================== Kamera & Schleife =================== */
 const camTarget=new THREE.Vector3(),camWant=new THREE.Vector3();
@@ -958,13 +976,14 @@ function updateCamera(dt){
   let cy=camTarget.y+Math.sin(camPitch)*d;cy=Math.max(cy,Math.max(heightAt(cx,cz),0)+0.9);
   camWant.set(cx,cy,cz);camera.position.lerp(camWant,1-Math.exp(-dt*10));camera.lookAt(camTarget);
 }
-const clock=new THREE.Clock();let slowT=0,elapsed=0;
+const clock=new THREE.Clock();let slowT=0,whereT=0,elapsed=0;
 function loop(){
   requestAnimationFrame(loop);
   const dt=Math.min(0.05,clock.getDelta());elapsed+=dt;const t=elapsed;
   updateSonar(dt);
   if(mode==='play'){updatePlayer(dt,t);updateFishing(dt,t);
-    slowT+=dt;if(slowT>0.2){slowT=0;updateCtx();updateTip();}}
+    slowT+=dt;if(slowT>0.2){slowT=0;updateCtx();updateTip();}
+    whereT+=dt;if(whereT>3){whereT=0;saveWhere();}}
   // Boot
   boat.mesh.visible=state.hasBoat;
   if(state.hasBoat){boat.mesh.position.set(boat.pos.x,BOAT_Y+Math.sin(t*2)*0.05,boat.pos.z);boat.mesh.rotation.set(Math.sin(t*1.7)*0.03,boat.yaw,Math.sin(t*2.1)*0.04);}
