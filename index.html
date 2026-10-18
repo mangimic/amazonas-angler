@@ -49,6 +49,20 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .sonar canvas{display:block;width:100%;height:auto}
 .sonar b{position:absolute;left:0;right:0;bottom:0;background:var(--ink);color:#fff;font:800 15px/1.6 var(--display);text-align:center}
 .sonar.ping{animation:bump .5s}
+#build .btop{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));
+  display:flex;gap:8px;align-items:center;pointer-events:none}
+#build .btop>*{pointer-events:auto}
+#build .bbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom,0px) + 12px);width:max-content;max-width:calc(100% - 24px);box-sizing:border-box;
+  background:var(--paper);border:4px solid var(--ink);border-radius:20px;box-shadow:0 6px 0 var(--ink);padding:10px;display:flex;flex-direction:column;gap:8px}
+.tools{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.tool{min-width:78px;min-height:64px;border:3px solid var(--ink);border-radius:14px;background:#e9dfc5;font:800 15px/1.1 var(--display);color:var(--ink);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;padding:4px 8px}
+.tool .i{font-size:26px;line-height:1.1}
+.tool small{font:700 12px var(--body);color:var(--muted)}
+.tool[aria-pressed="true"]{background:var(--gold);box-shadow:inset 0 0 0 3px var(--ink)}
+.wcols{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.wcols button{width:60px;height:60px;border-radius:50%;border:3px solid var(--ink)}
+.wcols button[aria-pressed="true"]{box-shadow:0 0 0 3px var(--paper),0 0 0 6px var(--ink)}
 .tip{position:fixed;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top,0px) + 70px);max-width:min(560px,calc(100% - 32px));
   background:rgba(18,51,35,.88);color:#fff;border-radius:14px;padding:8px 14px;font-weight:800;font-size:16px;text-align:center;pointer-events:none;text-wrap:balance}
 
@@ -185,6 +199,13 @@ button.bk:active{border-color:var(--ink)}
   <div class="small-note">Laufen: links auf dem Bildschirm wischen · Umschauen: rechts wischen · Am Computer: Pfeiltasten oder WASD, Leertaste zum Angeln</div>
 </div>
 
+<div id="build" hidden>
+  <div class="btop"><div class="pill"><span class="coin">L</span><span class="sum" id="bLudins">0</span><small>Ludins</small></div>
+    <span class="spacer"></span><button class="b go" id="btnBuildDone">✔ Fertig</button></div>
+  <div class="tip" id="bHint"></div>
+  <div class="bbar"><div class="tools" id="bTools"></div><div class="wcols" id="bCols"></div></div>
+</div>
+
 <div id="modal" hidden><div class="card" id="card"></div></div>
 <div id="toast"></div>
 
@@ -263,13 +284,14 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 
 /* =================== Speicherstand =================== */
 const KEY='amazonas-angler-1';
-const state={ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasSonar:false,sonarFound:false,usedBoat:false,
+const state={ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasSonar:false,sonarFound:false,usedBoat:false,
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s){Object.assign(state,s);state.avatar=Object.assign({},state.avatar,s.avatar||{});}}catch(e){}
 // Ältere Spielstände: Profi-Angel hieß früher hasRod; Köder und Kleidung gab es noch nicht
 if(state.hasRod&&!state.rod)state.rod=1;
 state.baits=Object.assign({frucht:0,blinker:0},state.baits);state.clothes=Object.assign({anglerhut:false,weste:false},state.clothes);
 if(!BAITS[state.bait])state.bait='wurm';
+state.house=Object.assign({w:{},r:{}},state.house);
 const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
 function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
 const bucketMax=()=>state.hasBucket?30:15;
@@ -289,6 +311,12 @@ function heightAt(x,z){
 }
 const DOCK={x0:riverX(0)+5,x1:riverX(0)+16.4,z0:-1.3,z1:1.3,y:0.6};
 const onDock=(x,z)=>x>=DOCK.x0&&x<=DOCK.x1&&z>=DOCK.z0&&z<=DOCK.z1;
+// Bauplatz für das eigene Pfahlhaus am Fluss: 5×5 Felder, jedes 2 m groß
+const PLOT={n:5,c:2,x0:riverX(23)+8.5,z0:18};PLOT.x1=PLOT.x0+PLOT.n*PLOT.c;PLOT.z1=PLOT.z0+PLOT.n*PLOT.c;
+PLOT.y=(()=>{let m=-9;for(let i=0;i<=10;i++)for(let j=0;j<=10;j++)m=Math.max(m,heightAt(PLOT.x0+i,PLOT.z0+j));return m+0.25;})();
+const onPlot=(x,z)=>x>=PLOT.x0&&x<=PLOT.x1&&z>=PLOT.z0&&z<=PLOT.z1;
+const nearPlot=(x,z,m)=>x>PLOT.x0-m&&x<PLOT.x1+m&&z>PLOT.z0-m&&z<PLOT.z1+m;
+const houseSegs=[]; // Wände als Linien, damit man nicht hindurchlaufen kann
 function hash(x,z){const s=Math.sin(x*12.9898+z*78.233)*43758.5453;return s-Math.floor(s);}
 function rng(seed){return function(){seed|=0;seed=seed+0x6D2B79F5|0;let t=Math.imul(seed^seed>>>15,1|seed);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
 const R=rng(7);
@@ -376,7 +404,7 @@ const trees=[[],[],[]];
 for(let i=0;i<4000&&trees[0].length+trees[1].length+trees[2].length<430;i++){
   const x=(R()*2-1)*BOUND,z=(R()*2-1)*BOUND,h=heightAt(x,z);
   if(h<0.8)continue;
-  if(Math.hypot(x-VX,z-VZ)<14)continue;
+  if(Math.hypot(x-VX,z-VZ)<14||nearPlot(x,z,3))continue;
   if(Math.abs(z)<4&&x>DOCK.x0-2&&x<VX+6)continue;
   let ok=true;for(const c of colliders){if((c.x-x)**2+(c.z-z)**2<9){ok=false;break;}}
   if(!ok)continue;
@@ -390,7 +418,7 @@ for(let i=0;i<4000&&trees[0].length+trees[1].length+trees[2].length<430;i++){
 (function(){
   const bushes=[],flowers=[];
   for(let i=0;i<5000&&bushes.length<520;i++){const x=(R()*2-1)*BOUND,z=(R()*2-1)*BOUND,h=heightAt(x,z);
-    if(h<0.4||Math.hypot(x-VX,z-VZ)<9||(Math.abs(z)<2.5&&x>DOCK.x1-4&&x<VX))continue;const s=0.5+R()*0.9;bushes.push(M(x,h,z,0,R()*6,0,s,s*0.7,s));}
+    if(h<0.4||Math.hypot(x-VX,z-VZ)<9||nearPlot(x,z,1.5)||(Math.abs(z)<2.5&&x>DOCK.x1-4&&x<VX))continue;const s=0.5+R()*0.9;bushes.push(M(x,h,z,0,R()*6,0,s,s*0.7,s));}
   const bm=new THREE.InstancedMesh(merge([part(new THREE.IcosahedronGeometry(1,0),'#3f8236')]),vcMat,bushes.length);
   bushes.forEach((m,k)=>bm.setMatrixAt(k,m));scene.add(bm);
   const FC=['#e2412b','#f6c13b','#ef6fa5','#ffffff','#8e44c4'];
@@ -402,7 +430,7 @@ for(let i=0;i<4000&&trees[0].length+trees[1].length+trees[2].length<430;i++){
   // Riesenseerosen
   const pads=[];
   for(let i=0;i<3000&&pads.length<60;i++){const z=(R()*2-1)*BOUND,side=R()<.5?-1:1,x=riverX(z)+side*(6+R()*3),h=heightAt(x,z);
-    if(h>-0.6||Math.abs(x)>BOUND)continue;if(Math.abs(z)<5&&x>DOCK.x0-4)continue;const s=0.8+R()*0.9;pads.push(M(x,0.05,z,0,R()*6,0,s,1,s));}
+    if(h>-0.6||Math.abs(x)>BOUND||nearPlot(x,z,2.5))continue;if(Math.abs(z)<5&&x>DOCK.x0-4)continue;const s=0.8+R()*0.9;pads.push(M(x,0.05,z,0,R()*6,0,s,1,s));}
   const pg=merge([part(new THREE.CylinderGeometry(1,1,0.06,14),'#4f8a3a'),part(new THREE.CylinderGeometry(1.04,1.04,0.18,14,1,true),'#8a3f3a',M(0,0.05,0))]);
   const pm=new THREE.InstancedMesh(pg,vcMat,pads.length);pads.forEach((m,k)=>pm.setMatrixAt(k,m));scene.add(pm);
 })();
@@ -520,6 +548,57 @@ const tiago=buildAvatar({skin:'#c98b5e',hair:'kurz',hairColor:'#e8e8e8',shirt:'#
 tiago.rod.visible=true;tiago.rod.rotation.x=0.35;
 tiago.group.position.set(TIAGO_AT.x,heightAt(TIAGO_AT.x,TIAGO_AT.z),TIAGO_AT.z);tiago.group.rotation.y=-Math.PI/2;scene.add(tiago.group);
 colliders.push({x:TIAGO_AT.x,z:TIAGO_AT.z,r:0.6});
+/* ---- Pfahlhaus: Plattform, Haus-Teile, Baumodus ---- */
+(function(){
+  const g=new THREE.Group(),Y=PLOT.y,W=PLOT.n*PLOT.c;
+  for(let i=0;i<W/0.5;i++){const p=new THREE.Mesh(new THREE.BoxGeometry(W,0.14,0.48),mat(i%3?'#9a7148':'#8a6340'));p.position.set(PLOT.x0+W/2,Y-0.07,PLOT.z0+0.25+i*0.5);g.add(p);}
+  for(let i=0;i<=4;i++)for(let j=0;j<=4;j++){const x=PLOT.x0+i*2.5,z=PLOT.z0+j*2.5,bot=Math.min(heightAt(x,z),-2.5)-0.3,h=Y-bot;
+    const st=new THREE.Mesh(new THREE.CylinderGeometry(0.16,0.18,h,7),mat('#5e4128'));st.position.set(x,bot+h/2-0.1,z);g.add(st);}
+  // Schild „Dein Bauplatz“
+  const cv=document.createElement('canvas');cv.width=512;cv.height=200;const x=cv.getContext('2d');
+  x.fillStyle='#fbf3df';x.fillRect(0,0,512,200);x.strokeStyle='#1b2a20';x.lineWidth=14;x.strokeRect(7,7,498,186);
+  x.fillStyle='#1b2a20';x.font='800 60px "Trebuchet MS",sans-serif';x.textAlign='center';x.fillText('Dein',256,80);x.fillStyle='#c2401f';x.fillText('Bauplatz',256,150);
+  const sx=PLOT.x1+0.8,sz=PLOT.z0-0.8,sy=heightAt(sx,sz);
+  const sign=new THREE.Mesh(new THREE.PlaneGeometry(1.8,0.7),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));sign.position.set(sx,sy+1.6,sz);sign.rotation.y=Math.PI*0.75;g.add(sign);
+  const post=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,1.6,6),mat('#5e4128'));post.position.set(sx,sy+0.7,sz);g.add(post);
+  scene.add(g);colliders.push({x:sx,z:sz,r:0.25});
+})();
+const PARTS={wand:{name:'Wand',ico:'🧱',price:5},fenster:{name:'Fenster',ico:'🪟',price:8},tuer:{name:'Tür',ico:'🚪',price:10},dach:{name:'Dach',ico:'🛖',price:6}};
+const WALL_COLS=['#c79a62','#e2412b','#2f7fd8','#5fb36a','#f6c13b','#f2f0e6'];
+const wallMats=WALL_COLS.map(c=>new THREE.MeshLambertMaterial({color:c,transparent:true}));
+const postMat=new THREE.MeshLambertMaterial({color:'#5e4128',transparent:true});
+const roofMat=new THREE.MeshLambertMaterial({color:'#c9a24a',transparent:true});
+const glassMat=new THREE.MeshLambertMaterial({color:'#bfe6f2',transparent:true,opacity:0.55});
+const geoCache={};const box=(w,h,d)=>geoCache[w+'|'+h+'|'+d]||(geoCache[w+'|'+h+'|'+d]=new THREE.BoxGeometry(w,h,d));
+// Teile einer Wand (entlang der x-Achse, 2 m lang): [x,y,Breite,Höhe,Glas?] und wo man anstößt
+const T=0.16;
+const WALL_SHAPES={
+  wand:{p:[[0,1.2,2,2.4]],hit:[[-1,1]]},
+  fenster:{p:[[0,0.45,2,0.9],[0,2.15,2,0.5],[-0.75,1.4,0.5,1],[0.75,1.4,0.5,1],[0,1.4,1,1,1]],hit:[[-1,1]]},
+  tuer:{p:[[-0.8,1.2,0.4,2.4],[0.8,1.2,0.4,2.4],[0,2.15,1.2,0.5]],hit:[[-1,-0.6],[0.6,1]]}};
+const houseG=new THREE.Group();scene.add(houseG);
+const houseParts={};const pops=[];
+// Kante: 'h,i,j' = waagrecht bei z=j (Feld i), 'v,i,j' = senkrecht bei x=i (Feld j)
+function edgeInfo(key){const [o,a,b]=key.split(',');const i=+a,j=+b,c=PLOT.c;
+  return o==='h'?{x:PLOT.x0+(i+0.5)*c,z:PLOT.z0+j*c,rot:0,ends:[[i,j],[i+1,j]]}:{x:PLOT.x0+i*c,z:PLOT.z0+(j+0.5)*c,rot:Math.PI/2,ends:[[i,j],[i,j+1]]};}
+function rebuildHouse(){
+  while(houseG.children.length)houseG.remove(houseG.children[0]);
+  for(const k in houseParts)delete houseParts[k];houseSegs.length=0;
+  const Y=PLOT.y,verts={};
+  for(const key in state.house.w){const [type,col]=state.house.w[key],sh=WALL_SHAPES[type];if(!sh)continue;const e=edgeInfo(key);
+    const wg=new THREE.Group();wg.position.set(e.x,Y,e.z);wg.rotation.y=e.rot;
+    sh.p.forEach(([x,y,w,h,gl])=>{const m=new THREE.Mesh(box(w,h,gl?0.05:T),gl?glassMat:wallMats[col]||wallMats[0]);m.position.set(x,y,0);wg.add(m);});
+    houseG.add(wg);houseParts[key]=wg;
+    const ca=Math.cos(e.rot),sa=Math.sin(e.rot);
+    sh.hit.forEach(([a,b])=>houseSegs.push({ax:e.x+a*ca,az:e.z-a*sa,bx:e.x+b*ca,bz:e.z-b*sa}));
+    e.ends.forEach(([i,j])=>verts[i+','+j]=1);}
+  for(const v in verts){const [i,j]=v.split(',').map(Number);const m=new THREE.Mesh(box(0.24,2.5,0.24),postMat);m.position.set(PLOT.x0+i*PLOT.c,Y+1.25,PLOT.z0+j*PLOT.c);houseG.add(m);}
+  for(const key in state.house.r){const [i,j]=key.split(',').map(Number);const m=new THREE.Mesh(box(2.2,0.2,2.2),roofMat);
+    m.position.set(PLOT.x0+(i+0.5)*PLOT.c,Y+2.55,PLOT.z0+(j+0.5)*PLOT.c);houseG.add(m);houseParts['r'+key]=m;}
+}
+rebuildHouse();
+const buildGrid=new THREE.GridHelper(PLOT.n*PLOT.c,PLOT.n,'#ffffff','#ffffff');buildGrid.material.transparent=true;buildGrid.material.opacity=0.7;
+buildGrid.position.set(PLOT.x0+PLOT.n*PLOT.c/2,PLOT.y+0.02,PLOT.z0+PLOT.n*PLOT.c/2);buildGrid.visible=false;scene.add(buildGrid);
 // Ausrufezeichen über Rosa
 const markCv=document.createElement('canvas');markCv.width=markCv.height=64;{const x=markCv.getContext('2d');x.fillStyle='#f6c13b';x.beginPath();x.arc(32,32,28,0,7);x.fill();
   x.lineWidth=5;x.strokeStyle='#1b2a20';x.stroke();x.fillStyle='#1b2a20';x.font='900 40px sans-serif';x.textAlign='center';x.fillText('L',32,46);}
@@ -613,6 +692,13 @@ cvs.addEventListener('pointermove',e=>{
   else if(e.pointerId===lookId){camYaw-=(e.clientX-lx)*0.007;camPitch=Math.min(1.15,Math.max(0.08,camPitch+(e.clientY-ly)*0.004));lx=e.clientX;ly=e.clientY;}});
 function endPtr(e){if(e.pointerId===joyId){joyId=null;input.jx=input.jy=0;joyBase.hidden=true;}if(e.pointerId===lookId)lookId=null;}
 cvs.addEventListener('pointerup',endPtr);cvs.addEventListener('pointercancel',endPtr);
+// Baumodus: Tippen setzt ein Teil, Wischen dreht die Ansicht
+let bPtr=null,bX0=0,bY0=0,bLast=0,bMoved=false;
+cvs.addEventListener('pointerdown',e=>{if(mode!=='build'||bPtr!==null)return;bPtr=e.pointerId;bX0=bLast=e.clientX;bY0=e.clientY;bMoved=false;});
+cvs.addEventListener('pointermove',e=>{if(mode!=='build'||e.pointerId!==bPtr)return;if(Math.hypot(e.clientX-bX0,e.clientY-bY0)>10)bMoved=true;
+  if(bMoved)buildYaw-=(e.clientX-bLast)*0.008;bLast=e.clientX;});
+cvs.addEventListener('pointerup',e=>{if(e.pointerId!==bPtr)return;bPtr=null;if(mode==='build'&&!bMoved)buildTap(e.clientX,e.clientY);});
+cvs.addEventListener('pointercancel',e=>{if(e.pointerId===bPtr)bPtr=null;});
 cvs.addEventListener('wheel',e=>{camDist=Math.min(14,Math.max(5,camDist+e.deltaY*0.01));},{passive:true});
 addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;input.keys[e.code]=true;if(mode==='play'&&(e.code==='Space'||e.code==='KeyE')){e.preventDefault();fishPress();}});
 addEventListener('keyup',e=>{input.keys[e.code]=false;});
@@ -620,10 +706,12 @@ addEventListener('keyup',e=>{input.keys[e.code]=false;});
 /* =================== Bewegung =================== */
 const inBounds=(x,z)=>Math.abs(x)<BOUND&&Math.abs(z)<BOUND;
 function hitsCollider(x,z,r){for(const c of colliders){const rr=c.r+r;if((c.x-x)**2+(c.z-z)**2<rr*rr)return true;}return false;}
-const walkable=(x,z)=>inBounds(x,z)&&(onDock(x,z)||heightAt(x,z)>0.15)&&!hitsCollider(x,z,0.35);
+function hitsWall(x,z,r){for(const s of houseSegs){const dx=s.bx-s.ax,dz=s.bz-s.az,l=dx*dx+dz*dz;
+    const k=Math.max(0,Math.min(1,((x-s.ax)*dx+(z-s.az)*dz)/l));if((s.ax+dx*k-x)**2+(s.az+dz*k-z)**2<r*r)return true;}return false;}
+const walkable=(x,z)=>inBounds(x,z)&&(onDock(x,z)||onPlot(x,z)||heightAt(x,z)>0.15)&&!hitsCollider(x,z,0.35)&&!hitsWall(x,z,0.33);
 const nearDock=(x,z)=>x>DOCK.x0-1.6&&x<DOCK.x1+1&&z>DOCK.z0-1.8&&z<DOCK.z1+1.8;
-const boatable=(x,z)=>inBounds(x,z)&&heightAt(x,z)<-0.6&&!nearDock(x,z);
-function groundY(x,z){const h=heightAt(x,z);return onDock(x,z)?Math.max(h,DOCK.y):h;}
+const boatable=(x,z)=>inBounds(x,z)&&heightAt(x,z)<-0.6&&!nearDock(x,z)&&!nearPlot(x,z,1.8);
+function groundY(x,z){const h=heightAt(x,z);return onDock(x,z)?Math.max(h,DOCK.y):onPlot(x,z)?Math.max(h,PLOT.y):h;}
 function angleLerp(a,b,t){let d=((b-a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI;return a+d*t;}
 
 function updatePlayer(dt,t){
@@ -678,7 +766,7 @@ const fishing={state:'idle',t:0,target:new THREE.Vector3(),from:new THREE.Vector
 function findWater(){
   const dx=Math.sin(player.facing),dz=Math.cos(player.facing);
   const ds=player.inBoat?[4,5.5,3]:[3.5,5,6.5,8];
-  for(const d of ds){const x=player.pos.x+dx*d,z=player.pos.z+dz*d;if(heightAt(x,z)<-0.35&&!onDock(x,z)&&inBounds(x,z))return new THREE.Vector3(x,0.05,z);}
+  for(const d of ds){const x=player.pos.x+dx*d,z=player.pos.z+dz*d;if(heightAt(x,z)<-0.35&&!onDock(x,z)&&!nearPlot(x,z,0.3)&&inBounds(x,z))return new THREE.Vector3(x,0.05,z);}
   return null;
 }
 // Köder für einen Wurf nehmen (Früchte werden weniger, Blinker und Würmer bleiben)
@@ -965,7 +1053,7 @@ function showShop(){
 let ctxAction=null,exitSpot=null;
 function findExit(){
   for(const r of[2.5,3.5,4.5,5.5])for(let i=0;i<16;i++){const a=i/16*Math.PI*2,x=player.pos.x+Math.sin(a)*r,z=player.pos.z+Math.cos(a)*r;
-    if(inBounds(x,z)&&(onDock(x,z)||heightAt(x,z)>0.3)&&!hitsCollider(x,z,0.4))return {x,z};}
+    if(inBounds(x,z)&&(onDock(x,z)||onPlot(x,z)||heightAt(x,z)>0.3)&&!hitsCollider(x,z,0.4)&&!hitsWall(x,z,0.4))return {x,z};}
   return null;
 }
 function updateCtx(){
@@ -973,14 +1061,16 @@ function updateCtx(){
   if(!player.inBoat){
     if(Math.hypot(p.x-ROSA.x,p.z-ROSA.z)<4.2)a='shop';
     else if(Math.hypot(p.x-TIAGO_AT.x,p.z-TIAGO_AT.z)<4.2)a='tiago';
+    else if(onPlot(p.x,p.z))a='build';
     else if(state.hasBoat&&Math.hypot(p.x-boat.pos.x,p.z-boat.pos.z)<BOAT_REACH)a='board';
   }else{exitSpot=findExit();if(exitSpot)a='exit';}
   if(a!==ctxAction){ctxAction=a;const b=$('#btnCtx');b.hidden=!a;
-    b.textContent=a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
+    b.textContent=a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
 $('#btnCtx').onclick=()=>{audio();
   if(ctxAction==='shop'){stopFishing();showShop();}
   else if(ctxAction==='tiago'){stopFishing();showTiago();}
+  else if(ctxAction==='build'){stopFishing();openBuild();}
   else if(ctxAction==='board'){stopFishing();player.inBoat=true;state.usedBoat=true;save();player.pos.copy(boat.pos);player.facing=boat.yaw;toast('Leinen los! Im tiefen Fluss leben die Riesenfische.');}
   else if(ctxAction==='exit'&&exitSpot){stopFishing();player.inBoat=false;player.pos.x=exitSpot.x;player.pos.z=exitSpot.z;player.y=groundY(exitSpot.x,exitSpot.z);
     player.av.legs.forEach(l=>l.rotation.x=0);}
@@ -1000,6 +1090,7 @@ function tipText(){
   if(found===0)return 'Lauf über den Holzsteg bis ans Wasser. Dann tippe auf „Angeln“.';
   if(state.bucket.length>=bucketMax())return 'Dein Eimer ist voll! Bring die Fische zu Rosa an die Hütte.';
   if(!state.metTiago&&state.ludins>=40)return 'Neu: Opa Tiago hat einen Angelladen neben Rosas Hütte!';
+  if(state.metTiago&&!state.builtOnce&&state.ludins>=20)return 'Hinter Opa Tiagos Hütte ist am Fluss ein Bauplatz für dein eigenes Haus!';
   if(!state.hasBoat&&state.ludins>=300)return 'Du hast genug Ludins! Kauf dir bei Opa Tiago ein Boot.';
   if(!state.hasBoat&&state.bucket.length>=4)return 'Verkaufe deine Fische bei Rosa. Für 300 Ludins gibt es bei Opa Tiago ein Boot!';
   if(state.hasBoat&&!state.usedBoat)return 'Dein Boot liegt am Steg. Geh hin und steig ein!';
@@ -1031,7 +1122,7 @@ let creatorSpin=0;
 function faceFreeSide(){const p=player.pos;
   for(let k=0;k<16;k++){const a=player.facing+(k%2?1:-1)*Math.ceil(k/2)*Math.PI/8;let free=true;
     for(const d of[1.2,2.4,3.6,4.4]){const x=p.x+Math.sin(a)*d,z=p.z+Math.cos(a)*d;
-      if(hitsCollider(x,z,0.7)||heightAt(x,z)>player.y+1.2){free=false;break;}}
+      if(hitsCollider(x,z,0.7)||hitsWall(x,z,0.5)||heightAt(x,z)>player.y+1.2){free=false;break;}}
     if(free){player.facing=a;return;}}}
 function openCreator(){mode='creator';$('#hud').hidden=true;$('#creator').hidden=false;$('#modal').hidden=true;buildCreator();creatorSpin=0;
   if(player.inBoat){player.inBoat=false;player.pos.set(VX-6,0,2);player.y=groundY(player.pos.x,player.pos.z);}
@@ -1057,11 +1148,67 @@ let boardOnStart=false;
   else if(walkable(w.x,w.z)){player.pos.set(w.x,0,w.z);player.facing=w.f||0;player.y=groundY(w.x,w.z);}
 })();
 
+/* ---- Baumodus ---- */
+let buildTool='wand',buildCol=0,buildYaw=Math.PI;
+const BUILD_HINT={wand:'Tippe auf eine Linie, dann steht dort eine Wand. Wischen dreht die Ansicht.',fenster:'Tippe auf eine Linie für eine Wand mit Fenster.',
+  tuer:'Tippe auf eine Linie für eine Tür. Durch Türen kannst du ins Haus gehen.',dach:'Tippe auf ein Feld, dann kommt ein Dach darauf.',weg:'Tippe auf ein Teil, um es wegzunehmen. Du bekommst die Ludins zurück.'};
+function openBuild(){mode='build';input.jx=input.jy=0;joyId=null;lookId=null;joyBase.hidden=true;
+  $('#hud').hidden=true;$('#build').hidden=false;buildGrid.visible=true;renderBuildUI();
+  if(!state.builtOnce)toast('Am Amazonas stehen viele Häuser auf Pfählen. In der Regenzeit steigt der Fluss nämlich viele Meter hoch!');}
+function closeBuild(){mode='play';$('#build').hidden=true;$('#hud').hidden=false;buildGrid.visible=false;
+  // Steht man jetzt in einer Wand, rückt man ein Stück zur Seite
+  const p=player.pos;if(hitsWall(p.x,p.z,0.33)){outer:for(const r of[0.5,1,1.5,2,3])for(let i=0;i<16;i++){const a=i/16*Math.PI*2,x=p.x+Math.sin(a)*r,z=p.z+Math.cos(a)*r;
+    if(walkable(x,z)){p.x=x;p.z=z;break outer;}}}
+  save();refreshHud();}
+$('#btnBuildDone').onclick=closeBuild;
+function renderBuildUI(){
+  $('#bLudins').textContent=state.ludins;$('#bHint').textContent=BUILD_HINT[buildTool];
+  const tb=$('#bTools');tb.innerHTML='';
+  [['wand'],['fenster'],['tuer'],['dach'],['weg']].forEach(([id])=>{const pt=PARTS[id];const b=el('button','tool',
+      pt?'<span class="i">'+pt.ico+'</span>'+pt.name+'<small>'+pt.price+' L</small>':'<span class="i">🧽</span>Weg<small>zurück</small>');
+    b.setAttribute('aria-pressed',buildTool===id);b.onclick=()=>{buildTool=id;renderBuildUI();};tb.appendChild(b);});
+  const cb=$('#bCols');cb.innerHTML='';cb.hidden=!['wand','fenster','tuer'].includes(buildTool);
+  WALL_COLS.forEach((c,i)=>{const b=el('button');b.style.background=c;b.setAttribute('aria-label','Wandfarbe '+(i+1));b.setAttribute('aria-pressed',buildCol===i);
+    b.onclick=()=>{buildCol=i;renderBuildUI();};cb.appendChild(b);});
+}
+const rayc=new THREE.Raycaster(),ndc=new THREE.Vector2(),buildPlane=new THREE.Plane(new THREE.Vector3(0,1,0),0),hitP=new THREE.Vector3();
+function buildTap(cx,cy){
+  ndc.set(cx/innerWidth*2-1,-(cy/innerHeight)*2+1);rayc.setFromCamera(ndc,camera);buildPlane.constant=-PLOT.y;
+  if(!rayc.ray.intersectPlane(buildPlane,hitP)||!nearPlot(hitP.x,hitP.z,0.6))return;
+  const N=PLOT.n,u=Math.max(0,Math.min(N,(hitP.x-PLOT.x0)/PLOT.c)),v=Math.max(0,Math.min(N,(hitP.z-PLOT.z0)/PLOT.c));
+  // nächste Kante
+  const dh=Math.abs(v-Math.round(v)),dv=Math.abs(u-Math.round(u));
+  const eKey=dh<=dv?'h,'+Math.min(N-1,Math.floor(u))+','+Math.round(v):'v,'+Math.round(u)+','+Math.min(N-1,Math.floor(v));
+  const cKey=Math.min(N-1,Math.floor(u))+','+Math.min(N-1,Math.floor(v));
+  const H=state.house;let changed=null;
+  if(buildTool==='weg'){
+    if(H.w[eKey]&&(Math.min(dh,dv)<0.3||!H.r[cKey])){state.ludins+=PARTS[H.w[eKey][0]].price;delete H.w[eKey];changed='-';}
+    else if(H.r[cKey]){state.ludins+=PARTS.dach.price;delete H.r[cKey];changed='-';}
+    else if(H.w[eKey]){state.ludins+=PARTS[H.w[eKey][0]].price;delete H.w[eKey];changed='-';}
+  }else if(buildTool==='dach'){
+    if(H.r[cKey])return;
+    if(state.ludins<PARTS.dach.price){toast('Dafür fehlen dir noch '+(PARTS.dach.price-state.ludins)+' Ludins.');return;}
+    state.ludins-=PARTS.dach.price;H.r[cKey]=1;changed='r'+cKey;
+  }else{
+    const old=H.w[eKey];if(old&&old[0]===buildTool&&old[1]===buildCol)return;
+    const cost=PARTS[buildTool].price-(old?PARTS[old[0]].price:0);
+    if(state.ludins<cost){toast('Dafür fehlen dir noch '+(cost-state.ludins)+' Ludins.');return;}
+    state.ludins-=cost;H.w[eKey]=[buildTool,buildCol];changed=eKey;
+  }
+  if(!changed)return;
+  if(changed!=='-'){state.builtOnce=true;tone(260,0.09,'square',0.05);tone(390,0.12,'square',0.05,0.07);}else tone(200,0.12,'triangle',0.08);
+  save();rebuildHouse();renderBuildUI();
+  if(changed!=='-'&&houseParts[changed])pops.push({o:houseParts[changed],t:0});
+}
+
 /* =================== Kamera & Schleife =================== */
 const camTarget=new THREE.Vector3(),camWant=new THREE.Vector3();
 function resize(){const w=innerWidth,h=innerHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix();}
 addEventListener('resize',resize);resize();
 function updateCamera(dt){
+  if(mode==='build'){const cx=PLOT.x0+PLOT.n*PLOT.c/2,cz=PLOT.z0+PLOT.n*PLOT.c/2,D=18,pt=0.98;
+    camWant.set(cx+Math.sin(buildYaw)*Math.cos(pt)*D,PLOT.y+Math.sin(pt)*D,cz+Math.cos(buildYaw)*Math.cos(pt)*D);
+    camera.position.lerp(camWant,1-Math.exp(-dt*8));camera.lookAt(cx,PLOT.y-1.2,cz);return;}
   if(mode==='creator'){
     creatorSpin+=dt*0.6;player.root.rotation.y=player.facing+Math.sin(creatorSpin)*0.6;
     const dx=Math.sin(player.facing),dz=Math.cos(player.facing);
@@ -1098,6 +1245,12 @@ function loop(){
       wakePuff(bx+(Math.random()-0.5)*0.6,bz+(Math.random()-0.5)*0.6);}}
   for(const w of wake){if(!w.m.visible)continue;w.t+=dt;const sc=1+w.t*2.2;w.m.scale.set(sc,sc,sc);w.m.material.opacity=Math.max(0,0.7-w.t*0.7);if(w.t>1)w.m.visible=false;}
   engineSound(tuckern?0.15+fahrt*0.85:0);
+  // Haus: im Baumodus Dach halb durchsichtig, steht man drin auch die Wände
+  const inside=mode!=='build'&&!player.inBoat&&onPlot(player.pos.x,player.pos.z);
+  roofMat.opacity=mode==='build'?0.4:inside?0.25:1;roofMat.depthWrite=roofMat.opacity===1;
+  const wo=inside?0.45:1;wallMats.forEach(m=>{m.opacity=wo;m.depthWrite=wo===1;});postMat.opacity=wo;postMat.depthWrite=wo===1;
+  for(let i=pops.length-1;i>=0;i--){const q=pops[i];q.t+=dt/0.25;const k=Math.min(1,q.t)-1;q.o.scale.setScalar(0.6+0.4*(1+2.70158*k*k*k+1.70158*k*k)); // springt sanft auf seine Größe
+    if(k>=1){q.o.scale.setScalar(1);pops.splice(i,1);}}
   // Rosa winkt
   rosa.arms[1].rotation.z=-0.3-Math.abs(Math.sin(t*2))*0.9;rosa.arms[1].rotation.x=-0.2;
   tiago.arms[1].rotation.z=-0.2-Math.abs(Math.sin(t*1.2))*0.6;tiago.rod.rotation.x=0.35+Math.sin(t*0.8)*0.08;
