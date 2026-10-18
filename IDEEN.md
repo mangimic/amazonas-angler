@@ -8,6 +8,7 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [x] Fische bei Rosa verkaufen (Ludins)
 - [x] Profi-Angel, großer Eimer, Boot kaufen
 - [x] Fischbuch: Fisch antippen zeigt eine eigene Seite
+- [x] Motorboot (600 Ludins, doppelt so schnell)
 
 ## Als Nächstes
 - [ ] Echte Fotos von den Fischen

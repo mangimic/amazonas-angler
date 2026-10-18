@@ -208,7 +208,8 @@ const FISH_BY={};FISH.forEach(f=>FISH_BY[f.id]=f);
 const SHOP=[
  {id:'rod',name:'Profi-Angel',price:120,ico:'🎣',desc:'Die Fische beißen schneller, und seltene Fische kommen öfter.'},
  {id:'bucket',name:'Großer Eimer',price:80,ico:'🪣',desc:'Jetzt passen 30 statt 15 Fische hinein.'},
- {id:'boat',name:'Boot',price:300,ico:'🛶',desc:'Fahr auf den Fluss! Nur dort leben die Riesenfische.'}
+ {id:'boat',name:'Boot',price:300,ico:'🛶',desc:'Fahr auf den Fluss! Nur dort leben die Riesenfische.'},
+ {id:'motor',name:'Motorboot',price:600,ico:'🚤',desc:'Rosa baut einen Motor an dein Boot. Dann fährst du doppelt so schnell!',needs:'hasBoat'}
 ];
 const SKINS=['#f6d2b8','#eab48c','#c98b5e','#9a6440','#6e4429','#4a2c1b'];
 const HAIRS=[['kurz','Kurz'],['lang','Lang'],['locken','Locken'],['keine','Keine']];
@@ -219,7 +220,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 
 /* =================== Speicherstand =================== */
 const KEY='amazonas-angler-1';
-const state={ludins:0,bucket:[],book:{},hasBoat:false,hasRod:false,hasBucket:false,usedBoat:false,
+const state={ludins:0,bucket:[],book:{},hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,usedBoat:false,
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s){Object.assign(state,s);state.avatar=Object.assign({},state.avatar,s.avatar||{});}}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
@@ -454,6 +455,14 @@ const boat={pos:new THREE.Vector3(riverX(3.6)+6.5,0,3.6),yaw:0,mesh:new THREE.Gr
   for(const z of[-1.2,1.0]){const b=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.08,0.35),mat('#c79a62'));b.position.set(0,-0.15,z);boat.mesh.add(b);}
   const flag=new THREE.Mesh(new THREE.ConeGeometry(0.25,0.6,3),mat('#f6c13b'));flag.rotation.z=-Math.PI/2;flag.position.set(0.25,1.0,-2.3);boat.mesh.add(flag);
   const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,1.2,5),mat('#5e4128'));pole.position.set(0,0.6,-2.3);boat.mesh.add(pole);
+  // Außenbord-Motor hinten am Boot (erst sichtbar, wenn man ihn gekauft hat)
+  const motor=new THREE.Group();motor.position.set(0,0,-2.75);
+  const box=new THREE.Mesh(new THREE.BoxGeometry(0.55,0.6,0.6),mat('#e2412b'));box.position.y=0.55;motor.add(box);
+  const cap=new THREE.Mesh(new THREE.BoxGeometry(0.58,0.12,0.63),mat('#2b2f33'));cap.position.y=0.9;motor.add(cap);
+  const shaft=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1,6),mat('#2b2f33'));shaft.position.y=-0.2;motor.add(shaft);
+  const prop=new THREE.Group();prop.position.set(0,-0.6,-0.12);
+  for(let i=0;i<3;i++){const bl=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.36,0.03),mat('#c9d3d8'));bl.rotation.z=i*Math.PI*2/3;bl.position.set(Math.sin(i*Math.PI*2/3)*0.12,Math.cos(i*Math.PI*2/3)*0.12,0);prop.add(bl);}
+  motor.add(prop);boat.motor=motor;boat.prop=prop;boat.mesh.add(motor);
   scene.add(boat.mesh);
 })();
 
@@ -472,6 +481,10 @@ function makeParrot(b,w,head){const g=new THREE.Group();const bd=new THREE.Mesh(
 const rings=[];
 function splash(x,z,big){const m=new THREE.Mesh(new THREE.RingGeometry(0.25,0.4,24),new THREE.MeshBasicMaterial({color:'#ffffff',transparent:true,opacity:0.8,depthWrite:false}));
   m.rotation.x=-Math.PI/2;m.position.set(x,0.06,z);scene.add(m);rings.push({m,t:0,s:big?2.2:1.2});}
+const wakeGeo=new THREE.RingGeometry(0.2,0.45,16);const wake=[];let wakeI=0,wakeT=0;
+for(let i=0;i<28;i++){const m=new THREE.Mesh(wakeGeo,new THREE.MeshBasicMaterial({color:'#ffffff',transparent:true,opacity:0,depthWrite:false}));
+  m.rotation.x=-Math.PI/2;m.visible=false;scene.add(m);wake.push({m,t:9});}
+function wakePuff(x,z){const w=wake[wakeI];wakeI=(wakeI+1)%wake.length;w.t=0;w.m.position.set(x,0.07,z);w.m.visible=true;}
 const jumper=new THREE.Group();{const b=new THREE.Mesh(new THREE.SphereGeometry(0.3,10,8),mat('#d9a45a'));b.scale.set(0.6,1,2);jumper.add(b);
   const t=new THREE.Mesh(new THREE.ConeGeometry(0.3,0.5,4),mat('#c56a12'));t.rotation.x=Math.PI/2;t.position.z=-0.75;jumper.add(t);}
 jumper.visible=false;scene.add(jumper);
@@ -492,6 +505,13 @@ function tone(f,d,type,vol,delay){if(!ac)return;const t=ac.currentTime+(delay||0
 function sfxSplash(){if(!ac)return;const n=ac.sampleRate*0.3,b=ac.createBuffer(1,n,ac.sampleRate),d=b.getChannelData(0);for(let i=0;i<n;i++)d[i]=(Math.random()*2-1)*(1-i/n)**2;
   const s=ac.createBufferSource();s.buffer=b;const f=ac.createBiquadFilter();f.type='lowpass';f.frequency.value=1200;const g=ac.createGain();g.gain.value=0.35;s.connect(f);f.connect(g);g.connect(ac.destination);s.start();}
 const sfxCoins=()=>{tone(988,0.12,'square',0.08);tone(1319,0.25,'square',0.08,0.09);};
+let engine=null;
+function engineSound(level){if(!ac)return;
+  if(!engine){const o=ac.createOscillator(),o2=ac.createOscillator(),f=ac.createBiquadFilter(),g=ac.createGain();
+    o.type='sawtooth';o2.type='square';f.type='lowpass';f.frequency.value=380;g.gain.value=0;
+    o.connect(f);o2.connect(f);f.connect(g);g.connect(ac.destination);o.start();o2.start();engine={o,o2,g};}
+  const t=ac.currentTime;engine.g.gain.setTargetAtTime(level>0?0.025+level*0.035:0,t,0.15);
+  engine.o.frequency.setTargetAtTime(48+level*42,t,0.2);engine.o2.frequency.setTargetAtTime(24+level*21,t,0.2);}
 const sfxBite=()=>{tone(660,0.1,'triangle',0.2);tone(880,0.15,'triangle',0.2,0.1);};
 const sfxCatch=()=>{[523,659,784,1047].forEach((f,i)=>tone(f,0.18,'triangle',0.15,i*0.08));};
 
@@ -534,8 +554,8 @@ function updatePlayer(dt,t){
     const fx=-Math.sin(camYaw),fz=-Math.cos(camYaw),rx=Math.cos(camYaw),rz=-Math.sin(camYaw);
     let mx=fx*(-jy)+rx*jx,mz=fz*(-jy)+rz*jx;const ml=Math.hypot(mx,mz)||1;mx/=ml;mz/=ml;
     const target=Math.atan2(mx,mz);
-    player.facing=angleLerp(player.facing,target,1-Math.exp(-dt*(player.inBoat?4:12)));
-    const sp=(player.inBoat?9:5.5)*mag*dt;
+    player.facing=angleLerp(player.facing,target,1-Math.exp(-dt*(player.inBoat?(state.hasMotor?5:4):12)));
+    const sp=(player.inBoat?(state.hasMotor?18:9):5.5)*mag*dt;
     const ok=player.inBoat?boatable:walkable;
     let dx=mx*sp,dz=mz*sp;
     if(player.inBoat){dx=Math.sin(player.facing)*sp;dz=Math.cos(player.facing)*sp;}
@@ -544,12 +564,13 @@ function updatePlayer(dt,t){
     else if(ok(p.x+dx,p.z)){p.x+=dx;moving=true;}
     else if(ok(p.x,p.z+dz)){p.z+=dz;moving=true;}
   }
+  player.speed=moving?mag:0;
   const av=player.av;
   if(player.inBoat){
     boat.pos.copy(player.pos);boat.yaw=player.facing;
     const by=0.12+Math.sin(t*2)*0.05;player.y=by-0.4;
     av.legs.forEach(l=>l.rotation.x=-1.45);
-    if(fishing.state==='idle')av.arms.forEach((a,i)=>a.rotation.x=Math.sin(t*3+i*Math.PI)*0.5*(moving?1:0.1));
+    if(fishing.state==='idle')av.arms.forEach((a,i)=>a.rotation.x=state.hasMotor?-0.6:Math.sin(t*3+i*Math.PI)*0.5*(moving?1:0.1));
   }else{
     const gy=groundY(player.pos.x,player.pos.z);player.y+=(gy-player.y)*Math.min(1,dt*14);
     player.walk+=dt*(moving?11*mag:0);
@@ -784,16 +805,19 @@ function showShop(){
     if(total){const all=el('button','b go','Alles verkaufen (+'+total+' Ludins)');all.onclick=()=>{state.ludins+=total;state.bucket=[];save();sfxCoins();refreshHud(true);toast('+'+total+' Ludins!');showShop();};bt.appendChild(all);}
     const c=el('button','b alt','Tschüss');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
   }else{
-    SHOP.forEach(s=>{const owned=s.id==='rod'?state.hasRod:s.id==='boat'?state.hasBoat:state.hasBucket;
+    const OWN={rod:'hasRod',boat:'hasBoat',bucket:'hasBucket',motor:'hasMotor'};
+    SHOP.forEach(s=>{const owned=state[OWN[s.id]];
       const row=el('div','item shopitem');row.appendChild(el('div','shopicon',s.ico));
       row.appendChild(el('div','t','<b>'+s.name+'</b><span>'+s.desc+'</span>'));
       const b=el('button','b',owned?'Gekauft':s.price+' L');
       if(owned)b.disabled=true;
+      else if(s.needs&&!state[s.needs]){b.disabled=true;b.textContent='Erst das Boot';}
       else if(state.ludins<s.price){b.disabled=true;b.textContent='Noch '+(s.price-state.ludins)+' L';}
-      b.onclick=()=>{if(state.ludins<s.price)return;state.ludins-=s.price;
+      b.onclick=()=>{if(owned||state.ludins<s.price||(s.needs&&!state[s.needs]))return;state.ludins-=s.price;
         if(s.id==='rod'){state.hasRod=true;toast('Super! Mit der Profi-Angel beißen die Fische schneller.');}
         if(s.id==='bucket'){state.hasBucket=true;toast('Jetzt passen 30 Fische in deinen Eimer!');}
         if(s.id==='boat'){state.hasBoat=true;toast('Dein Boot wartet am Steg!');}
+        if(s.id==='motor'){state.hasMotor=true;toast('Brumm! Dein Boot hat jetzt einen Motor.');}
         save();sfxCatch();refreshHud(true);showShop();};
       row.appendChild(b);l.appendChild(row);});
     card.appendChild(l);
@@ -840,6 +864,7 @@ function tipText(){
   if(!state.hasBoat&&state.ludins>=300)return 'Du hast genug Ludins! Kauf dir bei Rosa ein Boot.';
   if(!state.hasBoat&&state.bucket.length>=4)return 'Verkaufe deine Fische bei Rosa. Für 300 Ludins bekommst du ein Boot!';
   if(state.hasBoat&&!state.usedBoat)return 'Dein Boot liegt am Steg. Geh hin und steig ein!';
+  if(state.hasBoat&&!state.hasMotor&&state.ludins>=600)return 'Du hast genug Ludins! Bei Rosa gibt es jetzt ein Motorboot.';
   if(found>=FISH.length)return 'Wow! Du hast alle '+FISH.length+' Fischarten gefunden!';
   return '';
 }
@@ -891,6 +916,16 @@ function loop(){
   // Boot
   boat.mesh.visible=state.hasBoat;
   if(state.hasBoat){boat.mesh.position.set(boat.pos.x,0.12+Math.sin(t*2)*0.05,boat.pos.z);boat.mesh.rotation.set(Math.sin(t*1.7)*0.03,boat.yaw,Math.sin(t*2.1)*0.04);}
+  // Motorboot
+  boat.motor.visible=state.hasMotor;
+  const fahrt=mode==='play'&&player.inBoat&&state.hasMotor?player.speed||0:0;
+  const tuckern=mode==='play'&&player.inBoat&&state.hasMotor;
+  boat.prop.rotation.z+=dt*(tuckern?6+fahrt*30:0);
+  if(fahrt>0.2){boat.mesh.rotation.x-=0.06*fahrt;wakeT+=dt;
+    if(wakeT>0.05){wakeT=0;const bx=boat.pos.x-Math.sin(boat.yaw)*3.1,bz=boat.pos.z-Math.cos(boat.yaw)*3.1;
+      wakePuff(bx+(Math.random()-0.5)*0.6,bz+(Math.random()-0.5)*0.6);}}
+  for(const w of wake){if(!w.m.visible)continue;w.t+=dt;const sc=1+w.t*2.2;w.m.scale.set(sc,sc,sc);w.m.material.opacity=Math.max(0,0.7-w.t*0.7);if(w.t>1)w.m.visible=false;}
+  engineSound(tuckern?0.15+fahrt*0.85:0);
   // Rosa winkt
   rosa.arms[1].rotation.z=-0.3-Math.abs(Math.sin(t*2))*0.9;rosa.arms[1].rotation.x=-0.2;
   mark.position.set(ROSA.x,heightAt(ROSA.x,ROSA.z)+2.8+Math.sin(t*3)*0.12,ROSA.z);mark.visible=state.bucket.length>0||mode==='creator';
