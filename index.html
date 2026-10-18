@@ -21,6 +21,7 @@
 html,body{height:100%;overflow:hidden;background:#9fd6c8;color:var(--ink)}
 body{font-family:var(--body);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));
   -webkit-user-select:none;user-select:none;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
 #stage{position:fixed;inset:0;touch-action:none}
 #stage canvas{display:block;width:100%;height:100%}
 button{font:inherit;color:inherit;touch-action:manipulation;cursor:pointer}
@@ -355,7 +356,7 @@ for(let i=0;i<4000&&trees[0].length+trees[1].length+trees[2].length<430;i++){
   scene.add(g);
   const HX=VX+5,HZ=-7;
   const hut=new THREE.Group();
-  hut.add(Object.assign(new THREE.Mesh(new THREE.CylinderGeometry(3.2,3.3,2.8,9),mat('#c79a62')),{position:new THREE.Vector3(0,1.4,0)}));
+  const wall=new THREE.Mesh(new THREE.CylinderGeometry(3.2,3.3,2.8,9),mat('#c79a62'));wall.position.y=1.4;hut.add(wall);
   const roof=new THREE.Mesh(new THREE.ConeGeometry(4.6,3,9),mat('#d9b25a'));roof.position.y=4.2;hut.add(roof);
   const door=new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,0.2,12,1,false,0,Math.PI),mat('#3b2a1c'));door.rotation.set(Math.PI/2,0,Math.PI/2);door.position.set(-3.18,0,0);
   door.scale.set(1,1,2.2);hut.add(door);
