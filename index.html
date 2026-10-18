@@ -448,9 +448,12 @@ const mark=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTextur
 
 /* ---- Boot ---- */
 const boat={pos:new THREE.Vector3(riverX(3.6)+6.5,0,3.6),yaw:0,mesh:new THREE.Group()};
+const BOAT_Y=0.32,BOAT_REACH=7; // Höhe über dem Wasser; so nah muss man zum Einsteigen sein
 (function(){
   const hull=new THREE.Mesh(new THREE.SphereGeometry(1,20,10,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshLambertMaterial({color:'#a2502d',side:THREE.DoubleSide}));
   hull.scale.set(0.95,0.6,2.7);boat.mesh.add(hull);
+  // Holzboden über der Wasserlinie, damit innen kein Wasser durchschimmert
+  const floor=new THREE.Mesh(new THREE.CircleGeometry(1,28),mat('#8a5a34'));floor.rotation.x=-Math.PI/2;floor.position.y=-0.22;floor.scale.set(0.86,2.45,1);boat.mesh.add(floor);
   const rim=new THREE.Mesh(new THREE.TorusGeometry(1,0.07,6,28),mat('#6b3b1e'));rim.rotation.x=Math.PI/2;rim.scale.set(0.95,2.7,1);boat.mesh.add(rim);
   for(const z of[-1.2,1.0]){const b=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.08,0.35),mat('#c79a62'));b.position.set(0,-0.15,z);boat.mesh.add(b);}
   const flag=new THREE.Mesh(new THREE.ConeGeometry(0.25,0.6,3),mat('#f6c13b'));flag.rotation.z=-Math.PI/2;flag.position.set(0.25,1.0,-2.3);boat.mesh.add(flag);
@@ -568,7 +571,7 @@ function updatePlayer(dt,t){
   const av=player.av;
   if(player.inBoat){
     boat.pos.copy(player.pos);boat.yaw=player.facing;
-    const by=0.12+Math.sin(t*2)*0.05;player.y=by-0.4;
+    const by=BOAT_Y+Math.sin(t*2)*0.05;player.y=by-0.4;
     av.legs.forEach(l=>l.rotation.x=-1.45);
     if(fishing.state==='idle')av.arms.forEach((a,i)=>a.rotation.x=state.hasMotor?-0.6:Math.sin(t*3+i*Math.PI)*0.5*(moving?1:0.1));
   }else{
@@ -836,7 +839,7 @@ function updateCtx(){
   let a=null;const p=player.pos;
   if(!player.inBoat){
     if(Math.hypot(p.x-ROSA.x,p.z-ROSA.z)<4.2)a='shop';
-    else if(state.hasBoat&&Math.hypot(p.x-boat.pos.x,p.z-boat.pos.z)<4.8)a='board';
+    else if(state.hasBoat&&Math.hypot(p.x-boat.pos.x,p.z-boat.pos.z)<BOAT_REACH)a='board';
   }else{exitSpot=findExit();if(exitSpot)a='exit';}
   if(a!==ctxAction){ctxAction=a;const b=$('#btnCtx');b.hidden=!a;
     b.textContent=a==='shop'?'🐟 Zu Rosa':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
@@ -915,7 +918,7 @@ function loop(){
     slowT+=dt;if(slowT>0.2){slowT=0;updateCtx();updateTip();}}
   // Boot
   boat.mesh.visible=state.hasBoat;
-  if(state.hasBoat){boat.mesh.position.set(boat.pos.x,0.12+Math.sin(t*2)*0.05,boat.pos.z);boat.mesh.rotation.set(Math.sin(t*1.7)*0.03,boat.yaw,Math.sin(t*2.1)*0.04);}
+  if(state.hasBoat){boat.mesh.position.set(boat.pos.x,BOAT_Y+Math.sin(t*2)*0.05,boat.pos.z);boat.mesh.rotation.set(Math.sin(t*1.7)*0.03,boat.yaw,Math.sin(t*2.1)*0.04);}
   // Motorboot
   boat.motor.visible=state.hasMotor;
   const fahrt=mode==='play'&&player.inBoat&&state.hasMotor?player.speed||0:0;
