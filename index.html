@@ -202,6 +202,8 @@ const FISH=[
 // Echte Fotos (nur frei lizenzierte, z. B. Wikimedia Commons). Dateien liegen im Ordner fotos/.
 // Eintrag: id:{src:'fotos/<id>.jpg',von:'Fotograf',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:...'}
 const FOTOS={};
+// Solange ein Fisch noch kein echtes Foto hat, kommt dieses Bild.
+const PLATZHALTER={src:'fotos/platzhalter.jpg',platzhalter:true};
 const FISH_BY={};FISH.forEach(f=>FISH_BY[f.id]=f);
 const SHOP=[
  {id:'rod',name:'Profi-Angel',price:120,ico:'🎣',desc:'Die Fische beißen schneller, und seltene Fische kommen öfter.'},
@@ -693,19 +695,21 @@ function el(tag,cls,html){const e=document.createElement(tag);if(cls)e.className
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
 // Bild eines Fisches: gemalt, oder echtes Foto mit Angabe, wer es gemacht hat.
-const hasFoto=f=>!!FOTOS[f.id]&&!FOTOS[f.id].kaputt;
+const fotoFor=f=>{const ft=FOTOS[f.id];if(ft&&!ft.kaputt)return ft;return PLATZHALTER.kaputt?null:PLATZHALTER;};
+const hasFoto=f=>!!fotoFor(f);
 function fishPic(f,foto,onFail){
-  const fig=el('figure','pic');const ft=foto&&hasFoto(f)&&FOTOS[f.id];
+  const fig=el('figure','pic');const ft=foto&&fotoFor(f);
   if(!ft){fig.appendChild(fishCanvas(f,640,340));return fig;}
   const img=el('img');img.alt='Foto: '+f.name;img.src=ft.src;
   img.onerror=()=>{ft.kaputt=true;fig.innerHTML='';fig.appendChild(fishCanvas(f,640,340));if(onFail)onFail();};
   fig.appendChild(img);
+  if(ft.platzhalter){fig.appendChild(el('figcaption',null,'Platzhalter – hier kommt bald ein echtes Foto hin.'));return fig;}
   fig.appendChild(el('figcaption',null,'Foto: '+esc(ft.von)+' · <a href="'+esc(ft.link)+'" target="_blank" rel="noopener">'+esc(ft.lizenz)+'</a> · Wikimedia Commons'));
   return fig;
 }
 // Bild mit Knopf zum Wechseln zwischen Foto und gemaltem Fisch.
 function fishPicSwitch(f,startFoto){
-  const box=el('div','pic');let foto=startFoto&&hasFoto(f);const sw=el('button','b alt');const fail=()=>sw.remove();
+  const box=el('div','pic');let foto=startFoto&&hasFoto(f)&&!fotoFor(f).platzhalter;const sw=el('button','b alt');const fail=()=>sw.remove();
   let pic=fishPic(f,foto,fail);box.appendChild(pic);
   if(hasFoto(f)){const lbl=()=>sw.textContent=foto?'🎨 Gemalt':'📷 Echtes Foto';lbl();
     sw.onclick=()=>{foto=!foto;const n=fishPic(f,foto,fail);box.replaceChild(n,pic);pic=n;lbl();};box.appendChild(sw);}
