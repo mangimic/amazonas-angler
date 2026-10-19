@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Amazonas Angler</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -255,9 +256,26 @@ const FISH=[
  {id:'hecht',name:'Hecht',home:'see',fact:'Lauert gut versteckt zwischen Wasserpflanzen und schießt dann blitzschnell los.',w:4,price:60,cm:[40,110],shape:'long',c1:'#5f7a3a',c2:'#d8d39a',pat:'spots'}
 ];
 const fishHome=f=>f.home||'amazonas';
-// Echte Fotos (nur frei lizenzierte, z. B. Wikimedia Commons). Dateien liegen im Ordner fotos/.
+// Echte Fotos (nur frei lizenzierte, z. B. Wikimedia Commons). Dateien liegen im Ordner fotos/, Nachweis in fotos/BILDNACHWEIS.md.
+// Jugendschutz: nur lebende Fische im Wasser, keine toten Fische, nichts Gruseliges.
 // Eintrag: id:{src:'fotos/<id>.jpg',von:'Fotograf',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:...'}
-const FOTOS={};
+const FOTOS={
+ neon:{src:'fotos/neon.jpg',von:'Holger Krisp',lizenz:'CC BY 3.0',link:'https://commons.wikimedia.org/wiki/File:Neonsalmler_Paracheirodon_innesi.jpg'},
+ beil:{src:'fotos/beil.jpg',von:'Amada44',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Gasteropelecus_sternicla_-_9326.jpg'},
+ pacu:{src:'fotos/pacu.jpg',von:'Wisky',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Red_Pacu.JPG'},
+ piranha:{src:'fotos/piranha.jpg',von:'H. Zell',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Pygocentrus_nattereri_-_Karlsruhe_Zoo_01.jpg'},
+ skalar:{src:'fotos/skalar.jpg',von:'Alexxx1979',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Pterophyllum_scalare_DSC00532_2200.jpg'},
+ antennen:{src:'fotos/antennen.jpg',von:'5snake5',lizenz:'CC0',link:'https://commons.wikimedia.org/wiki/File:Pimelodus_pictus_-_Engel-Antennenwels.jpg'},
+ tambaqui:{src:'fotos/tambaqui.jpg',von:'Bloopityboop',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Tambaqui_(Colossoma_macropomum).jpg'},
+ pfauen:{src:'fotos/pfauen.jpg',von:'MOs810',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Cichla_ocellaris_Gdynia_(okon_pawi).jpg'},
+ diskus:{src:'fotos/diskus.jpg',von:'Gladstone Peixoto Moraes',lizenz:'Public domain',link:'https://commons.wikimedia.org/wiki/File:S_aequifasciata_axelrodi.jpg'},
+ rochen:{src:'fotos/rochen.jpg',von:'Raimond Spekking',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Pfauenaugen-Stechrochen_-_Ocellate_river_stingray_-_Potamotrygon_motoro.jpg'},
+ arowana:{src:'fotos/arowana.jpg',von:'Qwertzy2',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Osteoglossum_bicirrhosum.JPG'},
+ zitter:{src:'fotos/zitter.jpg',von:'Steven G. Johnson',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Electric-eel.jpg'},
+ dorado:{src:'fotos/dorado.jpg',von:'David Morimoto',lizenz:'CC BY-SA 2.0',link:'https://commons.wikimedia.org/wiki/File:Dourado(Salminus_brasiliensis)emBonito.jpg'},
+ piraiba:{src:'fotos/piraiba.jpg',von:'タウナギ',lizenz:'CC0',link:'https://commons.wikimedia.org/wiki/File:Brachyplatystoma_filamentosum_Totto.jpg'},
+ arapaima:{src:'fotos/arapaima.jpg',von:'Cliff',lizenz:'CC BY 2.0',link:'https://commons.wikimedia.org/wiki/File:Arapaima_(Arapaima_gigas)_4.jpg'}
+};
 // Solange ein Fisch noch kein echtes Foto hat, kommt dieses Bild.
 const PLATZHALTER={src:'fotos/platzhalter.jpg',platzhalter:true};
 const FISH_BY={};FISH.forEach(f=>FISH_BY[f.id]=f);
