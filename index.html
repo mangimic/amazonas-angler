@@ -1120,7 +1120,8 @@ function fishPic(f,foto,onFail){
   img.onerror=()=>{ft.kaputt=true;fig.innerHTML='';fig.appendChild(fishCanvas(f,640,340));if(onFail)onFail();};
   fig.appendChild(img);
   if(ft.platzhalter){fig.appendChild(el('figcaption',null,'Platzhalter – hier kommt bald ein echtes Foto hin.'));return fig;}
-  fig.appendChild(el('figcaption',null,'Foto: '+esc(ft.von)+' · <a href="'+esc(ft.link)+'" target="_blank" rel="noopener">'+esc(ft.lizenz)+'</a> · Wikimedia Commons'));
+  // Jugendschutz: kein Link nach draußen. Die vollen Links stehen in fotos/BILDNACHWEIS.md.
+  fig.appendChild(el('figcaption',null,'Foto: '+esc(ft.von)+' · '+esc(ft.lizenz)+' · Wikimedia Commons'));
   return fig;
 }
 // Bild mit Knopf zum Wechseln zwischen Foto und gemaltem Fisch.
