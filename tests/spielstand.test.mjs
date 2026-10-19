@@ -198,3 +198,29 @@ test('Was ist neu: geht nach einem Update einmal auf und merkt sich das', async 
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Fotos: jeder Fisch hat ein echtes Foto, und der Eimer zeigt Fotos', async () => {
+  // Jede Fisch-id aus FISH braucht einen Eintrag in FOTOS und eine Datei in fotos/
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const fishList = html.slice(html.indexOf('const FISH=['), html.indexOf('];', html.indexOf('const FISH=[')));
+  const ids = [...fishList.matchAll(/\{id:'(\w+)'/g)].map(m => m[1]);
+  const fotos = html.slice(html.indexOf('const FOTOS={'), html.indexOf('};', html.indexOf('const FOTOS={')));
+  assert.equal(ids.length, 25, '15 Amazonas-Fische und 10 See-Fische');
+  for (const id of ids) {
+    assert.ok(fotos.includes(` ${id}:{src:'fotos/${id}.jpg'`), `FOTOS-Eintrag für ${id}`);
+    assert.ok(fs.existsSync(path.join(root, 'fotos', id + '.jpg')), `fotos/${id}.jpg`);
+  }
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999,
+    bucket: [{ id: 'hecht', cm: 80, value: 62 }, { id: 'piranha', cm: 25, value: 11 }] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBucket');
+  const thumbs = page.locator('#card .item img.thumb');
+  await thumbs.first().waitFor({ timeout: 5000 });
+  assert.equal(await thumbs.count(), 2, 'zwei kleine Fotos im Eimer');
+  await page.waitForFunction(() => [...document.querySelectorAll('#card .item img.thumb')].every(i => i.complete && i.naturalWidth > 0));
+  assert.deepEqual(await thumbs.evaluateAll(l => l.map(i => i.getAttribute('src'))), ['fotos/hecht.jpg', 'fotos/piranha.jpg']);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

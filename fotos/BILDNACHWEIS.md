@@ -1,7 +1,7 @@
 # Bildnachweis – Fischfotos
 
 Alle Fotos kommen von [Wikimedia Commons](https://commons.wikimedia.org) und stehen unter freien Lizenzen.
-Sie wurden für das Spiel auf 800 × 600 Pixel zugeschnitten und verkleinert. Bei Pfauenbarsch und Arowana ist der Rand mit einer unscharfen Kopie des Fotos aufgefüllt, damit der ganze Fisch zu sehen ist. Sonst wurde nichts verändert.
+Sie wurden für das Spiel auf 800 × 600 Pixel zugeschnitten und verkleinert. Bei Pfauenbarsch, Arowana, Rotauge, Barsch, Döbel, Karpfen und Hecht ist der Rand mit einer unscharfen Kopie des Fotos aufgefüllt, damit der ganze Fisch zu sehen ist. Sonst wurde nichts verändert.
 Im Spiel steht unter jedem Foto der Name des Fotografen und die Lizenz. Die Links stehen nur hier, damit Kinder im Spiel nicht ins Internet gelangen.
 
 | Fisch | Datei | Foto von | Lizenz |
@@ -21,3 +21,13 @@ Im Spiel steht unter jedem Foto der Name des Fotografen und die Lizenz. Die Link
 | Goldener Dorado | [Dourado(Salminus brasiliensis)emBonito.jpg](https://commons.wikimedia.org/wiki/File:Dourado(Salminus_brasiliensis)emBonito.jpg) | David Morimoto | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0) |
 | Piraíba-Wels | [Brachyplatystoma filamentosum Totto.jpg](https://commons.wikimedia.org/wiki/File:Brachyplatystoma_filamentosum_Totto.jpg) | タウナギ | [CC0](http://creativecommons.org/publicdomain/zero/1.0/deed.en) |
 | Arapaima | [Arapaima (Arapaima gigas) 4.jpg](https://commons.wikimedia.org/wiki/File:Arapaima_(Arapaima_gigas)_4.jpg) | Cliff | [CC BY 2.0](https://creativecommons.org/licenses/by/2.0) |
+| Rotauge | [Rutilus rutilus Prague Vltava 3.jpg](https://commons.wikimedia.org/wiki/File:Rutilus_rutilus_Prague_Vltava_3.jpg) | Karelj | Public domain |
+| Rotfeder | [2017-07-02 AT Wien 13 Hietzing, Tiergarten Schönbrunn, Scardinius erythrophthalmus (49897346508).jpg](https://commons.wikimedia.org/wiki/File:2017-07-02_AT_Wien_13_Hietzing,_Tiergarten_Sch%C3%B6nbrunn,_Scardinius_erythrophthalmus_(49897346508).jpg) | Paul Korecky | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0) |
+| Barsch | [Perca fluviatilis Aquarium Liège 30012016 1.jpg](https://commons.wikimedia.org/wiki/File:Perca_fluviatilis_Aquarium_Li%C3%A8ge_30012016_1.jpg) | Vassil | [CC0](http://creativecommons.org/publicdomain/zero/1.0/deed.en) |
+| Karausche | [Cyprinidae Carassius carassius 1.jpg](https://commons.wikimedia.org/wiki/File:Cyprinidae_Carassius_carassius_1.jpg) | NasserHalaweh | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| Döbel | [Hal - Squalius cephalus - 2.jpg](https://commons.wikimedia.org/wiki/File:Hal_-_Squalius_cephalus_-_2.jpg) | Emőke Dénes | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| Schleie | [Tinca tinca Prague Vltava 3.jpg](https://commons.wikimedia.org/wiki/File:Tinca_tinca_Prague_Vltava_3.jpg) | Karelj | Public domain |
+| Karpfen | [Carp (Cyprinus carpio) in aquarium.JPG](https://commons.wikimedia.org/wiki/File:Carp_(Cyprinus_carpio)_in_aquarium.JPG) | Reaperman | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0) |
+| Forelle | [Oniria - Truite fario 03.jpg](https://commons.wikimedia.org/wiki/File:Oniria_-_Truite_fario_03.jpg) | Tylwyth Eldar | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| Zander | [Hal - Sander lucioperca - 1.jpg](https://commons.wikimedia.org/wiki/File:Hal_-_Sander_lucioperca_-_1.jpg) | Emőke Dénes | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| Hecht | [Esox lucius Prague Vltava 2.jpg](https://commons.wikimedia.org/wiki/File:Esox_lucius_Prague_Vltava_2.jpg) | Karelj | Public domain |

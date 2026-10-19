@@ -156,6 +156,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .list{display:flex;flex-direction:column;gap:8px}
 .item{display:grid;grid-template-columns:72px 1fr auto;gap:10px;align-items:center;background:#f3e8cc;border-radius:14px;padding:8px}
 .item canvas{width:72px;height:40px}
+.item img.thumb{width:72px;height:54px;object-fit:cover;border-radius:10px;border:2px solid var(--ink);box-sizing:border-box}
 .item .t{min-width:0}
 .item b{font:800 18px var(--display);display:block;line-height:1.1}
 .item span{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -301,7 +302,18 @@ const FOTOS={
  zitter:{src:'fotos/zitter.jpg',von:'Steven G. Johnson',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Electric-eel.jpg'},
  dorado:{src:'fotos/dorado.jpg',von:'David Morimoto',lizenz:'CC BY-SA 2.0',link:'https://commons.wikimedia.org/wiki/File:Dourado(Salminus_brasiliensis)emBonito.jpg'},
  piraiba:{src:'fotos/piraiba.jpg',von:'タウナギ',lizenz:'CC0',link:'https://commons.wikimedia.org/wiki/File:Brachyplatystoma_filamentosum_Totto.jpg'},
- arapaima:{src:'fotos/arapaima.jpg',von:'Cliff',lizenz:'CC BY 2.0',link:'https://commons.wikimedia.org/wiki/File:Arapaima_(Arapaima_gigas)_4.jpg'}
+ arapaima:{src:'fotos/arapaima.jpg',von:'Cliff',lizenz:'CC BY 2.0',link:'https://commons.wikimedia.org/wiki/File:Arapaima_(Arapaima_gigas)_4.jpg'},
+ // Fische aus dem Heimat-See
+ rotauge:{src:'fotos/rotauge.jpg',von:'Karelj',lizenz:'Public domain',link:'https://commons.wikimedia.org/wiki/File:Rutilus_rutilus_Prague_Vltava_3.jpg'},
+ rotfeder:{src:'fotos/rotfeder.jpg',von:'Paul Korecky',lizenz:'CC BY-SA 2.0',link:'https://commons.wikimedia.org/wiki/File:2017-07-02_AT_Wien_13_Hietzing,_Tiergarten_Sch%C3%B6nbrunn,_Scardinius_erythrophthalmus_(49897346508).jpg'},
+ barsch:{src:'fotos/barsch.jpg',von:'Vassil',lizenz:'CC0',link:'https://commons.wikimedia.org/wiki/File:Perca_fluviatilis_Aquarium_Li%C3%A8ge_30012016_1.jpg'},
+ karausche:{src:'fotos/karausche.jpg',von:'NasserHalaweh',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Cyprinidae_Carassius_carassius_1.jpg'},
+ doebel:{src:'fotos/doebel.jpg',von:'Emőke Dénes',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Hal_-_Squalius_cephalus_-_2.jpg'},
+ schleie:{src:'fotos/schleie.jpg',von:'Karelj',lizenz:'Public domain',link:'https://commons.wikimedia.org/wiki/File:Tinca_tinca_Prague_Vltava_3.jpg'},
+ karpfen:{src:'fotos/karpfen.jpg',von:'Reaperman',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Carp_(Cyprinus_carpio)_in_aquarium.JPG'},
+ forelle:{src:'fotos/forelle.jpg',von:'Tylwyth Eldar',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Oniria_-_Truite_fario_03.jpg'},
+ zander:{src:'fotos/zander.jpg',von:'Emőke Dénes',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Hal_-_Sander_lucioperca_-_1.jpg'},
+ hecht:{src:'fotos/hecht.jpg',von:'Karelj',lizenz:'Public domain',link:'https://commons.wikimedia.org/wiki/File:Esox_lucius_Prague_Vltava_2.jpg'}
 };
 // Solange ein Fisch noch kein echtes Foto hat, kommt dieses Bild.
 const PLATZHALTER={src:'fotos/platzhalter.jpg',platzhalter:true};
@@ -1218,6 +1230,9 @@ function fishPic(f,foto,onFail){
   fig.appendChild(el('figcaption',null,'Foto: '+esc(ft.von)+' · '+esc(ft.lizenz)+' · Wikimedia Commons'));
   return fig;
 }
+// Kleines Bild für Listen (Eimer, Rosa, Reuse): echtes Foto, wenn es eins gibt, sonst der gemalte Fisch.
+function fishThumb(f){const ft=FOTOS[f.id];if(!ft||ft.kaputt)return fishCanvas(f,144,80);
+  const img=el('img','thumb');img.alt=f.name;img.src=ft.src;img.onerror=()=>{ft.kaputt=true;img.replaceWith(fishCanvas(f,144,80));};return img;}
 // Bild mit Knopf zum Wechseln zwischen Foto und gemaltem Fisch.
 function fishPicSwitch(f,startFoto){
   const box=el('div','pic');let foto=startFoto&&hasFoto(f)&&!fotoFor(f).platzhalter;const sw=el('button','b alt');const fail=()=>sw.remove();
@@ -1245,7 +1260,7 @@ function showBucket(){
   card.appendChild(el('p',null,state.bucket.length+' von '+bucketMax()+' Plätzen belegt. Verkaufen kannst du die Fische bei Rosa an der Hütte.'));
   const l=el('div','list');
   if(!state.bucket.length)l.appendChild(el('div','empty','Noch leer. Ab ans Wasser!'));
-  state.bucket.forEach(it=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishCanvas(f,144,80));
+  state.bucket.forEach(it=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishThumb(f));
     row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm</span>'));row.appendChild(el('span','sum',it.value+' L'));l.appendChild(row);});
   card.appendChild(l);
   const c=el('button','b','Fertig');c.onclick=closeModal;const bt=el('div','btns');bt.appendChild(c);card.appendChild(bt);
@@ -1310,7 +1325,7 @@ function showShop(){
   const l=el('div','list');
   {
     if(!state.bucket.length)l.appendChild(el('div','empty','Dein Eimer ist leer. Fang erst ein paar Fische!'));
-    state.bucket.forEach((it,i)=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishCanvas(f,144,80));
+    state.bucket.forEach((it,i)=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishThumb(f));
       row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm · '+it.value+' Ludins</span>'));
       const b=el('button','b','Verkaufen');b.onclick=()=>{state.bucket.splice(i,1);state.ludins+=it.value;save();sfxCoins();refreshHud(true);showShop();};
       row.appendChild(b);l.appendChild(row);});
@@ -1574,7 +1589,7 @@ function showTrap(t){
   const l=el('div','list');
   if(!t.fish.length){const wait=Math.ceil((REUSE.every-(Date.now()-t.t))/60000);
     l.appendChild(el('div','empty','Noch leer. Die Fische brauchen etwas Zeit. Schau in '+(wait<=1?'einer Minute':wait+' Minuten')+' wieder nach!'));}
-  t.fish.forEach(it=>{const f=FISH_BY[it.id];if(!f)return;const row=el('div','item');row.appendChild(fishCanvas(f,144,80));
+  t.fish.forEach(it=>{const f=FISH_BY[it.id];if(!f)return;const row=el('div','item');row.appendChild(fishThumb(f));
     row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm · '+it.value+' Ludins</span>'));row.appendChild(el('span',null,''));l.appendChild(row);});
   card.appendChild(l);
   if(t.fish.length&&t.fish.length>=REUSE.full)card.appendChild(el('p',null,'Die Reuse ist voll. Leere sie, dann können neue Fische hinein.'));
@@ -1681,6 +1696,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:12,day:'19.10.2026',ico:'📷',t:'Fotos für die See-Fische',d:'Jetzt haben auch Hecht, Zander, Forelle und die anderen See-Fische echte Fotos. Im Eimer, bei Rosa und in der Reuse siehst du kleine Fotos von deinen Fischen.'},
  {v:11,day:'19.10.2026',ico:'✨',t:'Was ist neu?',d:'Diese Seite! Hier steht nach jedem Update, was dazugekommen ist.'},
  {v:10,day:'19.10.2026',ico:'🛥️',t:'Yacht',d:'Bei Opa Tiago im Tab „Boot“ gibt es eine Yacht für 1500 Ludins. Dein Name steht am Rumpf, sie ist das schnellste Boot, und im Fischtank passen 20 Fische mehr.'},
  {v:9,day:'19.10.2026',ico:'🗺️',t:'Karte',d:'Oben rechts siehst du jetzt eine kleine Karte. Tipp darauf, dann siehst du den ganzen Fluss und den Heimat-See.'},

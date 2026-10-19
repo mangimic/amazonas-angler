@@ -20,9 +20,9 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [x] Übersichtskarte (kleine Karte oben rechts, große Karte zum Antippen)
 - [x] Yacht kaufen (1500 Ludins, schnellstes Boot, Fischtank, Name am Rumpf)
 - [x] Seite „Was ist neu?“ mit Versionsnummer
+- [x] Echte Fotos von den 10 See-Fischen, auch im Eimer, bei Rosa und in der Reuse
 
 ## Als Nächstes
-- [ ] Echte Fotos von den 10 See-Fischen
 - [ ] Haus: Möbel
 - [ ] Haus: Aquarium mit gefangenen Fischen
 - [ ] Haus: Pokale für die größten Fänge
