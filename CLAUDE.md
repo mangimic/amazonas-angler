@@ -26,6 +26,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   (ganzer Fluss + Heimat-See). Auf der Karte zeigt **rechts nach Norden** (flussaufwärts).
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
+- **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
+  trägt den Avatar-Namen am Rumpf, Fischtank an Bord = 20 Plätze mehr im Eimer. Werte in `YACHT`.
 - **Echte Fotos** von den 15 Amazonas-Fischen (Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`). Die 10 See-Fische haben noch kein Foto (Platzhalter).
 
 ## Technik
