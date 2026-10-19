@@ -26,8 +26,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - Alles steckt in `index.html` (Three.js r128 von cdnjs, kein Build-Schritt).
 - Ziel-Gerät: **iPad** (Touch). Links wischen = laufen, rechts wischen = umschauen.
   Große Knöpfe (mindestens 60 px), alles muss mit dem Finger gehen.
-- Spielstand liegt im `localStorage` (Schlüssel `amazonas-angler-1`).
-  Wenn sich das Format ändert: alte Spielstände weiter laden können.
+- Spielstand: siehe Abschnitt **Spielstand** unten. Das ist die wichtigste Regel im ganzen Projekt.
 - Die Welt wird in Stücken (`CHUNK`, 160 m) gebaut, nur in der Nähe des Spielers. Höhe überall: `heightAt(x,z)`.
 - Fischdaten stehen in der Liste `FISH` (Name, Fakt, Seltenheit `w`, Preis, Größe, Farben, Form).
 - Testen: `index.html` im Browser öffnen. Für das iPad: lokalen Server starten
@@ -44,6 +43,22 @@ Die Skills sind Wissen aus dem Internet. **Diese Datei hier gilt immer zuerst.**
 - Knöpfe mindestens 60 px (auch wenn ein Skill weniger sagt).
 - „Game Feel“ (wie gut sich etwas anfühlt) sanft halten: kein starkes Bildschirm-Wackeln, kein Kampf, keine Schadenszahlen.
 - Keine bezahlten Dienste und keine KI-erzeugten Bilder oder Töne.
+
+## Spielstand – darf nie verloren gehen
+Der Spielstand liegt auf dem iPad im `localStorage` des Browsers. Ein Update auf GitHub Pages
+löscht ihn nicht, solange die Adresse gleich bleibt und der Code ihn richtig liest.
+- Schlüssel `amazonas-angler-1` **nie ändern**. Auch nicht `-backup`, `-vor-v…`, `-kaputt`, `-vor-code`.
+- Neues Feld: nur in `state` mit Startwert eintragen. Fehlende Felder in alten Ständen bekommen so den Startwert.
+- Feld umbenennen oder umbauen: `SAVE_VERSION` um 1 erhöhen und in `migrate()` einen neuen Schritt
+  `if(from<N){…}` anhängen. Alte Schritte nie ändern oder löschen.
+- Nie Felder aus `state` löschen und nie den ganzen Spielstand zurücksetzen.
+  Für einen Neustart gibt es keinen Knopf – das ist Absicht.
+- Fisch aus `FISH` entfernt? Dann kauft Rosa ihn beim Laden ab (schon eingebaut). Fisch-`id`s nie umbenennen.
+- Repo-Name und Adresse (`mangimic.github.io/amazonas-angler`) nicht ändern. Neue Adresse = leerer Spielstand
+  (dann hilft nur der **Spielstand-Code** aus der Avatar-Werkstatt).
+- **Vor jedem Commit, der `index.html` ändert, den Test laufen lassen:**
+  `cd tests && npm install && npm test`. Alle Tests müssen grün sein.
+  Bekommt der Spielstand neue Teile, auch einen Test dafür ergänzen (`tests/spielstand.test.mjs`).
 
 ## Regeln für Änderungen
 - Kleine Schritte: lieber eine Sache fertig machen als viele halb.

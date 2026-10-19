@@ -196,6 +196,7 @@ button.bk:active{border-color:var(--ink)}
   <div class="row"><span class="lbl">Hut</span><div class="opts" id="opHat"></div></div>
   <div class="row" id="rowVest" hidden><span class="lbl">Schwimmweste</span><div class="opts" id="opVest"></div></div>
   <button class="big" id="btnGo">Los geht's!</button>
+  <button class="b alt" id="btnSaveCode">💾 Spielstand sichern</button>
   <div class="small-note">Laufen: links auf dem Bildschirm wischen · Umschauen: rechts wischen · Am Computer: Pfeiltasten oder WASD, Leertaste zum Angeln</div>
 </div>
 
@@ -283,17 +284,69 @@ const PANTS=['#2f4a7a','#3d3a33','#7a5a3a','#3e6b3a','#c0c6cc'];
 const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen','Blumen']];
 
 /* =================== Speicherstand =================== */
-const KEY='amazonas-angler-1';
-const state={ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasSonar:false,sonarFound:false,usedBoat:false,
+// WICHTIG – damit kein Spielstand verloren geht (siehe CLAUDE.md, Abschnitt „Spielstand“):
+// 1. KEY nie ändern. 2. Neue Felder nur unten in state mit Startwert eintragen.
+// 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
+// 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
+const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasSonar:false,sonarFound:false,usedBoat:false,
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
-try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s){Object.assign(state,s);state.avatar=Object.assign({},state.avatar,s.avatar||{});}}catch(e){}
-// Ältere Spielstände: Profi-Angel hieß früher hasRod; Köder und Kleidung gab es noch nicht
-if(state.hasRod&&!state.rod)state.rod=1;
-state.baits=Object.assign({frucht:0,blinker:0},state.baits);state.clothes=Object.assign({anglerhut:false,weste:false},state.clothes);
+const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
+function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+function lsSet(k,v){try{localStorage.setItem(k,v);return true;}catch(e){return false;}}
+function parseSave(raw){try{const s=JSON.parse(raw||'null');return isObj(s)?s:null;}catch(e){return null;}}
+// Umbau alter Spielstände. Jeder Schritt bringt einen Stand von Version n auf n+1. Nie alte Schritte ändern!
+function migrate(s){
+  const from=typeof s.v==='number'?s.v:1;
+  if(from<2){ // Version 1: Profi-Angel hieß hasRod; Köder, Kleidung und Haus gab es noch nicht
+    if(s.hasRod&&!s.rod)s.rod=1;}
+  if(from<SAVE_VERSION)s.v=SAVE_VERSION;
+  return s;
+}
+const savedRaw=lsGet(KEY);
+let loaded=parseSave(savedRaw),loadedFrom='main';
+if(!loaded&&savedRaw)lsSet(KEY+'-kaputt',savedRaw); // kaputten Stand aufheben, nicht wegwerfen
+if(!loaded){loaded=parseSave(lsGet(BACKUP_KEY));loadedFrom=loaded?'backup':'new';}
+if(loaded){
+  const oldV=typeof loaded.v==='number'?loaded.v:1;
+  // Vor jedem Umbau eine Kopie des alten Stands behalten
+  if(oldV<SAVE_VERSION&&loadedFrom==='main'&&!lsGet(KEY+'-vor-v'+SAVE_VERSION))lsSet(KEY+'-vor-v'+SAVE_VERSION,savedRaw);
+  migrate(loaded);
+  Object.assign(state,loaded);state.avatar=Object.assign({},state.avatar,isObj(loaded.avatar)?loaded.avatar:{});
+}
+// Alles prüfen und fehlende Teile ergänzen, damit nie ein kaputter Wert das Spiel stoppt
+if(!Number.isFinite(state.ludins)||state.ludins<0)state.ludins=Math.max(0,Number(state.ludins)||0);
+state.ludins=Math.round(state.ludins);
+if(!Array.isArray(state.bucket))state.bucket=[];
+if(!isObj(state.book))state.book={};
+state.baits=Object.assign({frucht:0,blinker:0},isObj(state.baits)?state.baits:{});
+state.clothes=Object.assign({anglerhut:false,weste:false},isObj(state.clothes)?state.clothes:{});
 if(!BAITS[state.bait])state.bait='wurm';
-state.house=Object.assign({w:{},r:{}},state.house);
+state.house=Object.assign({w:{},r:{}},isObj(state.house)?state.house:{});
+// Fische, die es im Spiel nicht mehr gibt: Rosa kauft sie ab, damit nichts verloren geht
+let lostFishLudins=0;
+state.bucket=state.bucket.filter(it=>{if(it&&FISH_BY[it.id])return true;lostFishLudins+=Math.max(0,Math.round(Number(it&&it.value)||0));return false;});
+state.ludins+=lostFishLudins;
 const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
-function save(){try{localStorage.setItem(KEY,JSON.stringify(state))}catch(e){}}
+// Sicherheitskopie: der Stand vom letzten Spielstart. Geht der Hauptstand kaputt, lädt das Spiel diese Kopie.
+if(loadedFrom==='main')lsSet(BACKUP_KEY,savedRaw);
+// Den Browser bitten, den Spielstand nicht von selbst zu löschen
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});}catch(e){}
+let saveWarned=false,pauseSaving=false;
+function save(){
+  if(pauseSaving)return false;
+  if(lsSet(KEY,JSON.stringify(state)))return true;
+  if(!saveWarned){saveWarned=true;setTimeout(()=>{try{toast('Achtung: Der Spielstand kann hier nicht gespeichert werden. Bitte nicht im privaten Modus spielen.');}catch(e){}},0);}
+  return false;
+}
+// Spielstand-Code: zum Sichern oder auf ein anderes Gerät mitnehmen
+const CODE_PREFIX='AMAZONAS1-';
+function makeSaveCode(){const b=new TextEncoder().encode(JSON.stringify(state));let s='';b.forEach(c=>s+=String.fromCharCode(c));return CODE_PREFIX+btoa(s);}
+function readSaveCode(code){
+  code=String(code||'').replace(/\s+/g,'');if(code.indexOf(CODE_PREFIX)!==0)return null;
+  try{const bin=atob(code.slice(CODE_PREFIX.length));const b=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);
+    const s=parseSave(new TextDecoder().decode(b));return s&&isObj(s.avatar)?s:null;}catch(e){return null;}
+}
 const bucketMax=()=>state.hasBucket?30:15;
 
 /* =================== Welt-Formeln =================== */
@@ -1010,8 +1063,9 @@ function refreshHud(bump){
   if(bump){const p=$('#pillLudins');p.classList.remove('bump');void p.offsetWidth;p.classList.add('bump');}
 }
 const card=$('#card');
-function openModal(){mode='modal';$('#modal').hidden=false;input.jx=input.jy=0;joyId=null;lookId=null;joyBase.hidden=true;}
-function closeModal(){$('#modal').hidden=true;mode='play';}
+let modalBack='play';
+function openModal(){if(mode!=='modal')modalBack=mode;mode='modal';$('#modal').hidden=false;input.jx=input.jy=0;joyId=null;lookId=null;joyBase.hidden=true;}
+function closeModal(){$('#modal').hidden=true;mode=modalBack;}
 function el(tag,cls,html){const e=document.createElement(tag);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e;}
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
 
@@ -1209,7 +1263,46 @@ function openCreator(){mode='creator';$('#hud').hidden=true;$('#creator').hidden
 $('#btnGo').onclick=()=>{audio();if(!state.avatar.name)state.avatar.name='Angler';
   if(boardOnStart){boardOnStart=false;player.inBoat=true;player.pos.copy(boat.pos);player.facing=boat.yaw;}
   save();$('#creator').hidden=true;$('#hud').hidden=false;mode='play';
-  camera.clearViewOffset();player.root.rotation.y=player.facing;refreshHud();updateFishBtn();};
+  camera.clearViewOffset();player.root.rotation.y=player.facing;refreshHud();updateFishBtn();
+  if(lostFishLudins){toast('Rosa hat ein paar alte Fische aus deinem Eimer gekauft: +'+lostFishLudins+' Ludins');lostFishLudins=0;}
+  else if(loadedFrom==='backup'){toast('Dein Spielstand war kaputt. Wir haben die Sicherheitskopie geladen.');loadedFrom='main';}};
+
+/* ---- Spielstand-Code: sichern und wiederherstellen ---- */
+function showSaveCode(confirmCode){
+  openModal();card.className='card';card.innerHTML='';
+  card.appendChild(el('h2',null,'Spielstand sichern'));
+  if(confirmCode){
+    const s=confirmCode;
+    card.appendChild(el('p',null,'Diesen Spielstand laden? <b>'+esc(s.avatar.name||'Angler')+'</b> mit '+(Math.round(Number(s.ludins))||0)+' Ludins.<br>Dein jetziger Spielstand wird dabei ersetzt.'));
+    const bt=el('div','btns');
+    const yes=el('button','b go','Ja, laden');yes.onclick=()=>{
+      lsSet(KEY+'-vor-code',JSON.stringify(state)); // den alten Stand trotzdem aufheben
+      if(lsSet(KEY,JSON.stringify(s))){pauseSaving=true;location.reload();}else toast('Das hat nicht geklappt. Der Spielstand kann hier nicht gespeichert werden.');};
+    const no=el('button','b alt','Abbrechen');no.onclick=()=>showSaveCode();
+    bt.append(yes,no);card.appendChild(bt);return;
+  }
+  card.appendChild(el('p',null,'Das ist dein Spielstand als Code. Kopiere ihn und heb ihn gut auf, zum Beispiel in den Notizen. Mit dem Code kannst du deinen Spielstand wiederholen, auch auf einem anderen Gerät.'));
+  const out=el('textarea');out.id='saveCodeOut';out.readOnly=true;out.rows=3;out.value=makeSaveCode();
+  out.style.cssText='width:100%;box-sizing:border-box;font:13px ui-monospace,Menlo,monospace;border:3px solid var(--ink);border-radius:12px;padding:8px;background:#fff;color:var(--ink)';
+  card.appendChild(out);
+  const bt=el('div','btns');
+  const cp=el('button','b go','Code kopieren');cp.onclick=()=>{
+    const ok=()=>toast('Code kopiert!'),fb=()=>{out.focus();out.select();toast('Halte den Finger auf den Code und tippe auf „Kopieren“.');};
+    try{navigator.clipboard.writeText(out.value).then(ok,fb);}catch(e){fb();}};
+  bt.appendChild(cp);card.appendChild(bt);
+  card.appendChild(el('p',null,'<b>Spielstand wiederholen:</b> Code hier einfügen.'));
+  const inp=el('textarea');inp.id='saveCodeIn';inp.rows=2;inp.placeholder=CODE_PREFIX+'…';inp.style.cssText=out.style.cssText;
+  card.appendChild(inp);
+  const err=el('p');err.style.color='#a32d2d';err.hidden=true;card.appendChild(err);
+  inp.addEventListener('input',()=>{err.hidden=true;});
+  const bt2=el('div','btns');
+  const ld=el('button','b','Code laden');ld.onclick=()=>{const s=readSaveCode(inp.value);
+    if(!s){err.textContent=inp.value.trim()?'Dieser Code passt nicht. Kopiere ihn bitte noch einmal ganz.':'Füge zuerst einen Code ein.';err.hidden=false;return;}
+    showSaveCode(s);};
+  const cl=el('button','b alt','Fertig');cl.onclick=closeModal;
+  bt2.append(ld,cl);card.appendChild(bt2);
+}
+$('#btnSaveCode').onclick=()=>{audio();save();showSaveCode();};
 
 /* ---- Ort merken: wo man steht, ob man im Boot sitzt, wo das Boot liegt ---- */
 const r2=v=>Math.round(v*100)/100;
