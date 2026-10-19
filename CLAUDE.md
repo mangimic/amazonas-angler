@@ -14,6 +14,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - Spielt am **Amazonas** (Fluss, Urwald, Riesenseerosen, Aras)
 - Der Fluss ist über **2 km** lang, mit einer **Insel** und **Stromschnellen** (die schieben das Boot)
 - Man kann **angeln**, es gibt **viele Fische** (echte Amazonas-Fische)
+- **Heimat-See**: ein See wie in Deutschland, mit dem **Flugzeug** neben dem Dorf erreichbar.
+  Dort beißen nur die 10 deutschen Fische (`home:'see'` in `FISH`). Verkauft werden sie bei Rosa.
 - **Ab 7 Jahren**: nichts Gruseliges, keine Gewalt, kein Blut
 - Eigener **Avatar** (Name, Haut, Haare, T-Shirt, Hose, Hut)
 - Fische **verkaufen** bei Händlerin Rosa
@@ -28,7 +30,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Große Knöpfe (mindestens 60 px), alles muss mit dem Finger gehen.
 - Spielstand: siehe Abschnitt **Spielstand** unten. Das ist die wichtigste Regel im ganzen Projekt.
 - Die Welt wird in Stücken (`CHUNK`, 160 m) gebaut, nur in der Nähe des Spielers. Höhe überall: `heightAt(x,z)`.
-- Fischdaten stehen in der Liste `FISH` (Name, Fakt, Seltenheit `w`, Preis, Größe, Farben, Form).
+- Fischdaten stehen in der Liste `FISH` (Name, Fakt, Seltenheit `w`, Preis, Größe, Farben, Form, `home`, Artikel `art`).
+- Der Heimat-See liegt in der Welt weit im Süden (`LAKE`, z um −900). `heightAt` springt dort auf `lakeHeight`.
 - Testen: `index.html` im Browser öffnen. Für das iPad: lokalen Server starten
   (`python3 -m http.server 8000`) und auf dem iPad `http://<IP-des-Computers>:8000` öffnen.
 

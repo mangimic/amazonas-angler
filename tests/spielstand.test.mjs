@@ -142,3 +142,18 @@ test('Spielstand-Code sichern und wiederherstellen', async () => {
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Heimat-See: Ort und See-Fische bleiben nach einem Update erhalten', async () => {
+  const { ctx, page, errors } = await newPage();
+  // Spielstand von vor dem Heimat-See-Update (ohne visitedLake), plus einer, der am See steht
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, bucket: [{ id: 'hecht', cm: 80, value: 62 }], book: { hecht: { n: 1, best: 80 } },
+    where: { x: 0, z: -931, f: 0, boat: false } }) });
+  await startGame(page);
+  await playAndLeave(page);
+  const s = JSON.parse(await read(page));
+  assert.ok(s.where.z < -900, 'man steht noch am See');
+  assert.equal(s.bucket[0].id, 'hecht', 'der Hecht bleibt im Eimer');
+  assert.equal(s.ludins, 345, 'Rosa hat den Hecht nicht abgekauft');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
