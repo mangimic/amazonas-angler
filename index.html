@@ -176,6 +176,9 @@ button.bk:active{border-color:var(--ink)}
 .pic figcaption{font-size:12px;color:var(--muted);line-height:1.3}
 .pic figcaption a{color:inherit}
 .rosa{display:flex;gap:12px;align-items:center}
+.btns.col{flex-direction:column;align-items:stretch}
+.saveok{font-weight:800}
+.card .err{color:#a32d2d;font-weight:700}
 .player{width:100%;font:inherit;color:inherit;text-align:left;border:3px solid transparent;cursor:pointer;min-height:72px}
 .player.me{border-color:var(--gold)}
 .player .sum{font:800 15px var(--display);color:var(--muted)}
@@ -472,9 +475,8 @@ function save(){
   if(!saveWarned){saveWarned=true;setTimeout(()=>{try{toast('Achtung: Der Spielstand kann hier nicht gespeichert werden. Bitte nicht im privaten Modus spielen.');}catch(e){}},0);}
   return false;
 }
-// Spielstand-Code: zum Sichern oder auf ein anderes Gerät mitnehmen
+// Alter Spielstand-Code (aus früheren Versionen). Neue Codes gibt es nicht mehr, alte kann man weiter laden.
 const CODE_PREFIX='AMAZONAS1-';
-function makeSaveCode(){const b=new TextEncoder().encode(JSON.stringify(state));let s='';b.forEach(c=>s+=String.fromCharCode(c));return CODE_PREFIX+btoa(s);}
 function readSaveCode(code){
   code=String(code||'').replace(/\s+/g,'');if(code.indexOf(CODE_PREFIX)!==0)return null;
   try{const bin=atob(code.slice(CODE_PREFIX.length));const b=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);
@@ -1421,7 +1423,20 @@ $('#btnGo').onclick=()=>{audio();if(!state.avatar.name)state.avatar.name='Angler
   if(lostFishLudins){toast('Rosa hat ein paar alte Fische aus deinem Eimer gekauft: +'+lostFishLudins+' Ludins');lostFishLudins=0;}
   else if(loadedFrom==='backup'){toast('Dein Spielstand war kaputt. Wir haben die Sicherheitskopie geladen.');loadedFrom='main';}};
 
-/* ---- Spielstand-Code: sichern und wiederherstellen ---- */
+/* ---- Spielstand sichern ----
+   Das Spiel speichert von selbst. Für ganz sicher gibt es eine Sicherheitskopie als Datei (ohne Code).
+   Laden geht mit der Datei oder mit einem alten Spielstand-Code. Geladenes kommt als neuer Spieler dazu. */
+function readBackup(text){text=String(text||'').trim();
+  if(text.indexOf(CODE_PREFIX)===0)return readSaveCode(text);
+  const o=parseSave(text),s=o&&o.app==='amazonas-angler'?o.state:o;
+  return isObj(s)&&isObj(s.avatar)?s:null;}
+function saveBackupFile(){
+  const day=new Date().toISOString().slice(0,10),who=(state.avatar.name||'Angler').replace(/[^0-9A-Za-zÄÖÜäöüß-]+/g,'_');
+  const text=JSON.stringify({app:'amazonas-angler',gespeichert:new Date().toISOString(),state});
+  const url=URL.createObjectURL(new Blob([text],{type:'application/json'}));
+  const a=el('a');a.href=url;a.download='Amazonas-Angler-'+who+'-'+day+'.json';document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+  toast('Gespeichert! Die Datei liegt in der App „Dateien“ unter „Downloads“.');}
 function showSaveCode(confirmCode){
   openModal();card.className='card';card.innerHTML='';
   card.appendChild(el('h2',null,'Spielstand sichern'));
@@ -1437,26 +1452,29 @@ function showSaveCode(confirmCode){
     const no=el('button','b alt','Abbrechen');no.onclick=()=>showSaveCode();
     bt.append(yes,no);card.appendChild(bt);return;
   }
-  card.appendChild(el('p',null,'Das ist dein Spielstand als Code. Kopiere ihn und heb ihn gut auf, zum Beispiel in den Notizen. Mit dem Code kannst du deinen Spielstand wiederholen, auch auf einem anderen Gerät.'));
-  const out=el('textarea');out.id='saveCodeOut';out.readOnly=true;out.rows=3;out.value=makeSaveCode();
-  out.style.cssText='width:100%;box-sizing:border-box;font:13px ui-monospace,Menlo,monospace;border:3px solid var(--ink);border-radius:12px;padding:8px;background:#fff;color:var(--ink)';
-  card.appendChild(out);
-  const bt=el('div','btns');
-  const cp=el('button','b go','Code kopieren');cp.onclick=()=>{
-    const ok=()=>toast('Code kopiert!'),fb=()=>{out.focus();out.select();toast('Halte den Finger auf den Code und tippe auf „Kopieren“.');};
-    try{navigator.clipboard.writeText(out.value).then(ok,fb);}catch(e){fb();}};
-  bt.appendChild(cp);card.appendChild(bt);
-  card.appendChild(el('p',null,'<b>Spielstand wiederholen:</b> Code hier einfügen.'));
-  const inp=el('textarea');inp.id='saveCodeIn';inp.rows=2;inp.placeholder=CODE_PREFIX+'…';inp.style.cssText=out.style.cssText;
-  card.appendChild(inp);
-  const err=el('p');err.style.color='#a32d2d';err.hidden=true;card.appendChild(err);
-  inp.addEventListener('input',()=>{err.hidden=true;});
-  const bt2=el('div','btns');
-  const ld=el('button','b','Code laden');ld.onclick=()=>{const s=readSaveCode(inp.value);
-    if(!s){err.textContent=inp.value.trim()?'Dieser Code passt nicht. Kopiere ihn bitte noch einmal ganz.':'Füge zuerst einen Code ein.';err.hidden=false;return;}
-    showSaveCode(s);};
+  card.appendChild(el('p','saveok',save()?'✅ Dein Spiel speichert von selbst. Gerade eben gespeichert!':'⚠️ Hier kann das Spiel nicht speichern. Bitte nicht im privaten Modus spielen.'));
+  card.appendChild(el('p',null,'Für ganz sicher: Speichere eine <b>Sicherheitskopie</b> auf dem iPad. Damit holst du dein Spiel zurück, auch auf einem anderen Gerät.'));
+  const err=el('p','err');err.hidden=true;
+  const fail=t=>{err.textContent=t;err.hidden=false;};
+  const bt=el('div','btns col');
+  const sv=el('button','b go','💾 Sicherheitskopie speichern');sv.id='btnBackupSave';sv.onclick=()=>{err.hidden=true;saveBackupFile();};
+  const file=el('input');file.type='file';file.accept='.json,application/json,text/plain';file.id='backupFile';file.hidden=true;
+  file.onchange=()=>{const f=file.files&&file.files[0];if(!f)return;
+    f.text().then(t=>{const s=readBackup(t);if(s)showSaveCode(s);else fail('Diese Datei ist keine Sicherheitskopie vom Amazonas Angler.');},
+      ()=>fail('Die Datei konnte nicht gelesen werden.'));};
+  const ld=el('button','b','📂 Sicherheitskopie laden');ld.id='btnBackupLoad';ld.onclick=()=>{err.hidden=true;file.click();};
+  bt.append(sv,ld,file);card.appendChild(bt);card.appendChild(err);
+  // Wer früher einen Code aufgeschrieben hat, kann ihn hier noch laden
+  const old=el('button','b alt','Ich habe noch einen alten Code');old.id='btnOldCode';
+  old.onclick=()=>{old.remove();
+    const inp=el('textarea');inp.id='saveCodeIn';inp.rows=2;inp.placeholder=CODE_PREFIX+'…';
+    inp.style.cssText='width:100%;box-sizing:border-box;font:13px ui-monospace,Menlo,monospace;border:3px solid var(--ink);border-radius:12px;padding:8px;background:#fff;color:var(--ink)';
+    inp.addEventListener('input',()=>{err.hidden=true;});
+    const lc=el('button','b','Code laden');lc.onclick=()=>{const s=readSaveCode(inp.value);
+      if(s)showSaveCode(s);else fail(inp.value.trim()?'Dieser Code passt nicht. Kopiere ihn bitte noch einmal ganz.':'Füge zuerst einen Code ein.');};
+    rest.before(inp,lc);inp.focus();};
   const cl=el('button','b alt','Fertig');cl.onclick=closeModal;
-  bt2.append(ld,cl);card.appendChild(bt2);
+  const rest=el('div','btns');rest.append(old,cl);card.appendChild(rest);
 }
 $('#btnSaveCode').onclick=()=>{audio();save();showSaveCode();};
 
@@ -1703,6 +1721,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:15,day:'19.10.2026',ico:'💾',t:'Sichern ohne Code',d:'Dein Spiel speichert von selbst. Unter „Spielstand sichern“ machst du mit einem Tipp eine Sicherheitskopie auf dem iPad, ganz ohne Code.'},
  {v:14,day:'19.10.2026',ico:'🐟',t:'Nur noch echte Fotos',d:'Überall siehst du jetzt echte Fotos von den Fischen: beim Fangen, im Fischbuch, im Eimer, bei Rosa und in der Reuse. Fische, die du noch nicht gefangen hast, sind im Fischbuch ein Fragezeichen.'},
  {v:13,day:'19.10.2026',ico:'👥',t:'Mehrere Spieler',d:'Jetzt kann jeder seinen eigenen Spielstand haben! In der Avatar-Werkstatt (👕) tippst du auf „Spieler wechseln“ und dann auf „+ Neuer Spieler“.'},
  {v:12,day:'19.10.2026',ico:'📷',t:'Fotos für die See-Fische',d:'Jetzt haben auch Hecht, Zander, Forelle und die anderen See-Fische echte Fotos. Im Eimer, bei Rosa und in der Reuse siehst du kleine Fotos von deinen Fischen.'},

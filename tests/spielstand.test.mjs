@@ -119,21 +119,46 @@ test('Spielstand aus einer neueren Version geht nicht verloren', async () => {
   await ctx.close();
 });
 
-test('Spielstand-Code sichern und wiederherstellen', async () => {
+// Ein Spielstand als alter Code, so wie ihn frühere Versionen gemacht haben
+const alterCode = st => 'AMAZONAS1-' + Buffer.from(JSON.stringify(st), 'utf8').toString('base64');
+
+test('Sicherheitskopie als Datei speichern und wieder laden (ohne Code)', async () => {
   const { ctx, page, errors } = await newPage();
   await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, ludins: 1234, bucket: [] }) });
   await startGame(page);
   await page.click('#btnSaveCode');
-  const code = await page.inputValue('#saveCodeOut');
-  assert.match(code, /^AMAZONAS1-/);
+  await page.locator('text=Gerade eben gespeichert').waitFor();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnBackupSave')]);
+  assert.match(download.suggestedFilename(), /^Amazonas-Angler-Testkind-\d{4}-\d{2}-\d{2}\.json$/);
+  const datei = path.join(here, 'test-sicherheitskopie.json');
+  await download.saveAs(datei);
+  assert.equal(JSON.parse(fs.readFileSync(datei, 'utf8')).state.ludins, 1234);
   await seed(page, {});
   await startGame(page);
   assert.equal(await page.inputValue('#nameIn'), '', 'neues Spiel ist leer');
   await page.click('#btnSaveCode');
+  await page.setInputFiles('#backupFile', { name: 'falsch.json', mimeType: 'application/json', buffer: Buffer.from('hallo') });
+  await page.locator('text=keine Sicherheitskopie').waitFor();
+  await page.setInputFiles('#backupFile', datei);
+  await Promise.all([page.waitForEvent('load'), page.click('text=Ja, laden')]);
+  fs.unlinkSync(datei);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  assert.equal(await page.inputValue('#nameIn'), 'Testkind');
+  assert.equal(JSON.parse(await read(page)).ludins, 1234);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Alter Spielstand-Code lässt sich weiter laden', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, {});
+  await startGame(page);
+  await page.click('#btnSaveCode');
+  await page.click('#btnOldCode');
   await page.fill('#saveCodeIn', 'falscher Code');
   await page.click('text=Code laden');
   await page.locator('text=Dieser Code passt nicht').waitFor();
-  await page.fill('#saveCodeIn', code);
+  await page.fill('#saveCodeIn', alterCode({ ...ALT_V1, v: 2, ludins: 1234, bucket: [] }));
   await page.click('text=Code laden');
   await Promise.all([page.waitForEvent('load'), page.click('text=Ja, laden')]);
   await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
@@ -257,17 +282,13 @@ test('Mehrere Spieler: jeder behält seinen eigenen Spielstand', async () => {
   await ctx.close();
 });
 
-test('Mehrere Spieler: Spielstand-Code kommt als neuer Spieler dazu', async () => {
+test('Mehrere Spieler: Sicherheitskopie kommt als neuer Spieler dazu', async () => {
   const { ctx, page, errors } = await newPage();
-  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, ludins: 777, bucket: [], avatar: { ...ALT_V1.avatar, name: 'Freund' } }) });
-  await startGame(page);
-  await page.click('#btnSaveCode');
-  const code = await page.inputValue('#saveCodeOut');
+  const kopie = JSON.stringify({ app: 'amazonas-angler', state: { ...ALT_V1, v: 2, newsSeen: 999, ludins: 777, bucket: [], avatar: { ...ALT_V1.avatar, name: 'Freund' } } });
   await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
   await startGame(page);
   await page.click('#btnSaveCode');
-  await page.fill('#saveCodeIn', code);
-  await page.click('text=Code laden');
+  await page.setInputFiles('#backupFile', { name: 'freund.json', mimeType: 'application/json', buffer: Buffer.from(kopie) });
   await page.locator('text=Er kommt als neuer Spieler dazu').waitFor();
   await Promise.all([page.waitForEvent('load'), page.click('text=Ja, laden')]);
   await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
