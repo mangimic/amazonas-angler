@@ -24,7 +24,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   schwimmt ein Fisch hinein (höchstens 3, echte Uhrzeit, läuft auch weiter, wenn das Spiel zu ist). Boje wird grün.
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
-- Wunsch: **echte Fotos** von den Fischen zeigen (noch offen)
+- **Echte Fotos** von den 15 Amazonas-Fischen (Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`). Die 10 See-Fische haben noch kein Foto (Platzhalter).
 
 ## Technik
 - Alles steckt in `index.html` (Three.js r128 von cdnjs, kein Build-Schritt).
@@ -71,3 +71,5 @@ löscht ihn nicht, solange die Adresse gleich bleibt und der Code ihn richtig li
 - Nach jeder fertigen Änderung einen Git-Commit mit einer deutschen Nachricht machen.
 - Bilder und Töne nur verwenden, wenn man sie frei benutzen darf (z. B. Wikimedia Commons mit Lizenzangabe).
 - Fakten über Tiere müssen stimmen.
+- **Jugendschutz gilt für das ganze Spiel**: keine Links ins Internet, keine Werbung, kein Chat,
+  keine Käufe mit echtem Geld, keine fremden Dienste, die Daten sehen (z. B. Google-Schriften). Fotos nur von lebenden Tieren, keine toten Fische, kein Blut, nichts Gruseliges.

@@ -16,9 +16,10 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [x] Spielstand sicher (Sicherheitskopie, Spielstand-Code)
 - [x] Heimat-See mit 10 deutschen Fischen, Flugzeug als Reiseweg
 - [x] Reusen kaufen und in den Fluss legen
+- [x] Echte Fotos von allen 15 Amazonas-Fischen (Wikimedia Commons, Nachweis in fotos/BILDNACHWEIS.md)
 
 ## Als Nächstes
-- [ ] Echte Fotos von den Fischen
+- [ ] Echte Fotos von den 10 See-Fischen
 - [ ] Haus: Möbel
 - [ ] Haus: Aquarium mit gefangenen Fischen
 - [ ] Haus: Pokale für die größten Fänge
