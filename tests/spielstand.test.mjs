@@ -157,3 +157,19 @@ test('Heimat-See: Ort und See-Fische bleiben nach einem Update erhalten', async 
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Reusen: ausgelegte Reusen und gekaufte Reusen bleiben erhalten', async () => {
+  const { ctx, page, errors } = await newPage();
+  const t = Date.now() - 5 * 60 * 1000;
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, bucket: [], reusen: 1,
+    traps: [{ x: 11.5, z: 0, t, fish: [{ id: 'piranha', cm: 22, value: 10 }] }, { kaputt: true }] }) });
+  await startGame(page);
+  await playAndLeave(page);
+  const s = JSON.parse(await read(page));
+  assert.equal(s.reusen, 1, 'gekaufte Reuse bleibt');
+  assert.equal(s.traps.length, 1, 'kaputter Eintrag fliegt raus, die echte Reuse bleibt');
+  assert.equal(s.traps[0].t, t, 'die Zeit läuft weiter, auch wenn das Spiel zu war');
+  assert.equal(s.traps[0].fish[0].id, 'piranha', 'Fisch in der Reuse bleibt');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

@@ -273,6 +273,9 @@ const BAITS={
  blinker:{name:'Blinker',ico:'✨',like:['pfauen','dorado','arowana','hecht','zander','barsch','forelle'],x:3}};
 // Opa Tiagos Angelladen
 const TIAGO_TABS=[['angeln','Angeln'],['koeder','Köder'],['boot','Boot'],['kleidung','Kleidung']];
+// Reusen: Fischfallen, die man ins Wasser legt. Alle REUSE.every Millisekunden schwimmt ein Fisch hinein (höchstens REUSE.full).
+const REUSE={price:100,max:3,full:3,every:2*60*1000};
+const reusenAll=()=>(state.reusen|0)+state.traps.length;
 const needBoat=()=>!state.hasBoat&&'Erst das Boot';
 const TIAGO=[
  {tab:'angeln',name:'Bambus-Angel',price:0,ico:'🎋',desc:'Deine erste Angel. Mit ihr fängt jeder an.',owned:()=>true},
@@ -282,6 +285,8 @@ const TIAGO=[
   lock:()=>state.rod<1&&'Erst die Profi-Angel',buy:()=>{state.rod=2;rebuildPlayer();},msg:'Wow, eine goldene Angel!'},
  {tab:'angeln',name:'Großer Eimer',price:80,ico:'🪣',desc:'Jetzt passen 30 statt 15 Fische hinein.',owned:()=>state.hasBucket,
   buy:()=>{state.hasBucket=true;},msg:'Jetzt passen 30 Fische in deinen Eimer!'},
+ {tab:'angeln',name:'Reuse',price:REUSE.price,ico:'🧺',desc:'Ein Korb aus Netz. Leg ihn ins Wasser! Die Fische schwimmen durch eine Trichter-Öffnung hinein und finden nicht mehr heraus. Später holst du sie ab. Du kannst bis zu '+REUSE.max+' Reusen haben.',
+  count:()=>reusenAll(),lock:()=>reusenAll()>=REUSE.max&&'Du hast schon '+REUSE.max,buy:()=>{state.reusen++;},msg:'Eine Reuse! Stell dich ans Wasser und tippe auf „🧺 Reuse auslegen“.'},
  {tab:'koeder',name:'Würmer',price:0,ico:'🪱',desc:'Die mögen fast alle Fische. Davon hast du immer genug.',owned:()=>true},
  {tab:'koeder',name:'Früchte (10 Stück)',price:15,ico:'🍒',desc:'Tambaqui und Pacu fressen Früchte und Nüsse, die von den Bäumen ins Wasser fallen. Im Heimat-See mag der Döbel Kirschen. Mit Früchten beißen sie viel öfter!',
   count:()=>state.baits.frucht,buy:()=>{state.baits.frucht+=10;state.bait='frucht';},msg:'10 Früchte! Mit dem Köder-Knopf unten rechts wechselst du den Köder.'},
@@ -310,7 +315,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasSonar:false,sonarFound:false,usedBoat:false,
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasSonar:false,sonarFound:false,usedBoat:false,
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -344,6 +349,10 @@ state.baits=Object.assign({frucht:0,blinker:0},isObj(state.baits)?state.baits:{}
 state.clothes=Object.assign({anglerhut:false,weste:false},isObj(state.clothes)?state.clothes:{});
 if(!BAITS[state.bait])state.bait='wurm';
 state.house=Object.assign({w:{},r:{}},isObj(state.house)?state.house:{});
+state.reusen=Math.max(0,Math.round(Number(state.reusen)||0));
+if(!Array.isArray(state.traps))state.traps=[];
+state.traps=state.traps.filter(t=>isObj(t)&&Number.isFinite(t.x)&&Number.isFinite(t.z));
+state.traps.forEach(t=>{if(!Number.isFinite(t.t))t.t=Date.now();});
 // Fische, die es im Spiel nicht mehr gibt: Rosa kauft sie ab, damit nichts verloren geht
 let lostFishLudins=0;
 state.bucket=state.bucket.filter(it=>{if(it&&FISH_BY[it.id])return true;lostFishLudins+=Math.max(0,Math.round(Number(it&&it.value)||0));return false;});
@@ -1231,15 +1240,19 @@ function updateCtx(){
     if(Math.hypot(p.x-ROSA.x,p.z-ROSA.z)<4.2)a='shop';
     else if(Math.hypot(p.x-TIAGO_AT.x,p.z-TIAGO_AT.z)<4.2)a='tiago';
     else if(planeNear())a='fly';
+    else if(trapNear())a='trap';
     else if(onPlot(p.x,p.z))a='build';
     else if(state.hasBoat&&Math.hypot(p.x-boat.pos.x,p.z-boat.pos.z)<BOAT_REACH)a='board';
-  }else{exitSpot=findExit();if(exitSpot)a='exit';}
+  }else{exitSpot=findExit();if(exitSpot)a='exit';else if(trapNear())a='trap';}
+  if(!a&&state.reusen>0&&fishing.state==='idle'&&trapSpot())a='placetrap';
   if(a!==ctxAction){ctxAction=a;const b=$('#btnCtx');b.hidden=!a;
-    b.textContent=a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
+    b.textContent=a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
 $('#btnCtx').onclick=()=>{audio();
   if(ctxAction==='shop'){stopFishing();showShop();}
   else if(ctxAction==='tiago'){stopFishing();showTiago();}
+  else if(ctxAction==='trap'){const tr=trapNear();if(tr){stopFishing();showTrap(tr);}return;}
+  else if(ctxAction==='placetrap'){placeTrap();ctxAction='x';updateCtx();return;}
   else if(ctxAction==='fly'){const pl=planeNear();if(pl){fly(pl);return;}}
   else if(ctxAction==='build'){stopFishing();openBuild();}
   else if(ctxAction==='board'){stopFishing();player.inBoat=true;state.usedBoat=true;save();player.pos.copy(boat.pos);player.facing=boat.yaw;toast('Leinen los! Im tiefen Fluss leben die Riesenfische.');}
@@ -1270,6 +1283,8 @@ function tipText(){
   if(player.inBoat&&state.hasSonar&&!state.sonarFound)return 'Fahr langsam herum, bis das Echolot piept!';
   if(state.hasBoat&&!state.hasSonar&&state.ludins>=200)return 'Mit einem Echolot findest du die Fische. Opa Tiago hat eins für 200 Ludins!';
   if(state.hasBoat&&!state.hasMotor&&state.ludins>=600)return 'Du hast genug Ludins! Bei Opa Tiago gibt es ein Motorboot.';
+  if(state.traps.some(t=>trapFishCount(t)>=REUSE.full))return 'Eine Reuse ist voll! Die Boje ist grün. Hol die Fische ab.';
+  if(state.metTiago&&!reusenAll()&&state.ludins>=150)return 'Neu bei Opa Tiago: eine Reuse! Die fängt Fische, während du etwas anderes machst.';
   if(found>=FISH.length)return 'Wow! Du hast alle '+FISH.length+' Fischarten gefunden!';
   return '';
 }
@@ -1416,6 +1431,70 @@ function fly(p){
     toast(p.to==='see'?'Willkommen am Heimat-See! Hier leben Fische wie in Deutschland. Verkaufen kannst du sie bei Rosa.':'Willkommen zurück am Amazonas!');},1900);
 }
 
+/* ---- Reusen im Wasser ---- */
+const trapMeshes=[];
+const trapHome=t=>t.z<LAKE.zone?'see':'amazonas';
+const trapFishCount=t=>Math.max(0,Math.min(REUSE.full,Math.floor((Date.now()-t.t)/REUSE.every)));
+function makeTrapMesh(t){const g=new THREE.Group();
+  // Unter Wasser: der Korb (schaut ein Stück heraus, damit man ihn sieht)
+  const net=new THREE.Mesh(new THREE.CylinderGeometry(0.45,0.45,1.5,10,1,true),new THREE.MeshLambertMaterial({color:'#b48f5a',wireframe:true}));
+  net.rotation.z=Math.PI/2;net.position.y=-0.35;g.add(net);
+  for(const sx of[-0.75,0.75]){const ring=new THREE.Mesh(new THREE.TorusGeometry(0.45,0.04,5,14),mat('#8a6340'));ring.rotation.y=Math.PI/2;ring.position.set(sx,-0.35,0);g.add(ring);}
+  const funnel=new THREE.Mesh(new THREE.ConeGeometry(0.42,0.6,10,1,true),new THREE.MeshLambertMaterial({color:'#b48f5a',wireframe:true}));funnel.rotation.z=Math.PI/2;funnel.position.set(-0.5,-0.35,0);g.add(funnel);
+  // Boje: zeigt, wo die Reuse liegt. Grün = Fisch drin!
+  const buoy=new THREE.Mesh(new THREE.SphereGeometry(0.42,14,10),new THREE.MeshLambertMaterial({color:'#e2412b'}));buoy.position.y=0.22;g.add(buoy);
+  const band=new THREE.Mesh(new THREE.CylinderGeometry(0.43,0.43,0.14,14),mat('#ffffff'));band.position.y=0.3;g.add(band);
+  const pole=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.04,1.4,6),mat('#5e4128'));pole.position.y=1.2;g.add(pole);
+  const flag=new THREE.Mesh(new THREE.PlaneGeometry(0.55,0.35),new THREE.MeshLambertMaterial({color:'#f6c13b',side:THREE.DoubleSide}));flag.position.set(0.28,1.7,0);g.add(flag);
+  g.position.set(t.x,0,t.z);g.userData={trap:t,buoy};scene.add(g);trapMeshes.push(g);}
+function removeTrapMesh(t){const i=trapMeshes.findIndex(g=>g.userData.trap===t);if(i<0)return;scene.remove(trapMeshes[i]);trapMeshes.splice(i,1);}
+state.traps.forEach(makeTrapMesh);
+function updateTraps(t){for(const g of trapMeshes){const tr=g.userData.trap,n=trapFishCount(tr);
+  g.visible=Math.abs(tr.z-player.pos.z)<150;if(!g.visible)continue;
+  g.position.y=Math.sin(t*1.6+tr.x)*0.05;g.userData.buoy.material.color.set(n>0?'#2f9e5b':'#e2412b');}}
+const trapNear=()=>state.traps.find(t=>Math.hypot(player.pos.x-t.x,player.pos.z-t.z)<(player.inBoat?5:6.5));
+function trapSpot(){const w=findWater();if(!w)return null;
+  if(state.traps.some(t=>Math.hypot(t.x-w.x,t.z-w.z)<4))return null;return w;}
+function placeTrap(){const w=trapSpot();if(!w||state.reusen<1)return;
+  const t={x:Math.round(w.x*100)/100,z:Math.round(w.z*100)/100,t:Date.now()};
+  state.reusen--;state.traps.push(t);save();makeTrapMesh(t);splash(t.x,t.z);sfxSplash();
+  toast('Platsch! Deine Reuse liegt im Wasser. Komm in ein paar Minuten wieder. Wird die Boje grün, ist ein Fisch drin.');}
+// Ein Fisch aus der Reuse: nur kleine und mittlere Fische, die am Ort leben (keine Riesenfische vom Boot)
+function trapFish(home){const pool=FISH.filter(f=>fishHome(f)===home&&!f.boat);
+  let sum=0;pool.forEach(f=>sum+=f.w);let r=Math.random()*sum;for(const f of pool){r-=f.w;if(r<=0)return f;}return pool[0];}
+function showTrap(t){
+  openModal();card.className='card';card.innerHTML='';
+  const n=trapFishCount(t);
+  card.appendChild(el('h2',null,'Deine Reuse'));
+  if(!t.fish)t.fish=[];
+  // Fische erst beim Nachschauen auswürfeln und merken, damit sie beim nächsten Mal gleich bleiben
+  while(t.fish.length<n){const f=trapFish(trapHome(t)),k=Math.random();
+    t.fish.push({id:f.id,cm:Math.round(f.cm[0]+(f.cm[1]-f.cm[0])*k),value:Math.max(1,Math.round(f.price*(0.85+k*0.4)))});}
+  save();
+  const l=el('div','list');
+  if(!t.fish.length){const wait=Math.ceil((REUSE.every-(Date.now()-t.t))/60000);
+    l.appendChild(el('div','empty','Noch leer. Die Fische brauchen etwas Zeit. Schau in '+(wait<=1?'einer Minute':wait+' Minuten')+' wieder nach!'));}
+  t.fish.forEach(it=>{const f=FISH_BY[it.id];if(!f)return;const row=el('div','item');row.appendChild(fishCanvas(f,144,80));
+    row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm · '+it.value+' Ludins</span>'));row.appendChild(el('span',null,''));l.appendChild(row);});
+  card.appendChild(l);
+  if(t.fish.length&&t.fish.length>=REUSE.full)card.appendChild(el('p',null,'Die Reuse ist voll. Leere sie, dann können neue Fische hinein.'));
+  const bt=el('div','btns');
+  if(t.fish.length){const take=el('button','b go','In den Eimer');take.onclick=()=>{
+      const space=bucketMax()-state.bucket.length;if(space<=0){toast('Dein Eimer ist voll! Verkaufe zuerst Fische bei Rosa.');return;}
+      const moved=t.fish.splice(0,space);
+      moved.forEach(it=>{state.bucket.push(it);const b=state.book[it.id]||{n:0,best:0};b.n++;b.best=Math.max(b.best,it.cm);state.book[it.id]=b;});
+      if(!t.fish.length)t.t=Date.now(); // leer: die Zeit beginnt von vorn
+      else t.t=Date.now()-t.fish.length*REUSE.every;
+      save();sfxCatch();refreshHud(true);
+      toast(moved.length===1?'1 Fisch kommt in deinen Eimer.':moved.length+' Fische kommen in deinen Eimer.'+(t.fish.length?' Der Rest passt nicht mehr hinein.':''));showTrap(t);};
+    bt.appendChild(take);}
+  const up=el('button','b alt','Reuse mitnehmen');up.onclick=()=>{
+    if(t.fish&&t.fish.length){up.textContent='Erst die Fische in den Eimer!';return;}
+    state.traps.splice(state.traps.indexOf(t),1);state.reusen++;removeTrapMesh(t);save();closeModal();ctxAction='x';updateCtx();toast('Du hast die Reuse wieder eingepackt.');};
+  const cl=el('button','b alt','Fertig');cl.onclick=()=>{closeModal();ctxAction='x';updateCtx();};
+  bt.append(up,cl);card.appendChild(bt);
+}
+
 /* ---- Ort merken: wo man steht, ob man im Boot sitzt, wo das Boot liegt ---- */
 const r2=v=>Math.round(v*100)/100;
 function saveWhere(){if(mode==='creator')return;
@@ -1514,7 +1593,7 @@ function loop(){
   const dt=Math.min(0.05,clock.getDelta());elapsed+=dt;const t=elapsed;
   updateSonar(dt);
   const focusZ=mode==='build'?PLOT.z0:player.pos.z;updateChunks(focusZ,false);
-  water.position.z=Math.round(focusZ/8)*8;updateFoam(dt,t);rapidSound(player.pos.x,player.pos.z);
+  water.position.z=Math.round(focusZ/8)*8;updateFoam(dt,t);updateTraps(t);rapidSound(player.pos.x,player.pos.z);
   if(mode==='play'){updatePlayer(dt,t);updateFishing(dt,t);
     slowT+=dt;if(slowT>0.2){slowT=0;updateCtx();updateTip();}
     whereT+=dt;if(whereT>3){whereT=0;saveWhere();}}

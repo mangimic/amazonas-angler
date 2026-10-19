@@ -20,6 +20,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - Eigener **Avatar** (Name, Haut, Haare, T-Shirt, Hose, Hut)
 - Fische **verkaufen** bei Händlerin Rosa
 - **Angelladen** von Opa Tiago neben Rosa: Angeln, Köder, Boot-Sachen, Kleidung
+- **Reusen** (Fischfallen) bei Opa Tiago, 100 Ludins, höchstens 3. Man legt sie ins Wasser. Alle 2 Minuten
+  schwimmt ein Fisch hinein (höchstens 3, echte Uhrzeit, läuft auch weiter, wenn das Spiel zu ist). Boje wird grün.
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - Wunsch: **echte Fotos** von den Fischen zeigen (noch offen)
