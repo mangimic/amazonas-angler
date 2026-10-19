@@ -1,0 +1,13 @@
+{
+  "name": "amazonas-angler-tests",
+  "private": true,
+  "description": "Tests für das Spiel. Nur zum Prüfen, das Spiel selbst braucht kein npm.",
+  "type": "module",
+  "scripts": {
+    "test": "node --test spielstand.test.mjs"
+  },
+  "devDependencies": {
+    "playwright": "1.56.0",
+    "three": "0.128.0"
+  }
+}
