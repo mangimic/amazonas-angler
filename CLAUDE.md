@@ -24,7 +24,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   schwimmt ein Fisch hinein (höchstens 3, echte Uhrzeit, läuft auch weiter, wenn das Spiel zu ist). Boje wird grün.
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
-- **Echte Fotos** von allen Fischen (Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`)
+- **Echte Fotos** von den 15 Amazonas-Fischen (Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`). Die 10 See-Fische haben noch kein Foto (Platzhalter).
 
 ## Technik
 - Alles steckt in `index.html` (Three.js r128 von cdnjs, kein Build-Schritt).
