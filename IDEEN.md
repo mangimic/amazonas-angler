@@ -18,6 +18,8 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [x] Reusen kaufen und in den Fluss legen
 - [x] Echte Fotos von allen 15 Amazonas-Fischen (Wikimedia Commons, Nachweis in fotos/BILDNACHWEIS.md)
 - [x] Übersichtskarte (kleine Karte oben rechts, große Karte zum Antippen)
+- [x] Yacht kaufen (1500 Ludins, schnellstes Boot, Fischtank, Name am Rumpf)
+- [x] Seite „Was ist neu?“ mit Versionsnummer
 
 ## Als Nächstes
 - [ ] Echte Fotos von den 10 See-Fischen

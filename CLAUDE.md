@@ -26,6 +26,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   (ganzer Fluss + Heimat-See). Auf der Karte zeigt **rechts nach Norden** (flussaufwärts).
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
+- **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
+  trägt den Avatar-Namen am Rumpf, Fischtank an Bord = 20 Plätze mehr im Eimer. Werte in `YACHT`.
 - **Echte Fotos** von den 15 Amazonas-Fischen (Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`). Die 10 See-Fische haben noch kein Foto (Platzhalter).
 
 ## Technik
@@ -68,6 +70,8 @@ löscht ihn nicht, solange die Adresse gleich bleibt und der Code ihn richtig li
   Bekommt der Spielstand neue Teile, auch einen Test dafür ergänzen (`tests/spielstand.test.mjs`).
 
 ## Regeln für Änderungen
+- **Jede neue Funktion bekommt einen Eintrag in `NEWS`** (Seite „Was ist neu?“), ganz oben, mit `v` um 1 höher,
+  Datum, Symbol und 1–2 kindgerechten Sätzen. So sieht man nach dem Update, was neu ist, und an der Versionsnummer, ob das iPad aktuell ist.
 - Kleine Schritte: lieber eine Sache fertig machen als viele halb.
 - Nach jeder Änderung prüfen, dass das Spiel noch startet (keine Fehler in der Konsole).
 - Nach jeder fertigen Änderung einen Git-Commit mit einer deutschen Nachricht machen.

@@ -173,3 +173,28 @@ test('Reusen: ausgelegte Reusen und gekaufte Reusen bleiben erhalten', async () 
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Yacht: bleibt gekauft, und der Fischtank gibt 20 Plätze mehr', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, bucket: [], hasYacht: true, hasBucket: true }) });
+  await startGame(page);
+  await playAndLeave(page);
+  const s = JSON.parse(await read(page));
+  assert.equal(s.hasYacht, true);
+  assert.equal(await page.textContent('#hudBucket'), '0/50', 'großer Eimer 30 + Fischtank 20');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Was ist neu: geht nach einem Update einmal auf und merkt sich das', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, bucket: [] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#card h2:has-text("Was ist neu?")').waitFor({ timeout: 5000 });
+  const s = JSON.parse(await read(page));
+  assert.ok(s.newsSeen > 0, 'gesehen wird gespeichert');
+  assert.equal(s.ludins, 345, 'der Spielstand bleibt dabei unverändert');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

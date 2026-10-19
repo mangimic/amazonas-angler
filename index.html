@@ -63,6 +63,16 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .maplegend{flex:1 1 220px;min-width:0;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:15px;font-weight:700}
 .maplegend span{white-space:nowrap}
 .maphead{margin:0;font:800 18px var(--display)}
+#btnNews{position:relative}
+.newsdot{position:absolute;top:-6px;right:-6px;width:16px;height:16px;border-radius:50%;background:var(--macaw);border:2px solid var(--ink)}
+.news{display:flex;flex-direction:column;gap:12px;flex-shrink:0}
+.newsday{margin:4px 0 0;font:800 16px var(--display);color:var(--muted)}
+.newsitem{display:grid;grid-template-columns:52px 1fr;gap:12px;align-items:start;background:#f3e8cc;border-radius:14px;padding:10px 12px}
+.newsitem.fresh{background:#fff3c4;box-shadow:inset 0 0 0 3px var(--gold)}
+.newsitem .ni{font-size:34px;line-height:1.1;text-align:center}
+.newsitem b{display:block;font:800 18px/1.2 var(--display)}
+.newsitem span{display:block;font-size:15px;line-height:1.4;margin-top:2px}
+.newsver{font-size:13px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
 .sonar b{position:absolute;left:0;right:0;bottom:0;background:var(--ink);color:#fff;font:800 15px/1.6 var(--display);text-align:center}
 .sonar.ping{animation:bump .5s}
 #build .btop{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));
@@ -195,6 +205,7 @@ button.bk:active{border-color:var(--ink)}
     <div class="pill" id="pillLudins"><span class="coin">L</span><span class="sum" id="hudLudins">0</span><small>Ludins</small></div>
     <button class="chip" id="btnBucket" aria-label="Eimer anschauen">🪣 <span class="sum" id="hudBucket">0/15</span></button>
     <button class="chip" id="btnBook">📖 Fischbuch</button>
+    <button class="chip" id="btnNews">✨ Neu<span class="newsdot" id="newsDot" hidden></span></button>
     <span class="spacer"></span>
     <span class="name" id="hudName"></span>
     <button class="chip" id="btnAvatar" aria-label="Avatar ändern">👕</button>
@@ -310,6 +321,8 @@ const TIAGO_TABS=[['angeln','Angeln'],['koeder','Köder'],['boot','Boot'],['klei
 // Reusen: Fischfallen, die man ins Wasser legt. Alle REUSE.every Millisekunden schwimmt ein Fisch hinein (höchstens REUSE.full).
 const REUSE={price:100,max:3,full:3,every:2*60*1000};
 const reusenAll=()=>(state.reusen|0)+state.traps.length;
+// Die Yacht: das große Upgrade fürs Boot
+const YACHT={price:1500,speed:24,turn:3.2,extra:20,len:3.6};
 const needBoat=()=>!state.hasBoat&&'Erst das Boot';
 const TIAGO=[
  {tab:'angeln',name:'Bambus-Angel',price:0,ico:'🎋',desc:'Deine erste Angel. Mit ihr fängt jeder an.',owned:()=>true},
@@ -330,6 +343,8 @@ const TIAGO=[
   buy:()=>{state.hasBoat=true;},msg:'Dein Boot wartet am Steg!'},
  {tab:'boot',name:'Motorboot',price:600,ico:'🚤',desc:'Opa Tiago baut einen Motor an dein Boot. Dann fährst du doppelt so schnell!',owned:()=>state.hasMotor,lock:needBoat,
   buy:()=>{state.hasMotor=true;},msg:'Brumm! Dein Boot hat jetzt einen Motor.'},
+ {tab:'boot',name:'Yacht',price:YACHT.price,ico:'🛥️',desc:'Eine große weiße Yacht mit Kajüte, Steuerrad und deinem Namen am Rumpf! Sie ist die schnellste auf dem Fluss. Im Fischtank an Bord haben 20 Fische mehr Platz.',
+  owned:()=>state.hasYacht,lock:needBoat,buy:()=>{state.hasYacht=true;buildYachtName();},msg:'Wow, deine eigene Yacht! Sie liegt am Steg. Steig ein!'},
  {tab:'boot',name:'Echolot',price:200,ico:'📡',desc:'Ein Bildschirm im Boot zeigt dir, wo die Fische schwimmen. Dort beißen sie schneller!',owned:()=>state.hasSonar,lock:needBoat,
   buy:()=>{state.hasSonar=true;},msg:'Das Echolot ist im Boot. Fahr los und such die Fische!'},
  {tab:'kleidung',name:'Anglerhut',price:40,ico:'👒',desc:'Ein richtiger Anglerhut gegen die Sonne am Fluss.',owned:()=>state.clothes.anglerhut,
@@ -349,7 +364,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasSonar:false,sonarFound:false,usedBoat:false,
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -411,7 +426,7 @@ function readSaveCode(code){
   try{const bin=atob(code.slice(CODE_PREFIX.length));const b=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)b[i]=bin.charCodeAt(i);
     const s=parseSave(new TextDecoder().decode(b));return s&&isObj(s.avatar)?s:null;}catch(e){return null;}
 }
-const bucketMax=()=>state.hasBucket?30:15;
+const bucketMax=()=>(state.hasBucket?30:15)+(state.hasYacht?YACHT.extra:0);
 
 /* =================== Welt-Formeln =================== */
 const smooth=(a,b,x)=>{const t=Math.min(1,Math.max(0,(x-a)/(b-a)));return t*t*(3-2*t)};
@@ -797,6 +812,43 @@ const markCv=document.createElement('canvas');markCv.width=markCv.height=64;{con
   x.lineWidth=5;x.strokeStyle='#1b2a20';x.stroke();x.fillStyle='#1b2a20';x.font='900 40px sans-serif';x.textAlign='center';x.fillText('L',32,46);}
 const mark=new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(markCv)}));mark.scale.set(0.8,0.8,0.8);scene.add(mark);
 
+/* ---- Yacht ---- */
+const YACHT_DECK=0.55; // so hoch steht man auf dem Deck
+let yachtNameMesh=null;
+function buildYacht(){const g=new THREE.Group(),white=mat('#f4f6f7'),blue=mat('#2f7fd8'),wood=mat('#c79a62'),dark=mat('#2b2f33'),glass=mat('#7fc4e8');
+  // Rumpf: unten blau, oben weiß, vorne spitz
+  const hull=new THREE.Mesh(new THREE.SphereGeometry(1,24,12,0,Math.PI*2,Math.PI/2,Math.PI/2),new THREE.MeshLambertMaterial({color:'#f4f6f7',side:THREE.DoubleSide}));
+  hull.scale.set(1.55,1.0,3.6);hull.position.set(0,YACHT_DECK-0.02,0.6);g.add(hull);
+  const stripe=new THREE.Mesh(new THREE.TorusGeometry(1,0.06,6,40),blue);stripe.rotation.x=Math.PI/2;stripe.scale.set(1.5,3.48,1);stripe.position.set(0,YACHT_DECK-0.27,0.6);g.add(stripe);
+  // Deck aus Holz
+  const deck=new THREE.Mesh(new THREE.CircleGeometry(1,40),wood);deck.rotation.x=-Math.PI/2;deck.scale.set(1.53,3.56,1);deck.position.set(0,YACHT_DECK-0.02,0.6);g.add(deck);
+  // Reling (Geländer)
+  const rail=new THREE.Mesh(new THREE.TorusGeometry(1,0.04,5,40),white);rail.rotation.x=Math.PI/2;rail.scale.set(1.45,3.4,1);rail.position.set(0,YACHT_DECK+0.75,0.6);g.add(rail);
+  for(let i=0;i<14;i++){const a=i/14*Math.PI*2,po=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.03,0.75,4),white);po.position.set(Math.sin(a)*1.45,YACHT_DECK+0.37,0.6+Math.cos(a)*3.4);g.add(po);}
+  // Kajüte vorne mit Fenstern
+  const cab=new THREE.Mesh(new THREE.BoxGeometry(1.9,1.2,2.2),white);cab.position.set(0,YACHT_DECK+0.6,1.95);g.add(cab);
+  for(const sx of[-1.01,1.01]){const w=new THREE.Mesh(new THREE.BoxGeometry(0.04,0.4,1.8),glass);w.position.set(sx*0.95,YACHT_DECK+0.8,1.95);g.add(w);}
+  const front=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.45,0.04),glass);front.position.set(0,YACHT_DECK+0.85,0.84);g.add(front);
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.12,2.7),blue);roof.position.set(0,YACHT_DECK+1.26,1.9);g.add(roof);
+  // Steuerrad vor dir
+  const wheel=new THREE.Mesh(new THREE.TorusGeometry(0.28,0.04,6,16),dark);wheel.position.set(0,YACHT_DECK+1.0,0.55);g.add(wheel);
+  for(let i=0;i<4;i++){const sp=new THREE.Mesh(new THREE.BoxGeometry(0.03,0.56,0.03),dark);sp.rotation.z=i*Math.PI/4;sp.position.copy(wheel.position);g.add(sp);}
+  const stand=new THREE.Mesh(new THREE.CylinderGeometry(0.06,0.08,0.9,6),dark);stand.position.set(0,YACHT_DECK+0.45,0.62);g.add(stand);
+  // Mast mit Flagge
+  const mast=new THREE.Mesh(new THREE.CylinderGeometry(0.04,0.05,2.2,6),white);mast.position.set(0,YACHT_DECK+2.3,2.2);g.add(mast);
+  const flag=new THREE.Mesh(new THREE.PlaneGeometry(0.7,0.45),new THREE.MeshLambertMaterial({color:'#e2412b',side:THREE.DoubleSide}));flag.rotation.y=Math.PI/2;flag.position.set(0,YACHT_DECK+3.15,1.85);g.add(flag);
+  // Rettungsring
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(0.28,0.08,6,14),mat('#f6a623'));ring.position.set(1.42,YACHT_DECK+0.5,-1.2);ring.rotation.y=Math.PI/2;g.add(ring);
+  g.position.z=-0.6; // so steht man hinter der Kajüte am Steuer
+  return g;}
+function buildYachtName(){if(!boat.yacht)return;if(yachtNameMesh){boat.yacht.remove(yachtNameMesh.a);boat.yacht.remove(yachtNameMesh.b);}
+  const name=(state.avatar.name||'Ludina').slice(0,14),cv=document.createElement('canvas');cv.width=512;cv.height=96;const c=cv.getContext('2d');
+  c.fillStyle='#1e4f8a';c.font='italic 800 64px "Trebuchet MS",sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(name,256,50);
+  const m=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),transparent:true});
+  const a=new THREE.Mesh(new THREE.PlaneGeometry(2.2,0.42),m),b=new THREE.Mesh(new THREE.PlaneGeometry(2.2,0.42),m);
+  a.position.set(1.52,YACHT_DECK-0.4,1.4);a.rotation.y=Math.PI/2;b.position.set(-1.52,YACHT_DECK-0.4,1.4);b.rotation.y=-Math.PI/2;
+  boat.yacht.add(a);boat.yacht.add(b);yachtNameMesh={a,b};}
+
 /* ---- Boot ---- */
 const boat={pos:new THREE.Vector3(riverX(3.6)+6.5,0,3.6),yaw:0,mesh:new THREE.Group()};
 const BOAT_Y=0.32,BOAT_REACH=7; // Höhe über dem Wasser; so nah muss man zum Einsteigen sein
@@ -817,6 +869,9 @@ const BOAT_Y=0.32,BOAT_REACH=7; // Höhe über dem Wasser; so nah muss man zum E
   const prop=new THREE.Group();prop.position.set(0,-0.6,-0.12);
   for(let i=0;i<3;i++){const bl=new THREE.Mesh(new THREE.BoxGeometry(0.08,0.36,0.03),mat('#c9d3d8'));bl.rotation.z=i*Math.PI*2/3;bl.position.set(Math.sin(i*Math.PI*2/3)*0.12,Math.cos(i*Math.PI*2/3)*0.12,0);prop.add(bl);}
   motor.add(prop);boat.motor=motor;boat.prop=prop;boat.mesh.add(motor);
+  // Alles bisher ist das Kanu. Die Yacht ist eine eigene Gruppe, je nachdem ist das eine oder andere sichtbar.
+  const canoe=new THREE.Group();[...boat.mesh.children].forEach(o=>canoe.add(o));boat.mesh.add(canoe);boat.canoe=canoe;
+  boat.yacht=buildYacht();boat.mesh.add(boat.yacht);
   scene.add(boat.mesh);
 })();
 
@@ -927,9 +982,11 @@ function updatePlayer(dt,t){
     const fx=-Math.sin(camYaw),fz=-Math.cos(camYaw),rx=Math.cos(camYaw),rz=-Math.sin(camYaw);
     let mx=fx*(-jy)+rx*jx,mz=fz*(-jy)+rz*jx;const ml=Math.hypot(mx,mz)||1;mx/=ml;mz/=ml;
     const target=Math.atan2(mx,mz);
-    player.facing=angleLerp(player.facing,target,1-Math.exp(-dt*(player.inBoat?(state.hasMotor?5:4):12)));
-    const sp=(player.inBoat?(state.hasMotor?18:9):5.5)*mag*dt;
-    const ok=player.inBoat?boatable:walkable;
+    player.facing=angleLerp(player.facing,target,1-Math.exp(-dt*(player.inBoat?(state.hasYacht?YACHT.turn:state.hasMotor?5:4):12)));
+    const sp=(player.inBoat?(state.hasYacht?YACHT.speed:state.hasMotor?18:9):5.5)*mag*dt;
+    // Die Yacht ist lang: auch der Bug (vorne) muss im tiefen Wasser bleiben
+    const yachtOk=(x,z)=>boatable(x,z)&&boatable(x+Math.sin(player.facing)*YACHT.len,z+Math.cos(player.facing)*YACHT.len);
+    const ok=player.inBoat?(state.hasYacht?yachtOk:boatable):walkable;
     let dx=mx*sp,dz=mz*sp;
     if(player.inBoat){dx=Math.sin(player.facing)*sp;dz=Math.cos(player.facing)*sp;}
     const p=player.pos;
@@ -945,9 +1002,11 @@ function updatePlayer(dt,t){
   const av=player.av;
   if(player.inBoat){
     boat.pos.copy(player.pos);boat.yaw=player.facing;
-    const by=BOAT_Y+Math.sin(t*2)*0.05;player.y=by-0.4;
-    av.legs.forEach(l=>l.rotation.x=-1.45);
-    if(fishing.state==='idle')av.arms.forEach((a,i)=>a.rotation.x=state.hasMotor?-0.6:Math.sin(t*3+i*Math.PI)*0.5*(moving?1:0.1));
+    const by=BOAT_Y+Math.sin(t*2)*0.05;
+    if(state.hasYacht){player.y=by+YACHT_DECK;av.legs.forEach(l=>l.rotation.x=0); // auf der Yacht steht man am Steuer
+      if(fishing.state==='idle')av.arms.forEach(a=>a.rotation.x=-0.7);}
+    else{player.y=by-0.4;av.legs.forEach(l=>l.rotation.x=-1.45);
+    if(fishing.state==='idle')av.arms.forEach((a,i)=>a.rotation.x=state.hasMotor?-0.6:Math.sin(t*3+i*Math.PI)*0.5*(moving?1:0.1));}
   }else{
     const gy=groundY(player.pos.x,player.pos.z);player.y+=(gy-player.y)*Math.min(1,dt*14);
     player.walk+=dt*(moving?11*mag:0);
@@ -1278,7 +1337,7 @@ function updateCtx(){
     else if(planeNear())a='fly';
     else if(trapNear())a='trap';
     else if(onPlot(p.x,p.z))a='build';
-    else if(state.hasBoat&&Math.hypot(p.x-boat.pos.x,p.z-boat.pos.z)<BOAT_REACH)a='board';
+    else if(state.hasBoat&&Math.hypot(p.x-boat.pos.x,p.z-boat.pos.z)<BOAT_REACH+(state.hasYacht?3:0))a='board';
   }else{exitSpot=findExit();if(exitSpot)a='exit';else if(trapNear())a='trap';}
   if(!a&&state.reusen>0&&fishing.state==='idle'&&trapSpot())a='placetrap';
   if(a!==ctxAction){ctxAction=a;const b=$('#btnCtx');b.hidden=!a;
@@ -1318,6 +1377,7 @@ function tipText(){
   if(state.hasBoat&&!state.usedBoat)return 'Dein Boot liegt am Steg. Geh hin und steig ein!';
   if(player.inBoat&&state.hasSonar&&!state.sonarFound)return 'Fahr langsam herum, bis das Echolot piept!';
   if(state.hasBoat&&!state.hasSonar&&state.ludins>=200)return 'Mit einem Echolot findest du die Fische. Opa Tiago hat eins für 200 Ludins!';
+  if(state.hasBoat&&!state.hasYacht&&state.ludins>=YACHT.price)return 'Du hast genug Ludins für eine Yacht! Schau bei Opa Tiago unter „Boot“.';
   if(state.hasBoat&&!state.hasMotor&&state.ludins>=600)return 'Du hast genug Ludins! Bei Opa Tiago gibt es ein Motorboot.';
   if(state.traps.some(t=>trapFishCount(t)>=REUSE.full))return 'Eine Reuse ist voll! Die Boje ist grün. Hol die Fische ab.';
   if(state.metTiago&&!reusenAll()&&state.ludins>=150)return 'Neu bei Opa Tiago: eine Reuse! Die fängt Fische, während du etwas anderes machst.';
@@ -1351,10 +1411,14 @@ function faceFreeSide(){const p=player.pos;
 function openCreator(){mode='creator';$('#hud').hidden=true;$('#creator').hidden=false;$('#modal').hidden=true;buildCreator();creatorSpin=0;
   if(player.inBoat){player.inBoat=false;player.pos.set(VX-6,0,2);player.y=groundY(player.pos.x,player.pos.z);}
   faceFreeSide();}
-$('#btnGo').onclick=()=>{audio();if(!state.avatar.name)state.avatar.name='Angler';
+$('#btnGo').onclick=()=>{audio();if(!state.avatar.name)state.avatar.name='Angler';if(state.hasYacht)buildYachtName();
   if(boardOnStart){boardOnStart=false;player.inBoat=true;player.pos.copy(boat.pos);player.facing=boat.yaw;}
   save();$('#creator').hidden=true;$('#hud').hidden=false;mode='play';
   camera.clearViewOffset();player.root.rotation.y=player.facing;refreshHud();updateFishBtn();
+  updateNewsDot();
+  const playedBefore=state.ludins>0||Object.keys(state.book).length>0||state.hasBoat;
+  if(!playedBefore&&!(state.newsSeen|0)){state.newsSeen=NEWS_V;save();updateNewsDot();}
+  else if((state.newsSeen|0)<NEWS_V)setTimeout(showNews,400);
   if(lostFishLudins){toast('Rosa hat ein paar alte Fische aus deinem Eimer gekauft: +'+lostFishLudins+' Ludins');lostFishLudins=0;}
   else if(loadedFrom==='backup'){toast('Dein Spielstand war kaputt. Wir haben die Sicherheitskopie geladen.');loadedFrom='main';}};
 
@@ -1613,6 +1677,38 @@ function showMap(){
 }
 $('#btnMap').onclick=()=>{audio();showMap();};
 
+/* ---- Was ist neu? ----
+   Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
+   Nach einem Update geht die Seite einmal von selbst auf. */
+const NEWS=[
+ {v:11,day:'19.10.2026',ico:'✨',t:'Was ist neu?',d:'Diese Seite! Hier steht nach jedem Update, was dazugekommen ist.'},
+ {v:10,day:'19.10.2026',ico:'🛥️',t:'Yacht',d:'Bei Opa Tiago im Tab „Boot“ gibt es eine Yacht für 1500 Ludins. Dein Name steht am Rumpf, sie ist das schnellste Boot, und im Fischtank passen 20 Fische mehr.'},
+ {v:9,day:'19.10.2026',ico:'🗺️',t:'Karte',d:'Oben rechts siehst du jetzt eine kleine Karte. Tipp darauf, dann siehst du den ganzen Fluss und den Heimat-See.'},
+ {v:8,day:'19.10.2026',ico:'📸',t:'Echte Fotos',d:'Im Fischbuch siehst du echte Fotos von allen 15 Amazonas-Fischen.'},
+ {v:7,day:'19.10.2026',ico:'🧺',t:'Reusen',d:'Kauf bei Opa Tiago eine Reuse und leg sie ins Wasser. Alle 2 Minuten schwimmt ein Fisch hinein. Ist die Boje grün, hol ihn ab!'},
+ {v:6,day:'19.10.2026',ico:'✈️',t:'Heimat-See',d:'Mit dem Flugzeug neben dem Dorf fliegst du zu einem See wie in Deutschland. Dort leben 10 neue Fische, zum Beispiel Hecht, Zander und Forelle.'},
+ {v:5,day:'19.10.2026',ico:'💾',t:'Spielstand sichern',d:'In der Avatar-Werkstatt (👕) bekommst du einen Spielstand-Code. Heb ihn gut auf, dann geht dein Spiel nie verloren.'},
+ {v:4,day:'18.10.2026',ico:'🌊',t:'Langer Fluss',d:'Der Fluss ist jetzt über 2 km lang, mit einer Insel und Stromschnellen, die dein Boot schieben.'},
+ {v:3,day:'18.10.2026',ico:'🏠',t:'Dein eigenes Haus',d:'Hinter Opa Tiagos Hütte kannst du ein Pfahlhaus am Fluss bauen.'},
+ {v:2,day:'18.10.2026',ico:'🎣',t:'Opa Tiagos Angelladen',d:'Angeln, Köder, Motorboot, Echolot und Kleidung gibt es bei Opa Tiago neben Rosa.'},
+ {v:1,day:'18.10.2026',ico:'🐟',t:'Amazonas Angler',d:'Die erste Version: Avatar bauen, angeln, Fische bei Rosa verkaufen und ein Boot kaufen.'}];
+const NEWS_V=NEWS[0].v;
+function updateNewsDot(){$('#newsDot').hidden=(state.newsSeen|0)>=NEWS_V;}
+function showNews(){
+  stopFishing();openModal();card.className='card';card.innerHTML='';
+  const seen=state.newsSeen|0;
+  card.appendChild(el('h2',null,'Was ist neu?'));
+  const box=el('div','news');let day='';
+  NEWS.forEach(n=>{if(n.day!==day){day=n.day;box.appendChild(el('h3','newsday',n.day));}
+    const it=el('div','newsitem'+(n.v>seen&&seen>0?' fresh':''));it.appendChild(el('div','ni',n.ico));
+    it.appendChild(el('div',null,'<b>'+esc(n.t)+'</b><span>'+esc(n.d)+'</span>'));box.appendChild(it);});
+  card.appendChild(box);
+  card.appendChild(el('p','newsver','Version '+NEWS_V+' vom '+NEWS[0].day));
+  const ok=el('button','b','Los geht\'s!');ok.onclick=closeModal;const bt=el('div','btns');bt.appendChild(ok);card.appendChild(bt);
+  state.newsSeen=NEWS_V;save();updateNewsDot();
+}
+$('#btnNews').onclick=()=>{audio();showNews();};
+
 /* ---- Ort merken: wo man steht, ob man im Boot sitzt, wo das Boot liegt ---- */
 const r2=v=>Math.round(v*100)/100;
 function saveWhere(){if(mode==='creator')return;
@@ -1720,12 +1816,12 @@ function loop(){
   if(state.hasBoat){boat.mesh.position.set(boat.pos.x,BOAT_Y+Math.sin(t*2)*0.05,boat.pos.z);const rw=rapidAt(boat.pos.x,boat.pos.z);boat.mesh.rotation.set(Math.sin(t*1.7)*0.03+Math.sin(t*7)*0.05*rw,boat.yaw,Math.sin(t*2.1)*0.04+Math.sin(t*9)*0.07*rw);
     if(rw>0.3&&Math.random()<dt*6)wakePuff(boat.pos.x+(Math.random()-0.5)*3,boat.pos.z+(Math.random()-0.5)*4);}
   // Motorboot
-  boat.motor.visible=state.hasMotor;
-  const fahrt=mode==='play'&&player.inBoat&&state.hasMotor?player.speed||0:0;
-  const tuckern=mode==='play'&&player.inBoat&&state.hasMotor;
+  boat.motor.visible=state.hasMotor;boat.canoe.visible=!state.hasYacht;boat.yacht.visible=!!state.hasYacht;
+  const fahrt=mode==='play'&&player.inBoat&&(state.hasMotor||state.hasYacht)?player.speed||0:0;
+  const tuckern=mode==='play'&&player.inBoat&&(state.hasMotor||state.hasYacht);
   boat.prop.rotation.z+=dt*(tuckern?6+fahrt*30:0);
   if(fahrt>0.2){boat.mesh.rotation.x-=0.06*fahrt;wakeT+=dt;
-    if(wakeT>0.05){wakeT=0;const bx=boat.pos.x-Math.sin(boat.yaw)*3.1,bz=boat.pos.z-Math.cos(boat.yaw)*3.1;
+    if(wakeT>0.05){wakeT=0;const back=state.hasYacht?3.6:3.1,bx=boat.pos.x-Math.sin(boat.yaw)*back,bz=boat.pos.z-Math.cos(boat.yaw)*back;
       wakePuff(bx+(Math.random()-0.5)*0.6,bz+(Math.random()-0.5)*0.6);}}
   for(const w of wake){if(!w.m.visible)continue;w.t+=dt;const sc=1+w.t*2.2;w.m.scale.set(sc,sc,sc);w.m.material.opacity=Math.max(0,0.7-w.t*0.7);if(w.t>1)w.m.visible=false;}
   engineSound(tuckern?0.15+fahrt*0.85:0);
