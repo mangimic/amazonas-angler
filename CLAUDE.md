@@ -22,6 +22,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - **Angelladen** von Opa Tiago neben Rosa: Angeln, Köder, Boot-Sachen, Kleidung
 - **Reusen** (Fischfallen) bei Opa Tiago, 100 Ludins, höchstens 3. Man legt sie ins Wasser. Alle 2 Minuten
   schwimmt ein Fisch hinein (höchstens 3, echte Uhrzeit, läuft auch weiter, wenn das Spiel zu ist). Boje wird grün.
+- **Karte**: kleine Karte oben rechts (60 m um dich herum), Antippen oder Taste M öffnet die große Karte
+  (ganzer Fluss + Heimat-See). Auf der Karte zeigt **rechts nach Norden** (flussaufwärts).
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Echte Fotos** von den 15 Amazonas-Fischen (Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`). Die 10 See-Fische haben noch kein Foto (Platzhalter).
