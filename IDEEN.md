@@ -21,6 +21,7 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [x] Yacht kaufen (1500 Ludins, schnellstes Boot, Fischtank, Name am Rumpf)
 - [x] Seite „Was ist neu?“ mit Versionsnummer
 - [x] Echte Fotos von den 10 See-Fischen, auch im Eimer, bei Rosa und in der Reuse
+- [x] Mehrere Spieler mit eigenem Spielstand („Wer spielt?“)
 
 ## Als Nächstes
 - [ ] Haus: Möbel
