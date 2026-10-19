@@ -290,3 +290,22 @@ test('Mehrere Spieler: kaputte Spielerliste, aber kein Spieler geht verloren', a
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Fischbuch: nur echte Fotos, keine gemalten Fische', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBook');
+  await page.locator('#card .bk img.bkimg').first().waitFor({ timeout: 5000 });
+  assert.equal(await page.locator('#card .bk img.bkimg').count(), 2, 'Piranha und Diskus als Foto');
+  assert.equal(await page.locator('#card .bk .unknown').count(), 23, 'die anderen sind ein Fragezeichen');
+  assert.equal(await page.locator('#card canvas').count(), 0, 'kein gemalter Fisch');
+  await page.click('#card button.bk:has-text("Piranha")');
+  await page.locator('#card .pic img.photo').waitFor();
+  assert.equal(await page.locator('#card .pic img.photo').getAttribute('src'), 'fotos/piranha.jpg');
+  assert.equal(await page.locator('#card canvas').count(), 0);
+  assert.equal(await page.locator('#card button:has-text("Gemalt")').count(), 0, 'kein Knopf mehr zum Umschalten');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

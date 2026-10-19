@@ -29,7 +29,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
   trägt den Avatar-Namen am Rumpf, Fischtank an Bord = 20 Plätze mehr im Eimer. Werte in `YACHT`.
 - **Echte Fotos** von allen 25 Fischen (15 Amazonas, 10 See), Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`.
-  Eimer, Rosa und Reuse zeigen kleine Fotos (`fishThumb`), das Fischbuch zeigt das große Foto.
+  Fang, Fischbuch, Eimer, Rosa und Reuse zeigen immer das Foto. Noch nicht gefangene Fische zeigt das Fischbuch als „?“.
 
 ## Technik
 - Alles steckt in `index.html` (Three.js r128 von cdnjs, kein Build-Schritt).
@@ -37,7 +37,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Große Knöpfe (mindestens 60 px), alles muss mit dem Finger gehen.
 - Spielstand: siehe Abschnitt **Spielstand** unten. Das ist die wichtigste Regel im ganzen Projekt.
 - Die Welt wird in Stücken (`CHUNK`, 160 m) gebaut, nur in der Nähe des Spielers. Höhe überall: `heightAt(x,z)`.
-- Fischdaten stehen in der Liste `FISH` (Name, Fakt, Seltenheit `w`, Preis, Größe, Farben, Form, `home`, Artikel `art`).
+- Fischdaten stehen in der Liste `FISH` (Name, Fakt, Seltenheit `w`, Preis, Größe, `home`, Artikel `art`).
+  Fische werden **nur als echte Fotos** gezeigt (`fishImg`), es gibt keine gemalten Fische mehr. Neuer Fisch = auch ein Foto in `FOTOS`.
 - Der Heimat-See liegt in der Welt weit im Süden (`LAKE`, z um −900). `heightAt` springt dort auf `lakeHeight`.
 - Testen: `index.html` im Browser öffnen. Für das iPad: lokalen Server starten
   (`python3 -m http.server 8000`) und auf dem iPad `http://<IP-des-Computers>:8000` öffnen.
