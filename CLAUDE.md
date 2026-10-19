@@ -28,7 +28,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
   trägt den Avatar-Namen am Rumpf, Fischtank an Bord = 20 Plätze mehr im Eimer. Werte in `YACHT`.
-- **Echte Fotos** von den 15 Amazonas-Fischen (Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`). Die 10 See-Fische haben noch kein Foto (Platzhalter).
+- **Echte Fotos** von allen 25 Fischen (15 Amazonas, 10 See), Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`.
+  Eimer, Rosa und Reuse zeigen kleine Fotos (`fishThumb`), das Fischbuch zeigt das große Foto.
 
 ## Technik
 - Alles steckt in `index.html` (Three.js r128 von cdnjs, kein Build-Schritt).
@@ -57,6 +58,9 @@ Die Skills sind Wissen aus dem Internet. **Diese Datei hier gilt immer zuerst.**
 Der Spielstand liegt auf dem iPad im `localStorage` des Browsers. Ein Update auf GitHub Pages
 löscht ihn nicht, solange die Adresse gleich bleibt und der Code ihn richtig liest.
 - Schlüssel `amazonas-angler-1` **nie ändern**. Auch nicht `-backup`, `-vor-v…`, `-kaputt`, `-vor-code`.
+- **Mehrere Spieler** pro Gerät: `KEY` ist immer der Stand dessen, der gerade spielt (`state.playerId`).
+  Die anderen liegen in `amazonas-angler-1-spieler-<id>`, die Liste in `amazonas-angler-1-spieler`. Diese Schlüssel nie ändern.
+  Spieler werden nie gelöscht (nur ganz leere, die nie gespielt haben). Ein Spielstand-Code kommt als neuer Spieler dazu.
 - Neues Feld: nur in `state` mit Startwert eintragen. Fehlende Felder in alten Ständen bekommen so den Startwert.
 - Feld umbenennen oder umbauen: `SAVE_VERSION` um 1 erhöhen und in `migrate()` einen neuen Schritt
   `if(from<N){…}` anhängen. Alte Schritte nie ändern oder löschen.

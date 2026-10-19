@@ -156,6 +156,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .list{display:flex;flex-direction:column;gap:8px}
 .item{display:grid;grid-template-columns:72px 1fr auto;gap:10px;align-items:center;background:#f3e8cc;border-radius:14px;padding:8px}
 .item canvas{width:72px;height:40px}
+.item img.thumb{width:72px;height:54px;object-fit:cover;border-radius:10px;border:2px solid var(--ink);box-sizing:border-box}
 .item .t{min-width:0}
 .item b{font:800 18px var(--display);display:block;line-height:1.1}
 .item span{font-size:14px;color:var(--muted);font-variant-numeric:tabular-nums}
@@ -174,6 +175,10 @@ button.bk:active{border-color:var(--ink)}
 .pic figcaption{font-size:12px;color:var(--muted);line-height:1.3}
 .pic figcaption a{color:inherit}
 .rosa{display:flex;gap:12px;align-items:center}
+.player{width:100%;font:inherit;color:inherit;text-align:left;border:3px solid transparent;cursor:pointer;min-height:72px}
+.player.me{border-color:var(--gold)}
+.player .sum{font:800 15px var(--display);color:var(--muted)}
+.pface{width:56px;height:56px;border-radius:50%;border:6px solid;box-sizing:border-box;justify-self:center}
 .rosa .face{width:54px;height:54px;flex:none;border-radius:50%;background:#8d5524;border:3px solid var(--ink);position:relative}
 .rosa .face::before,.rosa .face::after{content:"";position:absolute;top:20px;width:7px;height:7px;border-radius:50%;background:#1a1a1a}
 .rosa .face::before{left:14px}.rosa .face::after{right:14px}
@@ -232,6 +237,7 @@ button.bk:active{border-color:var(--ink)}
   <div class="row"><span class="lbl">Hut</span><div class="opts" id="opHat"></div></div>
   <div class="row" id="rowVest" hidden><span class="lbl">Schwimmweste</span><div class="opts" id="opVest"></div></div>
   <button class="big" id="btnGo">Los geht's!</button>
+  <button class="b alt" id="btnPlayers">👥 Spieler wechseln</button>
   <button class="b alt" id="btnSaveCode">💾 Spielstand sichern</button>
   <div class="small-note">Laufen: links auf dem Bildschirm wischen · Umschauen: rechts wischen · Am Computer: Pfeiltasten oder WASD, Leertaste zum Angeln</div>
 </div>
@@ -301,7 +307,18 @@ const FOTOS={
  zitter:{src:'fotos/zitter.jpg',von:'Steven G. Johnson',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Electric-eel.jpg'},
  dorado:{src:'fotos/dorado.jpg',von:'David Morimoto',lizenz:'CC BY-SA 2.0',link:'https://commons.wikimedia.org/wiki/File:Dourado(Salminus_brasiliensis)emBonito.jpg'},
  piraiba:{src:'fotos/piraiba.jpg',von:'タウナギ',lizenz:'CC0',link:'https://commons.wikimedia.org/wiki/File:Brachyplatystoma_filamentosum_Totto.jpg'},
- arapaima:{src:'fotos/arapaima.jpg',von:'Cliff',lizenz:'CC BY 2.0',link:'https://commons.wikimedia.org/wiki/File:Arapaima_(Arapaima_gigas)_4.jpg'}
+ arapaima:{src:'fotos/arapaima.jpg',von:'Cliff',lizenz:'CC BY 2.0',link:'https://commons.wikimedia.org/wiki/File:Arapaima_(Arapaima_gigas)_4.jpg'},
+ // Fische aus dem Heimat-See
+ rotauge:{src:'fotos/rotauge.jpg',von:'Karelj',lizenz:'Public domain',link:'https://commons.wikimedia.org/wiki/File:Rutilus_rutilus_Prague_Vltava_3.jpg'},
+ rotfeder:{src:'fotos/rotfeder.jpg',von:'Paul Korecky',lizenz:'CC BY-SA 2.0',link:'https://commons.wikimedia.org/wiki/File:2017-07-02_AT_Wien_13_Hietzing,_Tiergarten_Sch%C3%B6nbrunn,_Scardinius_erythrophthalmus_(49897346508).jpg'},
+ barsch:{src:'fotos/barsch.jpg',von:'Vassil',lizenz:'CC0',link:'https://commons.wikimedia.org/wiki/File:Perca_fluviatilis_Aquarium_Li%C3%A8ge_30012016_1.jpg'},
+ karausche:{src:'fotos/karausche.jpg',von:'NasserHalaweh',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Cyprinidae_Carassius_carassius_1.jpg'},
+ doebel:{src:'fotos/doebel.jpg',von:'Emőke Dénes',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Hal_-_Squalius_cephalus_-_2.jpg'},
+ schleie:{src:'fotos/schleie.jpg',von:'Karelj',lizenz:'Public domain',link:'https://commons.wikimedia.org/wiki/File:Tinca_tinca_Prague_Vltava_3.jpg'},
+ karpfen:{src:'fotos/karpfen.jpg',von:'Reaperman',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Carp_(Cyprinus_carpio)_in_aquarium.JPG'},
+ forelle:{src:'fotos/forelle.jpg',von:'Tylwyth Eldar',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Oniria_-_Truite_fario_03.jpg'},
+ zander:{src:'fotos/zander.jpg',von:'Emőke Dénes',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Hal_-_Sander_lucioperca_-_1.jpg'},
+ hecht:{src:'fotos/hecht.jpg',von:'Karelj',lizenz:'Public domain',link:'https://commons.wikimedia.org/wiki/File:Esox_lucius_Prague_Vltava_2.jpg'}
 };
 // Solange ein Fisch noch kein echtes Foto hat, kommt dieses Bild.
 const PLATZHALTER={src:'fotos/platzhalter.jpg',platzhalter:true};
@@ -364,7 +381,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -411,10 +428,48 @@ const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
 if(loadedFrom==='main')lsSet(BACKUP_KEY,savedRaw);
 // Den Browser bitten, den Spielstand nicht von selbst zu löschen
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist().catch(()=>{});}catch(e){}
+/* ---- Mehrere Spieler auf einem Gerät ----
+   KEY ist immer der Spielstand von dem, der gerade spielt (state.playerId sagt, wer das ist).
+   Die anderen Spieler liegen in KEY+'-spieler-<id>', die Liste mit Name, Ludins und Fischen in PLAYERS_KEY.
+   Diese Schlüssel nie ändern. Spieler werden nie gelöscht (nur ganz leere, die nie gespielt haben). */
+const PLAYERS_KEY=KEY+'-spieler',slotKey=id=>KEY+'-spieler-'+id;
+let players=parseSave(lsGet(PLAYERS_KEY));
+if(!players||!Array.isArray(players.list))players={list:[]};
+players.list=players.list.filter(p=>isObj(p)&&typeof p.id==='string'&&p.id);
+// Fehlt ein Spieler in der Liste (Liste kaputt), aber sein Fach ist noch da: wieder eintragen
+try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i),pre=KEY+'-spieler-';
+  if(k&&k.indexOf(pre)===0){const id=k.slice(pre.length),s=parseSave(lsGet(k));
+    if(id&&s&&!players.list.some(p=>p.id===id))players.list.push({id,name:isObj(s.avatar)&&s.avatar.name||'',ludins:s.ludins,fish:isObj(s.book)?Object.keys(s.book).length:0});}}}catch(e){}
+function newPlayerId(){let i=players.list.length+1;while(players.list.some(p=>p.id==='p'+i))i++;return 'p'+i;}
+if(typeof state.playerId!=='string'||!state.playerId)state.playerId=players.list.length?newPlayerId():'p1';
+if(!players.list.some(p=>p.id===state.playerId))players.list.push({id:state.playerId});
+const askWhoPlays=players.list.length>1&&!players.picked; // nach einem Spielerwechsel nicht gleich noch einmal fragen
+delete players.picked;
+const emptyPlayer=s=>!(s.avatar&&s.avatar.name)&&!(Number(s.ludins)>0)&&!Object.keys(s.book||{}).length&&!s.hasBoat;
+function syncPlayer(){const p=players.list.find(p=>p.id===state.playerId);if(!p)return;
+  Object.assign(p,{name:state.avatar.name||'',ludins:state.ludins,fish:Object.keys(state.book).length,skin:state.avatar.skin,shirt:state.avatar.shirt,t:Date.now()});
+  lsSet(PLAYERS_KEY,JSON.stringify(players));}
+syncPlayer();
+// Zu einem anderen Spieler wechseln. raw = Spielstand des neuen Spielers (sonst aus seinem Fach).
+function switchPlayer(id,raw){
+  save();
+  const cur=JSON.stringify(state);
+  if(!emptyPlayer(state)&&!lsSet(slotKey(state.playerId),cur)){toast('Das hat nicht geklappt. Der Spielstand kann hier nicht gespeichert werden.');return;}
+  raw=raw||lsGet(slotKey(id));const next=parseSave(raw);
+  if(!next){toast('Dieser Spielstand ist leider kaputt.');return;}
+  next.playerId=id;raw=JSON.stringify(next);
+  if(!lsSet(KEY,raw)){toast('Das hat nicht geklappt. Der Spielstand kann hier nicht gespeichert werden.');return;}
+  lsSet(BACKUP_KEY,raw);
+  if(emptyPlayer(state))players.list=players.list.filter(p=>p.id!==state.playerId); // nie gespielt: nichts geht verloren
+  if(!players.list.some(p=>p.id===id))players.list.push({id,name:next.avatar&&next.avatar.name||''});
+  players.picked=true;lsSet(PLAYERS_KEY,JSON.stringify(players));
+  pauseSaving=true;location.reload();
+}
+const freshPlayer=()=>JSON.stringify({v:SAVE_VERSION,newsSeen:NEWS_V,avatar:{name:''}});
 let saveWarned=false,pauseSaving=false;
 function save(){
   if(pauseSaving)return false;
-  if(lsSet(KEY,JSON.stringify(state)))return true;
+  if(lsSet(KEY,JSON.stringify(state))){syncPlayer();return true;}
   if(!saveWarned){saveWarned=true;setTimeout(()=>{try{toast('Achtung: Der Spielstand kann hier nicht gespeichert werden. Bitte nicht im privaten Modus spielen.');}catch(e){}},0);}
   return false;
 }
@@ -1218,6 +1273,9 @@ function fishPic(f,foto,onFail){
   fig.appendChild(el('figcaption',null,'Foto: '+esc(ft.von)+' · '+esc(ft.lizenz)+' · Wikimedia Commons'));
   return fig;
 }
+// Kleines Bild für Listen (Eimer, Rosa, Reuse): echtes Foto, wenn es eins gibt, sonst der gemalte Fisch.
+function fishThumb(f){const ft=FOTOS[f.id];if(!ft||ft.kaputt)return fishCanvas(f,144,80);
+  const img=el('img','thumb');img.alt=f.name;img.src=ft.src;img.onerror=()=>{ft.kaputt=true;img.replaceWith(fishCanvas(f,144,80));};return img;}
 // Bild mit Knopf zum Wechseln zwischen Foto und gemaltem Fisch.
 function fishPicSwitch(f,startFoto){
   const box=el('div','pic');let foto=startFoto&&hasFoto(f)&&!fotoFor(f).platzhalter;const sw=el('button','b alt');const fail=()=>sw.remove();
@@ -1245,7 +1303,7 @@ function showBucket(){
   card.appendChild(el('p',null,state.bucket.length+' von '+bucketMax()+' Plätzen belegt. Verkaufen kannst du die Fische bei Rosa an der Hütte.'));
   const l=el('div','list');
   if(!state.bucket.length)l.appendChild(el('div','empty','Noch leer. Ab ans Wasser!'));
-  state.bucket.forEach(it=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishCanvas(f,144,80));
+  state.bucket.forEach(it=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishThumb(f));
     row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm</span>'));row.appendChild(el('span','sum',it.value+' L'));l.appendChild(row);});
   card.appendChild(l);
   const c=el('button','b','Fertig');c.onclick=closeModal;const bt=el('div','btns');bt.appendChild(c);card.appendChild(bt);
@@ -1310,7 +1368,7 @@ function showShop(){
   const l=el('div','list');
   {
     if(!state.bucket.length)l.appendChild(el('div','empty','Dein Eimer ist leer. Fang erst ein paar Fische!'));
-    state.bucket.forEach((it,i)=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishCanvas(f,144,80));
+    state.bucket.forEach((it,i)=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishThumb(f));
       row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm · '+it.value+' Ludins</span>'));
       const b=el('button','b','Verkaufen');b.onclick=()=>{state.bucket.splice(i,1);state.ludins+=it.value;save();sfxCoins();refreshHud(true);showShop();};
       row.appendChild(b);l.appendChild(row);});
@@ -1428,11 +1486,13 @@ function showSaveCode(confirmCode){
   card.appendChild(el('h2',null,'Spielstand sichern'));
   if(confirmCode){
     const s=confirmCode;
-    card.appendChild(el('p',null,'Diesen Spielstand laden? <b>'+esc(s.avatar.name||'Angler')+'</b> mit '+(Math.round(Number(s.ludins))||0)+' Ludins.<br>Dein jetziger Spielstand wird dabei ersetzt.'));
+    const keep=!emptyPlayer(state);
+    card.appendChild(el('p',null,'Diesen Spielstand laden? <b>'+esc(s.avatar.name||'Angler')+'</b> mit '+(Math.round(Number(s.ludins))||0)+' Ludins.'+
+      (keep?'<br>Er kommt als neuer Spieler dazu. Dein jetziger Spielstand bleibt erhalten.':'')));
     const bt=el('div','btns');
     const yes=el('button','b go','Ja, laden');yes.onclick=()=>{
       lsSet(KEY+'-vor-code',JSON.stringify(state)); // den alten Stand trotzdem aufheben
-      if(lsSet(KEY,JSON.stringify(s))){pauseSaving=true;location.reload();}else toast('Das hat nicht geklappt. Der Spielstand kann hier nicht gespeichert werden.');};
+      switchPlayer(keep?newPlayerId():state.playerId,JSON.stringify(s));};
     const no=el('button','b alt','Abbrechen');no.onclick=()=>showSaveCode();
     bt.append(yes,no);card.appendChild(bt);return;
   }
@@ -1458,6 +1518,27 @@ function showSaveCode(confirmCode){
   bt2.append(ld,cl);card.appendChild(bt2);
 }
 $('#btnSaveCode').onclick=()=>{audio();save();showSaveCode();};
+
+/* ---- Wer spielt? Jeder Spieler hat seinen eigenen Spielstand ---- */
+function showPlayers(){
+  save();openModal();card.className='card';card.innerHTML='';
+  card.appendChild(el('h2',null,'Wer spielt?'));
+  card.appendChild(el('p',null,'Jeder Spieler hat seinen eigenen Spielstand. Das Spiel speichert von selbst.'));
+  const l=el('div','list players');
+  players.list.forEach(p=>{const me=p.id===state.playerId,b=el('button','item player'+(me?' me':''));
+    const face=el('div','pface');face.style.background=p.skin||SKINS[1];face.style.borderColor=p.shirt||'#2f9e5b';b.appendChild(face);
+    b.appendChild(el('div','t','<b>'+esc(p.name||'Neuer Spieler')+'</b><span>'+(Math.round(Number(p.ludins))||0)+' Ludins · '+(p.fish|0)+((p.fish|0)===1?' Fischart':' Fischarten')+'</span>'));
+    b.appendChild(el('span','sum',me?'spielt gerade':'▶'));
+    b.onclick=()=>{if(me)closeModal();else switchPlayer(p.id);};l.appendChild(b);});
+  card.appendChild(l);
+  const bt=el('div','btns');
+  const add=el('button','b go','+ Neuer Spieler');add.onclick=()=>{
+    if(emptyPlayer(state)){closeModal();toast('Gib zuerst deinen Namen ein.');return;}
+    switchPlayer(newPlayerId(),freshPlayer());};
+  const c=el('button','b alt','Fertig');c.onclick=closeModal;
+  bt.append(add,c);card.appendChild(bt);
+}
+$('#btnPlayers').onclick=()=>{audio();showPlayers();};
 
 /* ---- Der Heimat-See: Wiese, Nadelbäume, Birken, Schilf, Steg ---- */
 (function(){
@@ -1574,7 +1655,7 @@ function showTrap(t){
   const l=el('div','list');
   if(!t.fish.length){const wait=Math.ceil((REUSE.every-(Date.now()-t.t))/60000);
     l.appendChild(el('div','empty','Noch leer. Die Fische brauchen etwas Zeit. Schau in '+(wait<=1?'einer Minute':wait+' Minuten')+' wieder nach!'));}
-  t.fish.forEach(it=>{const f=FISH_BY[it.id];if(!f)return;const row=el('div','item');row.appendChild(fishCanvas(f,144,80));
+  t.fish.forEach(it=>{const f=FISH_BY[it.id];if(!f)return;const row=el('div','item');row.appendChild(fishThumb(f));
     row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm · '+it.value+' Ludins</span>'));row.appendChild(el('span',null,''));l.appendChild(row);});
   card.appendChild(l);
   if(t.fish.length&&t.fish.length>=REUSE.full)card.appendChild(el('p',null,'Die Reuse ist voll. Leere sie, dann können neue Fische hinein.'));
@@ -1681,6 +1762,8 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:13,day:'19.10.2026',ico:'👥',t:'Mehrere Spieler',d:'Jetzt kann jeder seinen eigenen Spielstand haben! In der Avatar-Werkstatt (👕) tippst du auf „Spieler wechseln“ und dann auf „+ Neuer Spieler“.'},
+ {v:12,day:'19.10.2026',ico:'📷',t:'Fotos für die See-Fische',d:'Jetzt haben auch Hecht, Zander, Forelle und die anderen See-Fische echte Fotos. Im Eimer, bei Rosa und in der Reuse siehst du kleine Fotos von deinen Fischen.'},
  {v:11,day:'19.10.2026',ico:'✨',t:'Was ist neu?',d:'Diese Seite! Hier steht nach jedem Update, was dazugekommen ist.'},
  {v:10,day:'19.10.2026',ico:'🛥️',t:'Yacht',d:'Bei Opa Tiago im Tab „Boot“ gibt es eine Yacht für 1500 Ludins. Dein Name steht am Rumpf, sie ist das schnellste Boot, und im Fischtank passen 20 Fische mehr.'},
  {v:9,day:'19.10.2026',ico:'🗺️',t:'Karte',d:'Oben rechts siehst du jetzt eine kleine Karte. Tipp darauf, dann siehst du den ganzen Fluss und den Heimat-See.'},
@@ -1856,6 +1939,7 @@ function loop(){
 $('#loading').remove();
 updateChunks(player.pos.z,true);
 $('#creator').hidden=false;buildCreator();refreshHud();faceFreeSide();
+if(askWhoPlays)showPlayers();
 player.root.position.set(player.pos.x,player.y,player.pos.z);
 loop();
 })();

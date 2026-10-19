@@ -198,3 +198,95 @@ test('Was ist neu: geht nach einem Update einmal auf und merkt sich das', async 
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Fotos: jeder Fisch hat ein echtes Foto, und der Eimer zeigt Fotos', async () => {
+  // Jede Fisch-id aus FISH braucht einen Eintrag in FOTOS und eine Datei in fotos/
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const fishList = html.slice(html.indexOf('const FISH=['), html.indexOf('];', html.indexOf('const FISH=[')));
+  const ids = [...fishList.matchAll(/\{id:'(\w+)'/g)].map(m => m[1]);
+  const fotos = html.slice(html.indexOf('const FOTOS={'), html.indexOf('};', html.indexOf('const FOTOS={')));
+  assert.equal(ids.length, 25, '15 Amazonas-Fische und 10 See-Fische');
+  for (const id of ids) {
+    assert.ok(fotos.includes(` ${id}:{src:'fotos/${id}.jpg'`), `FOTOS-Eintrag für ${id}`);
+    assert.ok(fs.existsSync(path.join(root, 'fotos', id + '.jpg')), `fotos/${id}.jpg`);
+  }
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999,
+    bucket: [{ id: 'hecht', cm: 80, value: 62 }, { id: 'piranha', cm: 25, value: 11 }] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBucket');
+  const thumbs = page.locator('#card .item img.thumb');
+  await thumbs.first().waitFor({ timeout: 5000 });
+  assert.equal(await thumbs.count(), 2, 'zwei kleine Fotos im Eimer');
+  await page.waitForFunction(() => [...document.querySelectorAll('#card .item img.thumb')].every(i => i.complete && i.naturalWidth > 0));
+  assert.deepEqual(await thumbs.evaluateAll(l => l.map(i => i.getAttribute('src'))), ['fotos/hecht.jpg', 'fotos/piranha.jpg']);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Mehrere Spieler: jeder behält seinen eigenen Spielstand', async () => {
+  const { ctx, page, errors } = await newPage();
+  // Ein alter Spielstand von vor dem Spieler-Update wird automatisch Spieler 1
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+  await startGame(page);
+  await page.click('#btnPlayers');
+  await page.locator('#card .player:has-text("Testkind")').waitFor();
+  await Promise.all([page.waitForEvent('load'), page.click('text=+ Neuer Spieler')]);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  assert.equal(await page.inputValue('#nameIn'), '', 'der neue Spieler fängt leer an');
+  assert.equal(await page.locator('#card h2:has-text("Wer spielt?")').count(), 0, 'nach dem Wechsel nicht gleich wieder fragen');
+  let s = JSON.parse(await read(page));
+  assert.equal(s.ludins || 0, 0);
+  assert.equal(s.playerId, 'p2');
+  assert.equal(JSON.parse(await read(page, KEY + '-spieler-p1')).ludins, 345, 'Spieler 1 ist sicher aufgehoben');
+  await page.fill('#nameIn', 'Geschwister');
+  await playAndLeave(page);
+  // Beim nächsten Start fragt das Spiel, wer spielt
+  await startGame(page);
+  await page.locator('#card h2:has-text("Wer spielt?")').waitFor({ timeout: 5000 });
+  assert.equal(await page.locator('#card .player').count(), 2);
+  await Promise.all([page.waitForEvent('load'), page.click('#card .player:has-text("Testkind")')]);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  assert.equal(await page.inputValue('#nameIn'), 'Testkind');
+  s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 345, 'Spieler 1 hat alles zurück');
+  assert.equal(s.book.diskus.n, 1);
+  assert.equal(JSON.parse(await read(page, KEY + '-spieler-p2')).avatar.name, 'Geschwister', 'Spieler 2 ist sicher aufgehoben');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Mehrere Spieler: Spielstand-Code kommt als neuer Spieler dazu', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, ludins: 777, bucket: [], avatar: { ...ALT_V1.avatar, name: 'Freund' } }) });
+  await startGame(page);
+  await page.click('#btnSaveCode');
+  const code = await page.inputValue('#saveCodeOut');
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+  await startGame(page);
+  await page.click('#btnSaveCode');
+  await page.fill('#saveCodeIn', code);
+  await page.click('text=Code laden');
+  await page.locator('text=Er kommt als neuer Spieler dazu').waitFor();
+  await Promise.all([page.waitForEvent('load'), page.click('text=Ja, laden')]);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  assert.equal(await page.inputValue('#nameIn'), 'Freund');
+  assert.equal(JSON.parse(await read(page)).ludins, 777);
+  assert.equal(JSON.parse(await read(page, KEY + '-spieler-p1')).ludins, 345, 'der alte Spieler bleibt erhalten');
+  assert.equal(JSON.parse(await read(page, KEY + '-spieler')).list.length, 2);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Mehrere Spieler: kaputte Spielerliste, aber kein Spieler geht verloren', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playerId: 'p1' }),
+    [KEY + '-spieler-p2']: JSON.stringify({ v: 2, ludins: 99, playerId: 'p2', avatar: { name: 'Zweiter' } }),
+    [KEY + '-spieler']: 'kaputt{' });
+  await startGame(page);
+  await page.locator('#card h2:has-text("Wer spielt?")').waitFor({ timeout: 5000 });
+  assert.equal(await page.locator('#card .player:has-text("Zweiter")').count(), 1, 'Spieler 2 ist wieder in der Liste');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
