@@ -72,4 +72,4 @@ löscht ihn nicht, solange die Adresse gleich bleibt und der Code ihn richtig li
 - Bilder und Töne nur verwenden, wenn man sie frei benutzen darf (z. B. Wikimedia Commons mit Lizenzangabe).
 - Fakten über Tiere müssen stimmen.
 - **Jugendschutz gilt für das ganze Spiel**: keine Links ins Internet, keine Werbung, kein Chat,
-  keine Käufe mit echtem Geld. Fotos nur von lebenden Tieren, keine toten Fische, kein Blut, nichts Gruseliges.
+  keine Käufe mit echtem Geld, keine fremden Dienste, die Daten sehen (z. B. Google-Schriften). Fotos nur von lebenden Tieren, keine toten Fische, kein Blut, nichts Gruseliges.

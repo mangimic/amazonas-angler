@@ -1,8 +1,6 @@
 <meta charset="utf-8">
 <title>Amazonas Angler</title>
 <meta name="claude:viewport-fit-sides" content="cover">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@600;800&family=Nunito:wght@600;800&display=swap">
 <style>
 /* Layout: Vollbild-3D-Welt, darüber dicke "Aufkleber"-Bedienelemente für Kinderhände */
 :root{
@@ -15,8 +13,9 @@
   --paper:#fbf3df;
   --ink:#1b2a20;
   --muted:#5d6b5f;
-  --display:"Baloo 2","Trebuchet MS","Arial Rounded MT Bold",system-ui,sans-serif;
-  --body:"Nunito","Trebuchet MS",system-ui,sans-serif;
+  /* Nur Schriften, die schon auf dem Gerät sind (keine Google-Schriften: so gehen keine Daten an andere) */
+  --display:ui-rounded,"Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif;
+  --body:ui-rounded,"Trebuchet MS",system-ui,sans-serif;
   color-scheme:light;
 }
 html,body{height:100%;overflow:hidden;background:#9fd6c8;color:var(--ink)}
@@ -1107,7 +1106,7 @@ function updateSonar(dt){
   sctx.lineTo(SW-(sonar.cols.length-1)*2,SH);sctx.closePath();sctx.fill();
   sctx.lineWidth=3;sctx.lineCap='round';
   sonar.blips.forEach(b=>{const r=b.big?13:6;sctx.strokeStyle=b.big?'#ff5a3c':'#ffe066';sctx.beginPath();sctx.arc(b.x,sonarY(b.d)+r*0.6,r,Math.PI*1.15,Math.PI*1.85);sctx.stroke();});
-  sctx.fillStyle='#fff';sctx.font='800 16px "Baloo 2",system-ui,sans-serif';sctx.fillText(depth.toFixed(1).replace('.',',')+' m tief',8,20);
+  sctx.fillStyle='#fff';sctx.font='800 16px ui-rounded,"Arial Rounded MT Bold",system-ui,sans-serif';sctx.fillText(depth.toFixed(1).replace('.',',')+' m tief',8,20);
   const key=sc?(sc.big?'big':'school'):'none';
   if(key!==sonar.last){if(sonar.last!==null&&key!=='none'){sfxPing(sc.big);const e=$('#sonar');e.classList.remove('ping');void e.offsetWidth;e.classList.add('ping');}
     if(key!=='none'&&!state.sonarFound){state.sonarFound=true;save();}
