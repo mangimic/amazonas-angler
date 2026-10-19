@@ -63,6 +63,16 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .maplegend{flex:1 1 220px;min-width:0;display:flex;flex-wrap:wrap;gap:6px 14px;font-size:15px;font-weight:700}
 .maplegend span{white-space:nowrap}
 .maphead{margin:0;font:800 18px var(--display)}
+#btnNews{position:relative}
+.newsdot{position:absolute;top:-6px;right:-6px;width:16px;height:16px;border-radius:50%;background:var(--macaw);border:2px solid var(--ink)}
+.news{display:flex;flex-direction:column;gap:12px;flex-shrink:0}
+.newsday{margin:4px 0 0;font:800 16px var(--display);color:var(--muted)}
+.newsitem{display:grid;grid-template-columns:52px 1fr;gap:12px;align-items:start;background:#f3e8cc;border-radius:14px;padding:10px 12px}
+.newsitem.fresh{background:#fff3c4;box-shadow:inset 0 0 0 3px var(--gold)}
+.newsitem .ni{font-size:34px;line-height:1.1;text-align:center}
+.newsitem b{display:block;font:800 18px/1.2 var(--display)}
+.newsitem span{display:block;font-size:15px;line-height:1.4;margin-top:2px}
+.newsver{font-size:13px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
 .sonar b{position:absolute;left:0;right:0;bottom:0;background:var(--ink);color:#fff;font:800 15px/1.6 var(--display);text-align:center}
 .sonar.ping{animation:bump .5s}
 #build .btop{position:fixed;top:calc(env(safe-area-inset-top,0px) + 10px);left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));
@@ -195,6 +205,7 @@ button.bk:active{border-color:var(--ink)}
     <div class="pill" id="pillLudins"><span class="coin">L</span><span class="sum" id="hudLudins">0</span><small>Ludins</small></div>
     <button class="chip" id="btnBucket" aria-label="Eimer anschauen">🪣 <span class="sum" id="hudBucket">0/15</span></button>
     <button class="chip" id="btnBook">📖 Fischbuch</button>
+    <button class="chip" id="btnNews">✨ Neu<span class="newsdot" id="newsDot" hidden></span></button>
     <span class="spacer"></span>
     <span class="name" id="hudName"></span>
     <button class="chip" id="btnAvatar" aria-label="Avatar ändern">👕</button>
@@ -353,7 +364,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -1404,6 +1415,10 @@ $('#btnGo').onclick=()=>{audio();if(!state.avatar.name)state.avatar.name='Angler
   if(boardOnStart){boardOnStart=false;player.inBoat=true;player.pos.copy(boat.pos);player.facing=boat.yaw;}
   save();$('#creator').hidden=true;$('#hud').hidden=false;mode='play';
   camera.clearViewOffset();player.root.rotation.y=player.facing;refreshHud();updateFishBtn();
+  updateNewsDot();
+  const playedBefore=state.ludins>0||Object.keys(state.book).length>0||state.hasBoat;
+  if(!playedBefore&&!(state.newsSeen|0)){state.newsSeen=NEWS_V;save();updateNewsDot();}
+  else if((state.newsSeen|0)<NEWS_V)setTimeout(showNews,400);
   if(lostFishLudins){toast('Rosa hat ein paar alte Fische aus deinem Eimer gekauft: +'+lostFishLudins+' Ludins');lostFishLudins=0;}
   else if(loadedFrom==='backup'){toast('Dein Spielstand war kaputt. Wir haben die Sicherheitskopie geladen.');loadedFrom='main';}};
 
@@ -1661,6 +1676,38 @@ function showMap(){
   if(atLake()){const [sx,sy]=l2s(player.pos.x,player.pos.z);drawMe(d,sx,sy,-player.facing,10);}
 }
 $('#btnMap').onclick=()=>{audio();showMap();};
+
+/* ---- Was ist neu? ----
+   Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
+   Nach einem Update geht die Seite einmal von selbst auf. */
+const NEWS=[
+ {v:11,day:'19.10.2026',ico:'✨',t:'Was ist neu?',d:'Diese Seite! Hier steht nach jedem Update, was dazugekommen ist.'},
+ {v:10,day:'19.10.2026',ico:'🛥️',t:'Yacht',d:'Bei Opa Tiago im Tab „Boot“ gibt es eine Yacht für 1500 Ludins. Dein Name steht am Rumpf, sie ist das schnellste Boot, und im Fischtank passen 20 Fische mehr.'},
+ {v:9,day:'19.10.2026',ico:'🗺️',t:'Karte',d:'Oben rechts siehst du jetzt eine kleine Karte. Tipp darauf, dann siehst du den ganzen Fluss und den Heimat-See.'},
+ {v:8,day:'19.10.2026',ico:'📸',t:'Echte Fotos',d:'Im Fischbuch siehst du echte Fotos von allen 15 Amazonas-Fischen.'},
+ {v:7,day:'19.10.2026',ico:'🧺',t:'Reusen',d:'Kauf bei Opa Tiago eine Reuse und leg sie ins Wasser. Alle 2 Minuten schwimmt ein Fisch hinein. Ist die Boje grün, hol ihn ab!'},
+ {v:6,day:'19.10.2026',ico:'✈️',t:'Heimat-See',d:'Mit dem Flugzeug neben dem Dorf fliegst du zu einem See wie in Deutschland. Dort leben 10 neue Fische, zum Beispiel Hecht, Zander und Forelle.'},
+ {v:5,day:'19.10.2026',ico:'💾',t:'Spielstand sichern',d:'In der Avatar-Werkstatt (👕) bekommst du einen Spielstand-Code. Heb ihn gut auf, dann geht dein Spiel nie verloren.'},
+ {v:4,day:'18.10.2026',ico:'🌊',t:'Langer Fluss',d:'Der Fluss ist jetzt über 2 km lang, mit einer Insel und Stromschnellen, die dein Boot schieben.'},
+ {v:3,day:'18.10.2026',ico:'🏠',t:'Dein eigenes Haus',d:'Hinter Opa Tiagos Hütte kannst du ein Pfahlhaus am Fluss bauen.'},
+ {v:2,day:'18.10.2026',ico:'🎣',t:'Opa Tiagos Angelladen',d:'Angeln, Köder, Motorboot, Echolot und Kleidung gibt es bei Opa Tiago neben Rosa.'},
+ {v:1,day:'18.10.2026',ico:'🐟',t:'Amazonas Angler',d:'Die erste Version: Avatar bauen, angeln, Fische bei Rosa verkaufen und ein Boot kaufen.'}];
+const NEWS_V=NEWS[0].v;
+function updateNewsDot(){$('#newsDot').hidden=(state.newsSeen|0)>=NEWS_V;}
+function showNews(){
+  stopFishing();openModal();card.className='card';card.innerHTML='';
+  const seen=state.newsSeen|0;
+  card.appendChild(el('h2',null,'Was ist neu?'));
+  const box=el('div','news');let day='';
+  NEWS.forEach(n=>{if(n.day!==day){day=n.day;box.appendChild(el('h3','newsday',n.day));}
+    const it=el('div','newsitem'+(n.v>seen&&seen>0?' fresh':''));it.appendChild(el('div','ni',n.ico));
+    it.appendChild(el('div',null,'<b>'+esc(n.t)+'</b><span>'+esc(n.d)+'</span>'));box.appendChild(it);});
+  card.appendChild(box);
+  card.appendChild(el('p','newsver','Version '+NEWS_V+' vom '+NEWS[0].day));
+  const ok=el('button','b','Los geht\'s!');ok.onclick=closeModal;const bt=el('div','btns');bt.appendChild(ok);card.appendChild(bt);
+  state.newsSeen=NEWS_V;save();updateNewsDot();
+}
+$('#btnNews').onclick=()=>{audio();showNews();};
 
 /* ---- Ort merken: wo man steht, ob man im Boot sitzt, wo das Boot liegt ---- */
 const r2=v=>Math.round(v*100)/100;

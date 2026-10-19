@@ -70,6 +70,8 @@ löscht ihn nicht, solange die Adresse gleich bleibt und der Code ihn richtig li
   Bekommt der Spielstand neue Teile, auch einen Test dafür ergänzen (`tests/spielstand.test.mjs`).
 
 ## Regeln für Änderungen
+- **Jede neue Funktion bekommt einen Eintrag in `NEWS`** (Seite „Was ist neu?“), ganz oben, mit `v` um 1 höher,
+  Datum, Symbol und 1–2 kindgerechten Sätzen. So sieht man nach dem Update, was neu ist, und an der Versionsnummer, ob das iPad aktuell ist.
 - Kleine Schritte: lieber eine Sache fertig machen als viele halb.
 - Nach jeder Änderung prüfen, dass das Spiel noch startet (keine Fehler in der Konsole).
 - Nach jeder fertigen Änderung einen Git-Commit mit einer deutschen Nachricht machen.
