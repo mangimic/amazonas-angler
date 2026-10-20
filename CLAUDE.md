@@ -33,9 +33,10 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - **Angel-Wissen** (Themen der Fischerprüfung, kindgerecht): Bei Opa Tiago „🎓 Angel-Quiz“ (Liste `QUIZ`, je 5 Fragen,
   +10 Ludins für jede neue richtige Frage, ab 20 richtigen den **Junior-Angelschein** + 100 Ludins; `state.quiz`, `state.angelschein`).
   Beim Fangen kommen manchmal Tipps (`TIPS`). Quiz-`id`s nie ändern (stehen im Spielstand). Keine Fragen zum Töten von Fischen.
-- **Schonzeit und Mindestmaß** am Heimat-See (`RULES`, echte Uhrzeit), ähnlich wie in Bayern (Stand 2025, geprüft über Angel-Seiten):
-  Hecht und Zander 50 cm und Schonzeit 15.2.–30.4., Bachforelle 26 cm und 1.10.–28.2., Karpfen 35 cm, Schleie 26 cm.
-  Solche Fische dürfen nicht in den Eimer; Zurücksetzen bringt +5 Ludins (auch bei der Reuse).
+- **Schonzeit und Mindestmaß** am Heimat-See (`RULES`, echte Uhrzeit), wie in **Baden-Württemberg** (LFischVO, allgemeine Werte,
+  Stand 2026, geprüft über Angel-Seiten und den Landesfischereiverband): Hecht 50 cm, 15.2.–15.5.; Zander 45 cm, 1.4.–15.5.;
+  Bachforelle 25 cm, 1.10.–28.2.; Schleie 25 cm, 15.5.–30.6.; Karpfen 35 cm. Solche Fische dürfen nicht in den Eimer;
+  Zurücksetzen bringt +5 Ludins (auch bei der Reuse). Das Angel-Wissen ist auf Baden-Württemberg ausgerichtet.
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,

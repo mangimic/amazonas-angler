@@ -488,7 +488,7 @@ test('Mindestmaß: zu kleine Fische aus der Reuse kommen zurück ins Wasser', as
   const { ctx, page, errors } = await newPage();
   const t = Date.now() - 60 * 1000;
   await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], reusen: 0,
-    traps: [{ x: 11.5, z: 0, t, fish: [{ id: 'hecht', cm: 40, value: 50 }, { id: 'karpfen', cm: 60, value: 25 }] }],
+    traps: [{ x: 11.5, z: 0, t, fish: [{ id: 'hecht', cm: 40, value: 50 }, { id: 'karpfen', cm: 60, value: 25 }, { id: 'zander', cm: 47, value: 50 }] }],
     where: { x: 14, z: 0, f: 0, boat: false } }) });
   await startGame(page);
   await page.click('#btnGo');
@@ -497,8 +497,10 @@ test('Mindestmaß: zu kleine Fische aus der Reuse kommen zurück ins Wasser', as
   await page.locator('#card .item:has-text("Hecht"):has-text("Zu klein")').waitFor();
   await page.click('#card button:has-text("In den Eimer")');
   const s = JSON.parse(await read(page));
-  assert.deepEqual(s.bucket.map(f => f.id), ['karpfen'], 'nur der Karpfen darf mit');
-  assert.equal(s.ludins, 345 + 5, 'Belohnung fürs Zurücksetzen');
+  // Baden-Württemberg: Zander ab 45 cm, Schonzeit 1.4. bis 15.5.
+  const d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate(), zanderSchonzeit = md >= 401 && md <= 515;
+  assert.deepEqual(s.bucket.map(f => f.id), zanderSchonzeit ? ['karpfen'] : ['karpfen', 'zander'], 'Karpfen und (außer in der Schonzeit) der 47-cm-Zander dürfen mit');
+  assert.equal(s.ludins, 345 + 5 * (zanderSchonzeit ? 2 : 1), 'Belohnung fürs Zurücksetzen');
   assert.equal(s.book.hecht.best, 40, 'der Hecht steht trotzdem im Fischbuch');
   assert.deepEqual(errors, []);
   await ctx.close();
