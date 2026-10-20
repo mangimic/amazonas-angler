@@ -30,6 +30,12 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - **Bestenliste** (🏆 oben und in der Avatar-Werkstatt): Ludins, Fischarten, größter Fisch; antippen zeigt, wer was gefangen hat.
   Ohne Internet: Spieler dieses iPads + **Rekord-Karten** von Freunden (Datei `Rekordkarte-<Name>.json` mit Spitzname, Ludins, Fängen).
   Erwachsene schicken sie selbst weiter. Freunde-Karten liegen in `amazonas-angler-1-freunde` (dürfen entfernt werden). Kein Server!
+- **Angel-Wissen** (Themen der Fischerprüfung, kindgerecht): Bei Opa Tiago „🎓 Angel-Quiz“ (Liste `QUIZ`, je 5 Fragen,
+  +10 Ludins für jede neue richtige Frage, ab 20 richtigen den **Junior-Angelschein** + 100 Ludins; `state.quiz`, `state.angelschein`).
+  Beim Fangen kommen manchmal Tipps (`TIPS`). Quiz-`id`s nie ändern (stehen im Spielstand). Keine Fragen zum Töten von Fischen.
+- **Schonzeit und Mindestmaß** am Heimat-See (`RULES`, echte Uhrzeit), ähnlich wie in Bayern (Stand 2025, geprüft über Angel-Seiten):
+  Hecht und Zander 50 cm und Schonzeit 15.2.–30.4., Bachforelle 26 cm und 1.10.–28.2., Karpfen 35 cm, Schleie 26 cm.
+  Solche Fische dürfen nicht in den Eimer; Zurücksetzen bringt +5 Ludins (auch bei der Reuse).
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,

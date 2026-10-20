@@ -447,3 +447,59 @@ test('Bestenliste: Rekord-Karten von Freunden tauschen (ohne Internet)', async (
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+// Die Quizfragen und richtigen Antworten direkt aus dem Spiel lesen
+function quizAusDemSpiel() {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  return [...html.matchAll(/\{id:'(\w+)',k:'[^']*',q:'([^']*)',a:'([^']*)'/g)].map(m => ({ id: m[1], q: m[2], a: m[3] }));
+}
+
+test('Angel-Quiz bei Opa Tiago: richtige Antworten bringen Ludins und den Junior-Angelschein', async () => {
+  const quiz = quizAusDemSpiel();
+  assert.ok(quiz.length >= 20, 'genug Fragen für den Angelschein');
+  const { ctx, page, errors } = await newPage();
+  // 19 Fragen sind schon richtig, eine fehlt noch bis zum Angelschein
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], metTiago: true,
+    quiz: { ok: quiz.slice(0, 19).map(q => q.id) }, where: { x: 33.8, z: 2.6, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Opa Tiago")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.locator('text=Du hast schon 19').waitFor();
+  await page.click('#btnQuiz');
+  for (let i = 0; i < 5; i++) {
+    const frage = (await page.textContent('#card .qq')).trim();
+    const q = quiz.find(x => x.q === frage);
+    assert.ok(q, 'Frage gefunden: ' + frage);
+    await page.click(`#card .qa:text-is("${q.a}")`);
+    await page.locator('#card .qe:has-text("Richtig")').waitFor();
+    await page.click('#card button:has-text("Weiter")');
+  }
+  await page.locator('#card .schein:has-text("Junior-Angelschein")').waitFor();
+  const s = JSON.parse(await read(page));
+  assert.equal(s.angelschein, true);
+  assert.equal(s.quiz.ok.length, 24, 'die 5 neuen Fragen sind dazugekommen');
+  assert.equal(s.ludins, 345 + 5 * 10 + 100, 'pro neuer richtiger Frage 10 Ludins, dazu 100 für den Angelschein');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Mindestmaß: zu kleine Fische aus der Reuse kommen zurück ins Wasser', async () => {
+  const { ctx, page, errors } = await newPage();
+  const t = Date.now() - 60 * 1000;
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], reusen: 0,
+    traps: [{ x: 11.5, z: 0, t, fish: [{ id: 'hecht', cm: 40, value: 50 }, { id: 'karpfen', cm: 60, value: 25 }] }],
+    where: { x: 14, z: 0, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.locator('#card .item:has-text("Hecht"):has-text("Zu klein")').waitFor();
+  await page.click('#card button:has-text("In den Eimer")');
+  const s = JSON.parse(await read(page));
+  assert.deepEqual(s.bucket.map(f => f.id), ['karpfen'], 'nur der Karpfen darf mit');
+  assert.equal(s.ludins, 345 + 5, 'Belohnung fürs Zurücksetzen');
+  assert.equal(s.book.hecht.best, 40, 'der Hecht steht trotzdem im Fischbuch');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

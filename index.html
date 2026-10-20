@@ -215,6 +215,17 @@ button.bk:active{border-color:var(--ink)}
 .catches{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
 .catches div{background:#f3e8cc;border-radius:12px;padding:6px;text-align:center;font-size:13px}
 .catches img,.catches .nofoto{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;font-size:28px}
+.rule{background:#ffe9c2;border:3px solid #d98a2e;border-radius:14px;padding:10px 12px;text-align:left}
+.rule b{font:800 20px var(--display)}.rule p{margin:4px 0}.rule small{color:var(--muted)}
+.tipline{background:#e3f1ea;border-radius:12px;padding:8px 12px;font-size:16px}
+.card .small{font-size:14px;color:var(--muted)}
+.quiz .qq{font:800 22px/1.25 var(--display)}
+.quiz .qa{text-align:left;font-size:18px}
+.quiz .qa.right{background:#5fb36a;color:#fff}
+.quiz .qa.wrong{background:#f3b3a6}
+.quiz .qe{background:#e3f1ea;border-radius:12px;padding:8px 12px}
+.schein{border:4px double var(--ink);border-radius:18px;background:#fff6dc;padding:14px;text-align:center;display:flex;flex-direction:column;gap:4px}
+.schein .sico{font-size:54px}.schein b{font:800 26px var(--display)}.schein span{font:800 18px var(--display);color:var(--muted)}
 #loading{position:fixed;inset:0;display:grid;place-items:center;background:var(--leaf);color:var(--gold);font:800 30px var(--display)}
 @media (prefers-reduced-motion:reduce){.fish.bite{animation:none}.pill.bump{animation:none}}
 </style>
@@ -401,7 +412,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -437,6 +448,8 @@ if(!BAITS[state.bait])state.bait='wurm';
 state.house=Object.assign({w:{},r:{}},isObj(state.house)?state.house:{});
 state.reusen=Math.max(0,Math.round(Number(state.reusen)||0));
 if(!Array.isArray(state.traps))state.traps=[];
+if(!isObj(state.quiz)||!Array.isArray(state.quiz.ok))state.quiz={ok:[]};
+state.angelschein=state.angelschein===true;
 state.traps=state.traps.filter(t=>isObj(t)&&Number.isFinite(t.x)&&Number.isFinite(t.z));
 state.traps.forEach(t=>{if(!Number.isFinite(t.t))t.t=Date.now();});
 // Fische, die es im Spiel nicht mehr gibt: Rosa kauft sie ab, damit nichts verloren geht
@@ -1245,6 +1258,103 @@ function fishPic(f){
 }
 // Kleines Foto für Listen (Eimer, Rosa, Reuse)
 const fishThumb=f=>fishImg(f,'thumb');
+/* =================== Angel-Wissen (nach den Themen der Fischerprüfung, für Kinder) =================== */
+// Schonzeit und Mindestmaß im Spiel – ähnlich wie in Bayern. Jedes Bundesland und jeder See kann eigene Regeln haben.
+// von/bis = [Monat, Tag]. Fische ohne Eintrag haben im Spiel keine Regel.
+const RULES={
+ hecht:{min:50,von:[2,15],bis:[4,30],why:'Der Hecht legt im Frühling seine Eier zwischen Wasserpflanzen.'},
+ zander:{min:50,von:[2,15],bis:[4,30],why:'Der Zander legt im Frühling seine Eier, und der Vater bewacht das Nest.'},
+ forelle:{min:26,von:[10,1],bis:[2,28],why:'Die Bachforelle legt im Herbst und Winter ihre Eier in den Kies.'},
+ karpfen:{min:35},
+ schleie:{min:26}};
+const RELEASE_BONUS=5;
+const dateText=d=>d[1]+'.'+d[0]+'.';
+function inSeason(r,d){if(!r.von)return false;d=d||new Date();const md=(d.getMonth()+1)*100+d.getDate(),a=r.von[0]*100+r.von[1],b=r.bis[0]*100+r.bis[1];
+  return a<=b?md>=a&&md<=b:md>=a||md<=b;}
+const pron=f=>f.art==='eine'?'sie':f.art==='ein'?'es':'ihn';
+// Darf dieser Fisch mitgenommen werden? Sonst: warum nicht
+function ruleProblem(f,cm){const r=RULES[f.id];if(!r)return null;
+  if(inSeason(r))return {ico:'🌸',t:'Schonzeit!',d:'Vom '+dateText(r.von)+' bis '+dateText(r.bis)+' hat '+(f.art==='eine'?'die':'der')+' '+f.name+' Schonzeit. '+r.why+' Darum setzt man '+pron(f)+' jetzt vorsichtig zurück.'};
+  if(cm<r.min)return {ico:'📏',t:'Zu klein!',d:'Das Mindestmaß ist '+r.min+' cm, '+(f.art==='eine'?'deine':'dein')+' '+f.name+' ist erst '+cm+' cm lang. Setz '+pron(f)+' zurück, dann kann '+(f.art==='eine'?'sie':'er')+' weiterwachsen.'};
+  return null;}
+const TIPS=[
+ 'Fasse Fische nur mit nassen Händen an. So bleibt ihre schützende Schleimhaut heil.',
+ 'Ist ein Fisch zu klein, setzt du ihn vorsichtig zurück ins Wasser. Dann kann er weiterwachsen.',
+ 'Mit einem Kescher holst du große Fische sicher aus dem Wasser.',
+ 'Nimm alte Angelschnur und Müll immer mit. Vögel können sich darin verfangen.',
+ 'Sei am Wasser leise. Fische spüren Schritte am Ufer.',
+ 'Fische atmen mit Kiemen. Lässt du einen frei, gehört er schnell zurück ins Wasser.',
+ 'Erwachsene brauchen zum Angeln einen Fischereischein und eine Erlaubnis für das Gewässer.',
+ 'In der Schonzeit legen viele Fische ihre Eier. Dann lässt man sie in Ruhe.',
+ 'Mit der Seitenlinie spürt ein Fisch Bewegungen im Wasser, fast wie ein sechster Sinn.',
+ 'An den Schuppen kann man das Alter eines Fisches ablesen. Sie haben Ringe wie ein Baumstamm.',
+ 'Kaltes Wasser enthält mehr Sauerstoff als warmes. Darum mögen Forellen kühle Bäche.',
+ 'Auf dem Boot gilt: Schwimmweste an! Das machen echte Angler auch.'];
+// Quiz bei Opa Tiago. a = richtige Antwort, w = falsche Antworten, e = Erklärung. Die ids nie ändern (stehen im Spielstand).
+const QUIZ=[
+ {id:'kiemen',k:'🐟 Fische',q:'Womit atmen Fische unter Wasser?',a:'Mit den Kiemen',w:['Mit der Lunge','Mit den Flossen'],e:'Die Kiemen holen den Sauerstoff aus dem Wasser.'},
+ {id:'seitenlinie',k:'🐟 Fische',q:'Was spürt ein Fisch mit seiner Seitenlinie?',a:'Bewegungen im Wasser',w:['Die Farbe des Wassers','Wie spät es ist'],e:'Die Seitenlinie ist ein Sinnesorgan an der Seite des Fisches. Damit merkt er, wenn sich etwas im Wasser bewegt.'},
+ {id:'alter',k:'🐟 Fische',q:'Woran kann man das Alter eines Fisches ablesen?',a:'An Ringen auf den Schuppen',w:['An der Farbe der Augen','An der Länge der Flossen'],e:'Schuppen wachsen jedes Jahr ein Stück. Man sieht Ringe wie bei einem Baumstamm.'},
+ {id:'raubfisch',k:'🐟 Fische',q:'Welcher dieser Fische ist ein Raubfisch?',a:'Hecht',w:['Karpfen','Rotauge'],e:'Der Hecht jagt andere Fische. Karpfen und Rotaugen fressen kleine Tiere und Pflanzen.'},
+ {id:'barteln',k:'🐟 Fische',q:'Wie heißen die Fäden am Maul von Karpfen und Welsen?',a:'Barteln',w:['Kiemen','Flossen'],e:'Mit den Barteln tasten und schmecken die Fische ihr Futter im Schlamm.'},
+ {id:'schwimmblase',k:'🐟 Fische',q:'Wozu hat ein Fisch eine Schwimmblase?',a:'Damit er im Wasser schweben kann',w:['Damit er besser sieht','Damit er Futter verdaut'],e:'Die Schwimmblase ist mit Gas gefüllt. So sinkt der Fisch nicht nach unten.'},
+ {id:'laich',k:'🐟 Fische',q:'Was legen die meisten Fischweibchen ab?',a:'Eier, die man Laich nennt',w:['Nüsse','Kleine Steine'],e:'Aus den Eiern schlüpfen winzige Fischbabys, die Larven.'},
+ {id:'rotfeder',k:'🐟 Fische',q:'Woran erkennt man eine Rotfeder?',a:'Ihr Maul zeigt schräg nach oben',w:['Sie hat lange Barteln','Sie hat dunkle Querstreifen'],e:'Die Rotfeder frisst gern an der Wasseroberfläche. Darum zeigt ihr Maul nach oben.'},
+ {id:'barsch',k:'🐟 Fische',q:'Welcher Fisch hat dunkle Querstreifen und eine stachelige Rückenflosse?',a:'Der Barsch',w:['Die Schleie','Der Karpfen'],e:'Vorsicht beim Anfassen: Die vordere Rückenflosse des Barsches hat spitze Stacheln.'},
+ {id:'forelle',k:'🐟 Fische',q:'Woran erkennt man eine Bachforelle?',a:'An roten und schwarzen Punkten',w:['An einem langen Schwert','An blauen Streifen'],e:'Die roten Punkte der Bachforelle haben oft einen hellen Rand.'},
+ {id:'sauerstoff',k:'💧 Wasser',q:'Was brauchen Fische im Wasser unbedingt zum Leben?',a:'Sauerstoff',w:['Zucker','Salz'],e:'Ohne Sauerstoff im Wasser können Fische nicht leben.'},
+ {id:'kalt',k:'💧 Wasser',q:'In welchem Wasser ist mehr Sauerstoff?',a:'In kaltem Wasser',w:['In warmem Wasser','Das ist immer gleich'],e:'Kaltes Wasser kann mehr Sauerstoff halten. Im heißen Sommer wird er in Seen manchmal knapp.'},
+ {id:'pflanzen',k:'💧 Wasser',q:'Was machen Wasserpflanzen, wenn die Sonne scheint?',a:'Sie machen Sauerstoff',w:['Sie fangen Fische','Sie machen das Wasser salzig'],e:'Pflanzen bilden im Licht Sauerstoff. Und Fische verstecken sich gern zwischen ihnen.'},
+ {id:'bach',k:'💧 Wasser',q:'Welche Fische leben gern in kalten, sauberen Bächen?',a:'Forellen',w:['Karpfen','Karauschen'],e:'Forellen brauchen kühles Wasser mit viel Sauerstoff.'},
+ {id:'schilf',k:'💧 Wasser',q:'Warum ist Schilf am Ufer wichtig?',a:'Fische und Vögel finden dort Schutz',w:['Es macht das Wasser warm','Es ist nur zum Verstecken der Angel da'],e:'Viele Fische legen ihre Eier zwischen Pflanzen. Darum tritt man Schilf nicht kaputt.'},
+ {id:'kescher',k:'🎣 Angeln',q:'Wozu brauchst du einen Kescher?',a:'Um den Fisch sicher aus dem Wasser zu holen',w:['Um den Köder zu werfen','Um den See zu messen'],e:'Mit dem Kescher reißt die Schnur nicht, und der Fisch wird geschont.'},
+ {id:'pose',k:'🎣 Angeln',q:'Was zeigt dir die Pose, also der Schwimmer?',a:'Dass ein Fisch am Köder zieht',w:['Wie spät es ist','Wo Norden ist'],e:'Zieht ein Fisch am Köder, wackelt die Pose oder taucht unter.'},
+ {id:'schnur',k:'🎣 Angeln',q:'Was machst du mit alter Angelschnur?',a:'Mitnehmen und in den Müll werfen',w:['Am Ufer liegen lassen','Ins Wasser werfen'],e:'Vögel und andere Tiere können sich in Schnur verfangen.'},
+ {id:'nass',k:'🎣 Angeln',q:'Warum fasst man Fische nur mit nassen Händen an?',a:'Damit ihre Schleimhaut nicht kaputtgeht',w:['Damit sie nicht frieren','Damit sie bunter werden'],e:'Die Schleimhaut schützt den Fisch vor Krankheiten.'},
+ {id:'schein',k:'📜 Regeln',q:'Was brauchen Erwachsene in Deutschland zum Angeln?',a:'Einen Fischereischein und eine Erlaubnis für das Gewässer',w:['Gar nichts','Einen Führerschein'],e:'Für Kinder gibt es oft einen Jugend-Fischereischein. Die Regeln sind in jedem Bundesland etwas anders.'},
+ {id:'schonzeit',k:'📜 Regeln',q:'Was ist die Schonzeit?',a:'Die Zeit, in der Fische ihre Eier legen und nicht gefangen werden dürfen',w:['Die Mittagspause am See','Die Zeit, in der Angeln nichts kostet'],e:'In Bayern hat der Hecht zum Beispiel vom 15. Februar bis 30. April Schonzeit.'},
+ {id:'mindestmass',k:'📜 Regeln',q:'Was ist das Mindestmaß?',a:'So lang muss ein Fisch sein, damit man ihn mitnehmen darf',w:['Die Länge der Angel','Die Tiefe des Sees'],e:'Kleinere Fische sollen erst groß werden und selbst Eier legen können.'},
+ {id:'zuklein',k:'📜 Regeln',q:'Was machst du mit einem Fisch, der zu klein ist?',a:'Ich setze ihn vorsichtig ins Wasser zurück',w:['Ich nehme ihn trotzdem mit','Ich lege ihn ans Ufer'],e:'Mit nassen Händen und schnell zurück ins Wasser, dann geht es ihm gut.'},
+ {id:'umsetzen',k:'📜 Regeln',q:'Warum darf man Fische nicht einfach in einen anderen See bringen?',a:'Sie könnten dort Krankheiten mitbringen',w:['Weil sie Heimweh bekommen','Weil der See sonst überläuft'],e:'Neue Fische setzen nur Fachleute ein. So bleibt jeder See gesund.'},
+ {id:'leise',k:'📜 Regeln',q:'Wie verhältst du dich am Wasser?',a:'Leise sein und Tiere und Pflanzen schützen',w:['Laut rufen, damit die Fische kommen','Steine ins Wasser werfen'],e:'Fische spüren Erschütterungen am Ufer. Und viele Vögel brüten im Schilf.'}];
+const QUIZ_BY={};QUIZ.forEach(q=>QUIZ_BY[q.id]=q);
+const QUIZ_GOAL=20,QUIZ_LUDINS=10,SCHEIN_LUDINS=100;
+const quizOk=()=>state.quiz.ok.filter(id=>QUIZ_BY[id]);
+function showQuiz(round){
+  if(!round){ // 5 Fragen, zuerst die, die noch nicht richtig beantwortet sind
+    const ok=quizOk(),mix=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]);
+    const qs=mix(QUIZ.filter(q=>!ok.includes(q.id))).concat(mix(QUIZ.filter(q=>ok.includes(q.id)))).slice(0,5);
+    round={qs:qs.map(q=>q.id),i:0,right:0,ludins:0};}
+  openModal();card.className='card quiz';card.innerHTML='';
+  const head=el('div','rosa');const face=el('div','face tiago');face.appendChild(el('div','beard'));head.appendChild(face);
+  if(round.i>=round.qs.length){ // Ende der Runde
+    head.appendChild(el('div',null,'<h2>Angel-Quiz</h2><p>'+round.right+' von '+round.qs.length+' richtig!'+(round.ludins?' Du bekommst <b>+'+round.ludins+' Ludins</b>.':'')+'</p>'));
+    card.appendChild(head);
+    const n=quizOk().length;
+    if(!state.angelschein&&n>=QUIZ_GOAL){state.angelschein=true;state.ludins+=SCHEIN_LUDINS;save();refreshHud(true);sfxCatch();
+      card.appendChild(el('div','schein','<div class="sico">🎓</div><b>Junior-Angelschein</b><span>für '+esc(state.avatar.name||'Angler')+'</span><p>Du kennst dich mit Fischen, Wasser und Natur aus. Opa Tiago ist stolz auf dich!</p><p><b>+'+SCHEIN_LUDINS+' Ludins</b></p>'));}
+    else if(!state.angelschein)card.appendChild(el('p',null,'Für den <b>Junior-Angelschein</b> brauchst du '+QUIZ_GOAL+' richtige Fragen. Du hast schon '+n+'.'));
+    else card.appendChild(el('p',null,'🎓 Du hast den Junior-Angelschein! Spiel trotzdem gern weiter.'));
+    const bt=el('div','btns');const again=el('button','b go','Noch eine Runde');again.onclick=()=>showQuiz();
+    const back=el('button','b alt','Zurück zum Laden');back.onclick=showTiago;bt.append(again,back);card.appendChild(bt);return;}
+  const q=QUIZ_BY[round.qs[round.i]];
+  head.appendChild(el('div',null,'<h2>Angel-Quiz</h2><p>Frage '+(round.i+1)+' von '+round.qs.length+' · '+q.k+'</p>'));
+  card.appendChild(head);
+  card.appendChild(el('p','qq',esc(q.q)));
+  const box=el('div','btns col');
+  const answers=[q.a].concat(q.w).map(t=>[Math.random(),t]).sort((x,y)=>x[0]-y[0]).map(x=>x[1]);
+  answers.forEach(t=>{const b=el('button','b alt qa',esc(t));b.onclick=()=>{
+    if(box.dataset.done)return;box.dataset.done='1';const right=t===q.a;
+    [...box.children].forEach(x=>{if(x.textContent===q.a)x.classList.add('right');});
+    if(!right)b.classList.add('wrong');
+    if(right){round.right++;tone(880,0.15,'triangle',0.15);
+      if(!state.quiz.ok.includes(q.id)){state.quiz.ok.push(q.id);state.ludins+=QUIZ_LUDINS;round.ludins+=QUIZ_LUDINS;save();refreshHud(true);}}
+    else tone(220,0.2,'sine',0.1);
+    card.appendChild(el('p','qe',(right?'✅ Richtig! ':'Nicht ganz. ')+esc(q.e)));
+    const nx=el('button','b go','Weiter');nx.onclick=()=>{round.i++;showQuiz(round);};const bt=el('div','btns');bt.appendChild(nx);card.appendChild(bt);};
+    box.appendChild(b);});
+  card.appendChild(box);
+}
 function showCatch(f,cm,value,isNew){
   openModal();card.className='card catch';card.innerHTML='';
   if(isNew)card.appendChild(el('span','badge','NEU im Fischbuch!'));
@@ -1252,6 +1362,13 @@ function showCatch(f,cm,value,isNew){
   card.appendChild(fishPic(f));
   card.appendChild(el('div','stats','<span class="stat">'+cm+' cm</span><span class="stat">Wert: '+value+' Ludins</span>'));
   card.appendChild(el('p',null,esc(f.fact)));
+  const prob=ruleProblem(f,cm);
+  if(prob){card.appendChild(el('div','rule','<b>'+prob.ico+' '+prob.t+'</b><p>'+esc(prob.d)+'</p><small>Im Spiel gelten Regeln ähnlich wie in Bayern. Jedes Bundesland hat eigene Regeln.</small>'));
+    const bt=el('div','btns');const back=el('button','b go','Zurücksetzen (+'+RELEASE_BONUS+' Ludins)');back.onclick=()=>{
+      state.ludins+=RELEASE_BONUS;save();refreshHud(true);closeModal();splash(player.pos.x+Math.sin(player.facing)*3,player.pos.z+Math.cos(player.facing)*3);
+      toast('Gut gemacht! Opa Tiago wäre stolz auf dich.');};
+    bt.appendChild(back);card.appendChild(bt);return;}
+  if(Math.random()<0.4)card.appendChild(el('p','tipline','💡 '+esc(TIPS[Math.floor(Math.random()*TIPS.length)])));
   const bt=el('div','btns');
   const keep=el('button','b go','In den Eimer');keep.onclick=()=>{state.bucket.push({id:f.id,cm,value});save();refreshHud();closeModal();
     if(state.bucket.length>=bucketMax())toast('Dein Eimer ist jetzt voll!');};
@@ -1303,6 +1420,9 @@ function showTiago(){
   const head=el('div','rosa');const face=el('div','face tiago');face.appendChild(el('div','beard'));head.appendChild(face);
   head.appendChild(el('div',null,'<h2>Opa Tiagos Angelladen</h2><p>Olá, '+esc(state.avatar.name||'du')+'! Ich habe alles, was ein Angler braucht.</p>'));
   card.appendChild(head);
+  const qrow=el('div','item shopitem');qrow.appendChild(el('div','shopicon','🎓'));
+  qrow.appendChild(el('div','t','<b>Angel-Quiz</b><span>'+(state.angelschein?'Du hast den Junior-Angelschein!':'Beantworte '+QUIZ_GOAL+' Fragen richtig, dann bekommst du den Junior-Angelschein. Du hast schon '+quizOk().length+'.')+'</span>'));
+  const qz=el('button','b go','Los!');qz.id='btnQuiz';qz.onclick=()=>showQuiz();qrow.appendChild(qz);card.appendChild(qrow);
   const tabs=el('div','tabs four');
   TIAGO_TABS.forEach(([id,lb])=>{const b=el('button',null,lb);b.setAttribute('aria-pressed',tiagoTab===id);b.onclick=()=>{tiagoTab=id;showTiago();};tabs.appendChild(b);});
   card.appendChild(tabs);
@@ -1584,17 +1704,17 @@ function cleanCard(c){ // nur bekannte Fische und vernünftige Zahlen übernehme
   if(!isObj(c)||typeof c.id!=='string'||!c.id)return null;
   const book={};if(isObj(c.book))for(const id in c.book){const b=c.book[id];if(FISH_BY[id]&&isObj(b))book[id]={n:Math.max(1,Math.round(Number(b.n)||1)),best:Math.max(0,Math.round(Number(b.best)||0))};}
   const col=v=>typeof v==='string'&&/^#[0-9a-fA-F]{6}$/.test(v)?v:'';
-  return {id:c.id.slice(0,40),name:String(c.name||'Angler').slice(0,14),ludins:Math.min(1e7,Math.max(0,Math.round(Number(c.ludins)||0))),book,skin:col(c.skin),shirt:col(c.shirt),t:Number(c.t)||0};}
+  return {id:c.id.slice(0,40),name:String(c.name||'Angler').slice(0,14),schein:c.schein===true,ludins:Math.min(1e7,Math.max(0,Math.round(Number(c.ludins)||0))),book,skin:col(c.skin),shirt:col(c.shirt),t:Number(c.t)||0};}
 let friends=parseSave(lsGet(FRIENDS_KEY));
 friends=Array.isArray(friends&&friends.cards)?friends.cards.map(cleanCard).filter(Boolean):[];
 const saveFriends=()=>lsSet(FRIENDS_KEY,JSON.stringify({cards:friends}));
 function myCard(){if(!state.cardId){state.cardId='k'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);save();}
-  return {app:'amazonas-angler-karte',v:1,id:state.cardId,name:state.avatar.name||'Angler',ludins:state.ludins,book:state.book,skin:state.avatar.skin,shirt:state.avatar.shirt,t:Date.now()};}
+  return {app:'amazonas-angler-karte',v:1,id:state.cardId,name:state.avatar.name||'Angler',schein:state.angelschein,ludins:state.ludins,book:state.book,skin:state.avatar.skin,shirt:state.avatar.shirt,t:Date.now()};}
 // Alle Einträge für die Liste: Spieler auf diesem iPad und Freunde
 function rankEntries(){
   const list=players.list.map(p=>{let s=p.id===state.playerId?state:parseSave(lsGet(slotKey(p.id)));
     if(!s)s={avatar:{name:p.name},ludins:p.ludins,book:{}};
-    return {name:(s.avatar&&s.avatar.name)||p.name||'Neuer Spieler',ludins:Math.round(Number(s.ludins)||0),book:isObj(s.book)?s.book:{},
+    return {name:(s.avatar&&s.avatar.name)||p.name||'Neuer Spieler',ludins:Math.round(Number(s.ludins)||0),book:isObj(s.book)?s.book:{},schein:s.angelschein===true,
       skin:(s.avatar&&s.avatar.skin)||p.skin,shirt:(s.avatar&&s.avatar.shirt)||p.shirt,me:p.id===state.playerId,here:true};})
     .filter(e=>e.name!=='Neuer Spieler'||e.ludins>0);
   friends.forEach(c=>list.push({...c,friend:true}));
@@ -1614,7 +1734,7 @@ function showRanking(){
   list.forEach((e,i)=>{const r=el('button','rankrow'+(e.me?' me':''));
     r.appendChild(el('div','place',i<3?['🥇','🥈','🥉'][i]:String(i+1)));
     const face=el('div','pface');face.style.background=e.skin||SKINS[1];face.style.borderColor=e.shirt||'#2f9e5b';r.appendChild(face);
-    r.appendChild(el('div',null,'<b>'+esc(e.name)+'</b><span>'+(e.friend?'Rekord-Karte von Freund':e.me?'spielt gerade':'auf diesem iPad')+'</span>'));
+    r.appendChild(el('div',null,'<b>'+esc(e.name)+(e.schein?' 🎓':'')+'</b><span>'+(e.friend?'Rekord-Karte von Freund':e.me?'spielt gerade':'auf diesem iPad')+'</span>'));
     r.appendChild(el('div','val',rankTab==='ludins'?e.ludins+' L':rankTab==='kinds'?e.kinds+' / '+FISH.length:e.big?esc(FISH_BY[e.big.id].name)+'<br>'+e.big.cm+' cm':'–'));
     r.onclick=()=>showCatches(e);l.appendChild(r);});
   if(!list.length)l.appendChild(el('div','empty','Noch niemand da.'));
@@ -1770,19 +1890,22 @@ function showTrap(t){
   const l=el('div','list');
   if(!t.fish.length){const wait=Math.ceil((REUSE.every-(Date.now()-t.t))/60000);
     l.appendChild(el('div','empty','Noch leer. Die Fische brauchen etwas Zeit. Schau in '+(wait<=1?'einer Minute':wait+' Minuten')+' wieder nach!'));}
-  t.fish.forEach(it=>{const f=FISH_BY[it.id];if(!f)return;const row=el('div','item');row.appendChild(fishThumb(f));
-    row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm · '+it.value+' Ludins</span>'));row.appendChild(el('span',null,''));l.appendChild(row);});
+  t.fish.forEach(it=>{const f=FISH_BY[it.id];if(!f)return;const row=el('div','item');row.appendChild(fishThumb(f));const pr=ruleProblem(f,it.cm);
+    row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm · '+(pr?pr.ico+' '+pr.t+' Kommt zurück ins Wasser.':it.value+' Ludins')+'</span>'));row.appendChild(el('span',null,''));l.appendChild(row);});
   card.appendChild(l);
   if(t.fish.length&&t.fish.length>=REUSE.full)card.appendChild(el('p',null,'Die Reuse ist voll. Leere sie, dann können neue Fische hinein.'));
   const bt=el('div','btns');
   if(t.fish.length){const take=el('button','b go','In den Eimer');take.onclick=()=>{
       const space=bucketMax()-state.bucket.length;if(space<=0){toast('Dein Eimer ist voll! Verkaufe zuerst Fische bei Rosa.');return;}
       const moved=t.fish.splice(0,space);
-      moved.forEach(it=>{state.bucket.push(it);const b=state.book[it.id]||{n:0,best:0};b.n++;b.best=Math.max(b.best,it.cm);state.book[it.id]=b;});
+      let freed=0;
+      moved.forEach(it=>{const b=state.book[it.id]||{n:0,best:0};b.n++;b.best=Math.max(b.best,it.cm);state.book[it.id]=b;
+        const f=FISH_BY[it.id];if(f&&ruleProblem(f,it.cm)){freed++;state.ludins+=RELEASE_BONUS;}else state.bucket.push(it);}); // Schonzeit oder zu klein: zurück ins Wasser
       if(!t.fish.length)t.t=Date.now(); // leer: die Zeit beginnt von vorn
       else t.t=Date.now()-t.fish.length*REUSE.every;
       save();sfxCatch();refreshHud(true);
-      toast(moved.length===1?'1 Fisch kommt in deinen Eimer.':moved.length+' Fische kommen in deinen Eimer.'+(t.fish.length?' Der Rest passt nicht mehr hinein.':''));showTrap(t);};
+      const kept=moved.length-freed;
+      toast((kept===1?'1 Fisch kommt in deinen Eimer.':kept+' Fische kommen in deinen Eimer.')+(freed?' '+freed+' durfte'+(freed>1?'n':'')+' zurück ins Wasser: +'+freed*RELEASE_BONUS+' Ludins.':'')+(t.fish.length?' Der Rest passt nicht mehr hinein.':''));showTrap(t);};
     bt.appendChild(take);}
   const up=el('button','b alt','Reuse mitnehmen');up.onclick=()=>{
     if(t.fish&&t.fish.length){up.textContent='Erst die Fische in den Eimer!';return;}
@@ -1877,6 +2000,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:18,day:'20.10.2026',ico:'🎓',t:'Angel-Wissen',d:'Bei Opa Tiago gibt es ein Angel-Quiz. Mit 20 richtigen Antworten bekommst du den Junior-Angelschein! Am Heimat-See gibt es jetzt Schonzeiten und Mindestmaße wie bei echten Anglern.'},
  {v:17,day:'20.10.2026',ico:'🏆',t:'Bestenliste',d:'Wer hat die meisten Ludins und den größten Fisch? Tipp oben auf 🏆. Mit Rekord-Karten kannst du dich auch mit Freunden vergleichen.'},
  {v:16,day:'20.10.2026',ico:'⏰',t:'Spielzeit',d:'Erwachsene können in der Avatar-Werkstatt (👕) einstellen, wie lange du pro Tag spielst. Oben siehst du, wie viele Minuten noch übrig sind.'},
  {v:15,day:'19.10.2026',ico:'💾',t:'Sichern ohne Code',d:'Dein Spiel speichert von selbst. Unter „Spielstand sichern“ machst du mit einem Tipp eine Sicherheitskopie auf dem iPad, ganz ohne Code.'},
