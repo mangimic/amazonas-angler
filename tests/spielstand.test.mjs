@@ -575,3 +575,33 @@ test('Spielzeit: ohne Einstellung gelten 15 Minuten pro Tag', async () => {
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Infotafeln: am Heimat-See lesen, +5 Ludins nur beim ersten Mal, bleibt gespeichert', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], visitedLake: true,
+    where: { x: 4, z: -951, f: 0, boat: false } }) }); // da landet das Flugzeug, gleich neben der Regel-Tafel
+  await startGame(page);
+  await page.click('#btnGo');
+  const knopf = page.locator('#btnCtx:has-text("Infotafel")');
+  await knopf.waitFor({ timeout: 20000 });
+  await knopf.click();
+  const tabelle = page.locator('#card table.rules');
+  await tabelle.waitFor();
+  const text = await tabelle.textContent();
+  assert.match(text, /Hecht/);
+  assert.match(text, /50 cm/);
+  assert.match(await page.textContent('#card'), /Neues Wissen! \+5 Ludins/);
+  let s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 350);
+  assert.deepEqual(s.infoRead, ['regeln']);
+  await page.click('#card button:has-text("Fertig")');
+  await knopf.click(); // zweites Mal lesen: kein Geld mehr
+  await tabelle.waitFor();
+  assert.doesNotMatch(await page.textContent('#card'), /Neues Wissen/);
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 350);
+  assert.deepEqual(s.infoRead, ['regeln']);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

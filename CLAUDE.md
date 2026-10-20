@@ -43,6 +43,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   (150 Ludins: Kunstköder wird von selbst eingeholt, manchmal beißt keiner; Raubfische beißen 3× öfter) und ⚓ **Grundangeln**
   mit der Grundrute (120 Ludins: Blei am Grund, Bissanzeiger piept, längere Wartezeit, Grundfische und große Fische öfter).
   `state.methods`, `state.method`. Die Angel-Stufe (Bambus/Profi/Gold) gilt für alle Angelarten.
+- **Infotafeln** (`INFOBOARDS`, Texte in `INFO_TEXT`): 7 Tafeln am Fluss und am Heimat-See. Hingehen, „📋 Infotafel lesen“ tippen.
+  Jede neue Tafel bringt +5 Ludins (`state.infoRead`). Die Tafel „Regeln am See“ zeigt die Tabelle aus `RULES`. Tafel-`id`s nie ändern.
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,

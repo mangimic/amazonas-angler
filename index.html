@@ -227,6 +227,10 @@ button.bk:active{border-color:var(--ink)}
 .schein{border:4px double var(--ink);border-radius:18px;background:#fff6dc;padding:14px;text-align:center;display:flex;flex-direction:column;gap:4px}
 .schein .sico{font-size:54px}.schein b{font:800 26px var(--display)}.schein span{font:800 18px var(--display);color:var(--muted)}
 .mycard{width:min(320px,100%);border-radius:18px;box-shadow:0 6px 0 var(--ink)}
+.info .infohead{background:#2f7fd8;color:#fff;font:800 16px var(--display);padding:4px 12px;border-radius:999px;align-self:flex-start}
+table.rules{border-collapse:collapse;width:100%;font-size:16px}
+table.rules th,table.rules td{border-bottom:2px solid #e9dfc5;padding:6px 4px;text-align:left}
+table.rules tr.now td{background:#ffe9c2}
 #loading{position:fixed;inset:0;display:grid;place-items:center;background:var(--leaf);color:var(--gold);font:800 30px var(--display)}
 @media (prefers-reduced-motion:reduce){.fish.bite{animation:none}.pill.bump{animation:none}}
 </style>
@@ -428,7 +432,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -468,6 +472,7 @@ if(!isObj(state.quiz)||!Array.isArray(state.quiz.ok))state.quiz={ok:[]};
 state.angelschein=state.angelschein===true;
 state.methods=Object.assign({spin:false,grund:false},isObj(state.methods)?state.methods:{});
 if(!['pose','spin','grund'].includes(state.method))state.method='pose';
+if(!Array.isArray(state.infoRead))state.infoRead=[];
 state.traps=state.traps.filter(t=>isObj(t)&&Number.isFinite(t.x)&&Number.isFinite(t.z));
 state.traps.forEach(t=>{if(!Number.isFinite(t.t))t.t=Date.now();});
 // Fische, die es im Spiel nicht mehr gibt: Rosa kauft sie ab, damit nichts verloren geht
@@ -747,6 +752,32 @@ const bankX=z=>riverX(z)+riverHalf(z)+5;
 [500,1000,1500,2000].forEach(z=>makeSign(z<1000?z+' m':(z/1000+'').replace('.',',')+' km','vom Dorf',bankX(z),z));
 RAPIDS.forEach(r=>makeSign('Achtung!','Stromschnellen',bankX(r.z-r.len/2-14),r.z-r.len/2-14,'#c2401f'));
 makeSign('Insel','Urwald im Fluss',bankX(ISLE.z-ISLE.b-30),ISLE.z-ISLE.b-30,'#2f7fd8');
+
+/* ---- Infotafeln: in der Landschaft stehen Tafeln mit Wissen, die man lesen kann ----
+   Die Texte stehen in INFO_TEXT (weiter unten). Die ids nie ändern (state.infoRead merkt sich, was gelesen ist). */
+const INFOBOARDS=[
+ {id:'amazonas',x:VX-4,z:-5,ico:'🌎',title:'Der Amazonas'},
+ {id:'stromschnellen',x:bankX(RAPIDS[0].z-RAPIDS[0].len/2-8)+1,z:RAPIDS[0].z-RAPIDS[0].len/2-8,ico:'🌊',title:'Stromschnellen'},
+ {id:'regenwald',x:bankX(ISLE.z-ISLE.b-24)+1,z:ISLE.z-ISLE.b-24,ico:'🌳',title:'Der Regenwald'},
+ {id:'riesen',x:bankX(1506)+1,z:1506,ico:'🐋',title:'Riesenfische'},
+ {id:'regeln',x:LAKE.x+4,z:LAKE.z-LAKE.b-7.5,ico:'📏',title:'Regeln am See'},
+ {id:'seefische',x:LAKE.x-11,z:LAKE.z-LAKE.b-6,ico:'🐟',title:'Fische im See'},
+ {id:'ruecksicht',x:LAKE.x+11,z:LAKE.z-LAKE.b-5,ico:'💚',title:'Angeln mit Rücksicht'}];
+(function(){INFOBOARDS.forEach(b=>{
+  const cv=document.createElement('canvas');cv.width=512;cv.height=320;const c=cv.getContext('2d');
+  c.fillStyle='#fbf3df';c.fillRect(0,0,512,320);c.strokeStyle='#5e4128';c.lineWidth=18;c.strokeRect(9,9,494,302);
+  c.fillStyle='#2f7fd8';c.fillRect(18,18,476,70);c.fillStyle='#fff';c.font='800 46px "Trebuchet MS",sans-serif';c.textAlign='center';c.fillText('ℹ️ INFOTAFEL',256,68);
+  c.fillStyle='#1b2a20';c.font='800 50px "Trebuchet MS",sans-serif';c.fillText(b.ico+' '+b.title,256,175);
+  c.fillStyle='#5d6b5f';c.font='700 32px "Trebuchet MS",sans-serif';c.fillText('Komm näher und lies!',256,255);
+  const y=heightAt(b.x,b.z),g=new THREE.Group();
+  const board=new THREE.Mesh(new THREE.PlaneGeometry(2.4,1.5),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));board.position.y=1.85;g.add(board);
+  const back=new THREE.Mesh(new THREE.BoxGeometry(2.6,1.7,0.08),mat('#7a5a3a'));back.position.set(0,1.85,-0.06);g.add(back);
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(2.9,0.12,0.7),mat('#c2401f'));roof.position.set(0,2.8,0.05);roof.rotation.x=0.25;g.add(roof);
+  for(const s of[-1,1]){const post=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,2.8,6),mat('#5e4128'));post.position.set(s*1.2,1.4,-0.06);g.add(post);}
+  // die Tafel schaut zum Wasser hin, dort kommt man meist vorbei
+  const tx=b.z<LAKE.zone?LAKE.x:riverX(b.z),tz=b.z<LAKE.zone?LAKE.z:b.z;g.rotation.y=Math.atan2(tx-b.x,tz-b.z)+Math.PI;
+  g.position.set(b.x,y,b.z);scene.add(g);colliders.push({x:b.x,z:b.z,r:0.6});});})();
+const infoNear=()=>INFOBOARDS.find(b=>Math.hypot(player.pos.x-b.x,player.pos.z-b.z)<4);
 
 /* ---- Dorf: Steg, Hütte, Rosa ---- */
 (function(){
@@ -1407,6 +1438,39 @@ function showQuiz(round){
     box.appendChild(b);});
   card.appendChild(box);
 }
+// Texte der Infotafeln (kindgerecht, Fakten geprüft). fish = Fotos, die auf der Tafel gezeigt werden.
+const INFO_TEXT={
+ amazonas:{fish:['neon','piranha','diskus','skalar'],p:['Der Amazonas fließt durch Südamerika, vor allem durch Brasilien. Er ist einer der längsten Flüsse der Welt und führt mehr Wasser als jeder andere Fluss.',
+   'Im Amazonas leben mehr als 2.000 Fischarten – so viele wie fast nirgends sonst. Viele bunte Aquarienfische wie der Neonsalmler kommen von hier.']},
+ stromschnellen:{fish:['dorado'],p:['Hier fließt das Wasser schnell über Felsen. Im wilden Wasser ist viel Sauerstoff.',
+   'Der Goldene Dorado jagt gern in Stromschnellen. Hier beißt er öfter!','Die Strömung schiebt dein Boot. Mit Motor kommst du leichter durch. Und im Boot gilt: Schwimmweste an!']},
+ regenwald:{fish:['tambaqui','pacu','arowana'],p:['Der Amazonas-Regenwald ist der größte Regenwald der Erde. Hier leben Aras, Faultiere und Riesenseerosen. Ihre Blätter werden bis zu 3 Meter groß!',
+   'In der Regenzeit steigt der Fluss viele Meter hoch und überflutet den Wald. Dann schwimmen Fische zwischen den Bäumen und fressen Früchte, die ins Wasser fallen.']},
+ riesen:{fish:['arapaima','piraiba','zitter'],p:['Im tiefen Fluss leben Riesen! Der Arapaima kann über 2 Meter lang werden. Er atmet Luft und kommt alle paar Minuten an die Oberfläche.',
+   'Der Piraíba-Wels wird bis zu 3 Meter lang. Der Zitteraal kann Strom machen, um Beute zu fangen.','Zu den Riesen kommst du nur mit dem Boot.']},
+ regeln:{rules:true,p:['In Baden-Württemberg gibt es für viele Fische ein <b>Mindestmaß</b> und eine <b>Schonzeit</b>. In der Schonzeit legen die Fische ihre Eier.',
+   'Ist ein Fisch zu klein oder hat er gerade Schonzeit, setzt du ihn vorsichtig mit nassen Händen zurück ins Wasser.']},
+ seefische:{fish:['hecht','karpfen','schleie','barsch'],p:['Im Schilf legen viele Fische ihre Eier. Der Hecht lauert dort gut versteckt.',
+   'Karpfen und Schleie suchen am Grund nach Futter. Dafür nimmst du die <b>Grundrute</b>.','Raubfische wie Hecht, Zander und Barsch fängst du gut mit der <b>Spinnrute</b>.']},
+ ruecksicht:{fish:[],p:['🤲 Fasse Fische nur mit nassen Händen an. So bleibt ihre Schleimhaut heil.','🗑️ Nimm Müll und alte Angelschnur immer mit. Vögel können sich darin verfangen.',
+   '🤫 Sei leise am Ufer. Im Schilf brüten Vögel, und Fische spüren jeden Schritt.','🎣 Nimm nur so viele Fische mit, wie du wirklich brauchst.']}};
+const INFO_LUDINS=5;
+function showInfo(b){
+  const t=INFO_TEXT[b.id];if(!t)return;
+  openModal();card.className='card info';card.innerHTML='';
+  card.appendChild(el('div','infohead','ℹ️ Infotafel'));
+  card.appendChild(el('h2',null,b.ico+' '+esc(b.title)));
+  t.p.forEach(x=>card.appendChild(el('p',null,x)));
+  if(t.rules){const tb=el('table','rules');tb.innerHTML='<tr><th>Fisch</th><th>Mindestmaß</th><th>Schonzeit</th></tr>';
+    Object.keys(RULES).forEach(id=>{const r=RULES[id],f=FISH_BY[id];if(!f)return;const now=inSeason(r);
+      const tr=el('tr',now?'now':'','<td>'+esc(f.name)+'</td><td>'+r.min+' cm</td><td>'+(r.von?dateText(r.von)+' – '+dateText(r.bis)+(now?' <b>jetzt!</b>':''):'keine')+'</td>');tb.appendChild(tr);});
+    card.appendChild(tb);card.appendChild(el('p','small','Allgemeine Regeln in Baden-Württemberg. An manchen Gewässern gelten andere Regeln.'));}
+  if(t.fish&&t.fish.length){const g=el('div','catches');
+    t.fish.forEach(id=>{const f=FISH_BY[id];if(!f)return;const d=el('div');d.appendChild(fishImg(f,'cimg'));d.appendChild(el('b',null,esc(f.name)));g.appendChild(d);});card.appendChild(g);}
+  if(!state.infoRead.includes(b.id)){state.infoRead.push(b.id);state.ludins+=INFO_LUDINS;save();refreshHud(true);
+    card.appendChild(el('p','qe','📚 Neues Wissen! +'+INFO_LUDINS+' Ludins. Du hast '+state.infoRead.filter(id=>INFO_TEXT[id]).length+' von '+INFOBOARDS.length+' Infotafeln gelesen.'));}
+  const bt=el('div','btns');const c=el('button','b','Fertig');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
+}
 function showCatch(f,cm,value,isNew){
   openModal();card.className='card catch';card.innerHTML='';
   if(isNew)card.appendChild(el('span','badge','NEU im Fischbuch!'));
@@ -1525,6 +1589,7 @@ function updateCtx(){
   if(!player.inBoat){
     if(Math.hypot(p.x-ROSA.x,p.z-ROSA.z)<4.2)a='shop';
     else if(Math.hypot(p.x-TIAGO_AT.x,p.z-TIAGO_AT.z)<4.2)a='tiago';
+    else if(infoNear())a='info';
     else if(planeNear())a='fly';
     else if(trapNear())a='trap';
     else if(onPlot(p.x,p.z))a='build';
@@ -1532,11 +1597,12 @@ function updateCtx(){
   }else{exitSpot=findExit();if(exitSpot)a='exit';else if(trapNear())a='trap';}
   if(!a&&state.reusen>0&&fishing.state==='idle'&&trapSpot())a='placetrap';
   if(a!==ctxAction){ctxAction=a;const b=$('#btnCtx');b.hidden=!a;
-    b.textContent=a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
+    b.textContent=a==='info'?'📋 Infotafel lesen':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
 $('#btnCtx').onclick=()=>{audio();
   if(ctxAction==='shop'){stopFishing();showShop();}
   else if(ctxAction==='tiago'){stopFishing();showTiago();}
+  else if(ctxAction==='info'){const ib=infoNear();if(ib){stopFishing();showInfo(ib);}return;}
   else if(ctxAction==='trap'){const tr=trapNear();if(tr){stopFishing();showTrap(tr);}return;}
   else if(ctxAction==='placetrap'){placeTrap();ctxAction='x';updateCtx();return;}
   else if(ctxAction==='fly'){const pl=planeNear();if(pl){fly(pl);return;}}
@@ -2126,6 +2192,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:22,day:'20.10.2026',ico:'📋',t:'Infotafeln',d:'Am Fluss und am Heimat-See stehen jetzt Infotafeln. Geh hin und lies sie! Für jede neue Tafel bekommst du 5 Ludins.'},
  {v:21,day:'20.10.2026',ico:'⏰',t:'15 Minuten Spielzeit',d:'Am Anfang darfst du jetzt 15 Minuten am Tag spielen. Erwachsene können das in der Avatar-Werkstatt (👕) unter „Spielzeit“ ändern.'},
  {v:20,day:'20.10.2026',ico:'🃏',t:'Rekord-Karte als Bild',d:'Deine Rekord-Karte ist jetzt eine bunte Sammelkarte mit deinem Avatar und Fotos von deinen größten Fischen. Du findest sie unter 🏆.'},
  {v:19,day:'20.10.2026',ico:'🌀',t:'Spinnrute und Grundrute',d:'Bei Opa Tiago gibt es eine Spinnrute für Raubfische wie Hecht und Zander und eine Grundrute für Karpfen, Schleie und Welse. Unten rechts wechselst du die Angelart.'},
