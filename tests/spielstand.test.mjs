@@ -330,3 +330,228 @@ test('Fischbuch: nur echte Fotos, keine gemalten Fische', async () => {
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+// So schreibt das Spiel das heutige Datum in den Spielstand
+const heute = () => { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
+async function rechenaufgabe(page) {
+  const t = await page.locator('.gate p').textContent();
+  const [, a, b] = t.match(/(\d+) × (\d+)/);
+  await page.fill('#gateIn', String(a * b));
+  await page.click('#gateOk');
+}
+
+test('Spielzeit: Erwachsene stellen sie ein, danach macht das Spiel Pause', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+  await startGame(page);
+  await page.click('#btnTime');
+  await page.click('#btnTimeChange');
+  await page.fill('#gateIn', '1');
+  await page.click('#gateOk');
+  assert.equal(await page.locator('#card button:has-text("15 Min")').count(), 0, 'falsche Antwort: keine Einstellung');
+  await rechenaufgabe(page);
+  await page.click('#card button:has-text("15 Min")');
+  assert.equal(JSON.parse(await read(page, KEY + '-spielzeit')).min, 15);
+  await ctx.close();
+
+  // Fast die ganze Zeit ist schon verbraucht: nach einer Sekunde kommt die Pause
+  const b = await newPage();
+  await seed(b.page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playTime: { day: heute(), sec: 15 * 60 - 1, extra: 0 } }),
+    [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) });
+  await startGame(b.page);
+  await b.page.click('#btnGo');
+  await b.page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 10000 });
+  await b.page.click('#btnMoreTime');
+  await rechenaufgabe(b.page);
+  await b.page.click('#timeup button:has-text("+ 15 Minuten")');
+  assert.equal(await b.page.isVisible('#timeup'), false, 'es geht weiter');
+  const s = JSON.parse(await read(b.page));
+  assert.equal(s.playTime.extra, 15 * 60);
+  assert.equal(s.ludins, 345, 'der Spielstand bleibt dabei unverändert');
+  assert.match(await b.page.textContent('#timeChip'), /⏰ 1[56] Min/);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(b.errors, []);
+  await b.ctx.close();
+});
+
+test('Spielzeit: ein neuer Tag fängt wieder bei null an', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playTime: { day: '2000-1-1', sec: 99999, extra: 0 } }),
+    [KEY + '-spielzeit']: JSON.stringify({ min: 30 }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  assert.equal(await page.isVisible('#timeup'), false, 'keine Pause');
+  assert.match(await page.textContent('#timeChip'), /⏰ (29|30) Min/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Bestenliste: Spieler auf diesem iPad, sortiert nach Ludins', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playerId: 'p1' }),
+    [KEY + '-spieler-p2']: JSON.stringify({ v: 2, ludins: 1210, playerId: 'p2', book: { hecht: { n: 2, best: 95 } }, avatar: { name: 'Papa' } }),
+    [KEY + '-spieler']: JSON.stringify({ list: [{ id: 'p1' }, { id: 'p2', name: 'Papa' }] }) });
+  await startGame(page);
+  await page.locator('#card h2:has-text("Wer spielt?")').waitFor();
+  await page.click('#card button:has-text("Fertig")');
+  await page.click('#btnRanking');
+  const rows = page.locator('#card .rankrow');
+  await rows.first().waitFor();
+  assert.equal(await rows.count(), 2);
+  assert.match(await rows.nth(0).textContent(), /Papa.*1210 L/);
+  assert.match(await rows.nth(1).textContent(), /Testkind.*345 L/);
+  await page.click('#card .tabs button:has-text("Fischarten")');
+  assert.match(await page.locator('#card .rankrow').nth(0).textContent(), /Testkind.*2 \/ 25/);
+  await page.click('#card .rankrow:has-text("Papa")');
+  assert.match(await page.textContent('#card .catches'), /Hecht.*2× · größter 95 cm/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Bestenliste: Rekord-Karten von Freunden tauschen (ohne Internet)', async () => {
+  // Kind A speichert seine Rekord-Karte
+  const a = await newPage();
+  await seed(a.page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], book: { arapaima: { n: 1, best: 250 } } }) });
+  await startGame(a.page);
+  await a.page.click('#btnRanking');
+  const [download] = await Promise.all([a.page.waitForEvent('download'), a.page.click('#btnCardSave')]);
+  assert.equal(download.suggestedFilename(), 'Rekordkarte-Testkind.json');
+  const datei = path.join(here, 'test-rekordkarte.json');
+  await download.saveAs(datei);
+  const karte = JSON.parse(fs.readFileSync(datei, 'utf8'));
+  assert.equal(karte.app, 'amazonas-angler-karte');
+  assert.equal(karte.ludins, 345);
+  assert.equal(karte.bucket, undefined, 'nur Rekorde, kein ganzer Spielstand');
+  // Die eigene Karte kann man nicht als Freund laden
+  await a.page.setInputFiles('#cardFile', datei);
+  await a.page.locator('text=deine eigene Rekord-Karte').waitFor();
+  await a.ctx.close();
+
+  // Kind B lädt die Karte auf seinem iPad
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ v: 2, newsSeen: 999, ludins: 777, book: { hecht: { n: 1, best: 80 } }, avatar: { name: 'Freund' } }) });
+  await startGame(page);
+  await page.click('#btnRanking');
+  await page.setInputFiles('#cardFile', { name: 'kopie.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ app: 'amazonas-angler', state: {} })) });
+  await page.locator('text=Das ist eine Sicherheitskopie').waitFor();
+  await page.setInputFiles('#cardFile', datei);
+  await page.locator('#card .rankrow:has-text("Testkind")').waitFor();
+  fs.unlinkSync(datei); // erst löschen, wenn das Spiel die Datei gelesen hat
+  assert.match(await page.locator('#card .rankrow').nth(0).textContent(), /Freund.*777 L/);
+  assert.match(await page.locator('#card .rankrow').nth(1).textContent(), /Testkind.*Rekord-Karte von Freund.*345 L/);
+  await page.click('#card .tabs button:has-text("Größter Fisch")');
+  assert.match(await page.locator('#card .rankrow').nth(0).textContent(), /Testkind.*Arapaima.*250 cm/);
+  assert.equal(JSON.parse(await read(page, KEY + '-freunde')).cards.length, 1);
+  assert.equal(JSON.parse(await read(page)).ludins, 777, 'der eigene Spielstand bleibt unverändert');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Die Quizfragen und richtigen Antworten direkt aus dem Spiel lesen
+function quizAusDemSpiel() {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  return [...html.matchAll(/\{id:'(\w+)',k:'[^']*',q:'([^']*)',a:'([^']*)'/g)].map(m => ({ id: m[1], q: m[2], a: m[3] }));
+}
+
+test('Angel-Quiz bei Opa Tiago: richtige Antworten bringen Ludins und den Junior-Angelschein', async () => {
+  const quiz = quizAusDemSpiel();
+  assert.ok(quiz.length >= 20, 'genug Fragen für den Angelschein');
+  const { ctx, page, errors } = await newPage();
+  // 19 Fragen sind schon richtig, eine fehlt noch bis zum Angelschein
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], metTiago: true,
+    quiz: { ok: quiz.slice(0, 19).map(q => q.id) }, where: { x: 33.8, z: 2.6, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Opa Tiago")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.locator('text=Du hast schon 19').waitFor();
+  await page.click('#btnQuiz');
+  for (let i = 0; i < 5; i++) {
+    const frage = (await page.textContent('#card .qq')).trim();
+    const q = quiz.find(x => x.q === frage);
+    assert.ok(q, 'Frage gefunden: ' + frage);
+    await page.click(`#card .qa:text-is("${q.a}")`);
+    await page.locator('#card .qe:has-text("Richtig")').waitFor();
+    await page.click('#card button:has-text("Weiter")');
+  }
+  await page.locator('#card .schein:has-text("Junior-Angelschein")').waitFor();
+  const s = JSON.parse(await read(page));
+  assert.equal(s.angelschein, true);
+  assert.equal(s.quiz.ok.length, 24, 'die 5 neuen Fragen sind dazugekommen');
+  assert.equal(s.ludins, 345 + 5 * 10 + 100, 'pro neuer richtiger Frage 10 Ludins, dazu 100 für den Angelschein');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Mindestmaß: zu kleine Fische aus der Reuse kommen zurück ins Wasser', async () => {
+  const { ctx, page, errors } = await newPage();
+  const t = Date.now() - 60 * 1000;
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], reusen: 0,
+    traps: [{ x: 11.5, z: 0, t, fish: [{ id: 'hecht', cm: 40, value: 50 }, { id: 'karpfen', cm: 60, value: 25 }, { id: 'zander', cm: 47, value: 50 }] }],
+    where: { x: 14, z: 0, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.locator('#card .item:has-text("Hecht"):has-text("Zu klein")').waitFor();
+  await page.click('#card button:has-text("In den Eimer")');
+  const s = JSON.parse(await read(page));
+  // Baden-Württemberg: Zander ab 45 cm, Schonzeit 1.4. bis 15.5.
+  const d = new Date(), md = (d.getMonth() + 1) * 100 + d.getDate(), zanderSchonzeit = md >= 401 && md <= 515;
+  assert.deepEqual(s.bucket.map(f => f.id), zanderSchonzeit ? ['karpfen'] : ['karpfen', 'zander'], 'Karpfen und (außer in der Schonzeit) der 47-cm-Zander dürfen mit');
+  assert.equal(s.ludins, 345 + 5 * (zanderSchonzeit ? 2 : 1), 'Belohnung fürs Zurücksetzen');
+  assert.equal(s.book.hecht.best, 40, 'der Hecht steht trotzdem im Fischbuch');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Spinnrute und Grundrute: kaufen, Angelart wechseln, bleibt gespeichert', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], ludins: 400, metTiago: true,
+    where: { x: 33.8, z: 2.6, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  assert.equal(await page.isVisible('#btnMethod'), false, 'am Anfang gibt es nur die Pose');
+  await page.locator('#btnCtx:has-text("Opa Tiago")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.click('#card .item:has-text("Spinnrute") button');
+  await page.click('#card .item:has-text("Grundrute") button');
+  let s = JSON.parse(await read(page));
+  assert.deepEqual(s.methods, { spin: true, grund: true });
+  assert.equal(s.ludins, 400 - 150 - 120);
+  await page.click('#card button:has-text("Tschüss")');
+  assert.match(await page.textContent('#btnMethod'), /Grundangeln/);
+  await page.click('#btnMethod');
+  assert.match(await page.textContent('#btnMethod'), /Posenangeln/);
+  await page.click('#btnMethod');
+  assert.match(await page.textContent('#btnMethod'), /Spinnfischen/);
+  assert.equal(await page.isVisible('#btnBait'), false, 'beim Spinnfischen braucht man keinen Köder');
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  s = JSON.parse(await read(page));
+  assert.equal(s.method, 'spin', 'die Angelart bleibt gespeichert');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Spinnfischen: Kunstköder auswerfen, Biss, Fisch fangen', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], methods: { spin: true, grund: false }, method: 'spin',
+    where: { x: 14, z: 0, f: -Math.PI / 2, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  let gefangen = false;
+  for (let wurf = 0; wurf < 6 && !gefangen; wurf++) {
+    await page.click('#btnFish');
+    // warten, bis ein Fisch beißt oder der Köder wieder da ist
+    const was = await page.waitForFunction(() => {
+      const l = document.querySelector('#fishLbl').textContent;
+      return l === 'ZIEHEN!' ? 'biss' : l === 'Angeln' ? 'leer' : false;
+    }, null, { timeout: 60000, polling: 200 }).then(h => h.jsonValue()); // der Test-Browser ist langsam
+    if (was === 'biss') { await page.keyboard.press('Space'); gefangen = true; } // Leertaste = ziehen (der Knopf pulsiert)
+  }
+  assert.ok(gefangen, 'in 6 Würfen hat ein Fisch gebissen');
+  await page.locator('#card h2:has-text("gefangen")').waitFor();
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

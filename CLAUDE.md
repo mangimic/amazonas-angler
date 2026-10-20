@@ -24,6 +24,23 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   schwimmt ein Fisch hinein (höchstens 3, echte Uhrzeit, läuft auch weiter, wenn das Spiel zu ist). Boje wird grün.
 - **Karte**: kleine Karte oben rechts (60 m um dich herum), Antippen oder Taste M öffnet die große Karte
   (ganzer Fluss + Heimat-See). Auf der Karte zeigt **rechts nach Norden** (flussaufwärts).
+- **Spielzeit** (für Eltern): In der Avatar-Werkstatt „⏰ Spielzeit“. Ändern geht nur nach einer Rechenaufgabe für Erwachsene.
+  Aus/15/30/45/60/90 Minuten pro Tag, gilt fürs ganze Gerät (`amazonas-angler-1-spielzeit`), gezählt wird pro Spieler (`state.playTime`).
+  Oben steht, wie viele Minuten übrig sind. Ist die Zeit um, macht das Spiel Pause; Erwachsene können +15/+30 Minuten geben.
+- **Bestenliste** (🏆 oben und in der Avatar-Werkstatt): Ludins, Fischarten, größter Fisch; antippen zeigt, wer was gefangen hat.
+  Ohne Internet: Spieler dieses iPads + **Rekord-Karten** von Freunden (Datei `Rekordkarte-<Name>.json` mit Spitzname, Ludins, Fängen).
+  Erwachsene schicken sie selbst weiter. Freunde-Karten liegen in `amazonas-angler-1-freunde` (dürfen entfernt werden). Kein Server!
+- **Angel-Wissen** (Themen der Fischerprüfung, kindgerecht): Bei Opa Tiago „🎓 Angel-Quiz“ (Liste `QUIZ`, je 5 Fragen,
+  +10 Ludins für jede neue richtige Frage, ab 20 richtigen den **Junior-Angelschein** + 100 Ludins; `state.quiz`, `state.angelschein`).
+  Beim Fangen kommen manchmal Tipps (`TIPS`). Quiz-`id`s nie ändern (stehen im Spielstand). Keine Fragen zum Töten von Fischen.
+- **Schonzeit und Mindestmaß** am Heimat-See (`RULES`, echte Uhrzeit), wie in **Baden-Württemberg** (LFischVO, allgemeine Werte,
+  Stand 2026, geprüft über Angel-Seiten und den Landesfischereiverband): Hecht 50 cm, 15.2.–15.5.; Zander 45 cm, 1.4.–15.5.;
+  Bachforelle 25 cm, 1.10.–28.2.; Schleie 25 cm, 15.5.–30.6.; Karpfen 35 cm. Solche Fische dürfen nicht in den Eimer;
+  Zurücksetzen bringt +5 Ludins (auch bei der Reuse). Das Angel-Wissen ist auf Baden-Württemberg ausgerichtet.
+- **Angelarten** (`METHODS`, Knopf unten rechts zum Wechseln): 🎣 Posenangeln (hat jeder), 🌀 **Spinnfischen** mit der Spinnrute
+  (150 Ludins: Kunstköder wird von selbst eingeholt, manchmal beißt keiner; Raubfische beißen 3× öfter) und ⚓ **Grundangeln**
+  mit der Grundrute (120 Ludins: Blei am Grund, Bissanzeiger piept, längere Wartezeit, Grundfische und große Fische öfter).
+  `state.methods`, `state.method`. Die Angel-Stufe (Bambus/Profi/Gold) gilt für alle Angelarten.
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
