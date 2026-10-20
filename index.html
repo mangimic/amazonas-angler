@@ -229,6 +229,11 @@ button.bk:active{border-color:var(--ink)}
 .mycard{width:min(320px,100%);border-radius:18px;box-shadow:0 6px 0 var(--ink)}
 .info .infohead{background:#2f7fd8;color:#fff;font:800 16px var(--display);padding:4px 12px;border-radius:999px;align-self:flex-start}
 table.rules{border-collapse:collapse;width:100%;font-size:16px}
+.stampbig{font-size:72px;line-height:1}
+.flylist{flex:1 1 230px;min-width:0;display:flex;flex-direction:column;gap:8px}
+.flylist .b{text-align:left}
+.flylist span{font-size:15px;font-weight:700}
+#deMap{cursor:pointer}
 table.rules th,table.rules td{border-bottom:2px solid #e9dfc5;padding:6px 4px;text-align:left}
 table.rules tr.now td{background:#ffe9c2}
 #loading{position:fixed;inset:0;display:grid;place-items:center;background:var(--leaf);color:var(--gold);font:800 30px var(--display)}
@@ -325,7 +330,20 @@ const FISH=[
  {id:'karpfen',name:'Karpfen',home:'see',fact:'Hat vier Barteln am Maul und wühlt damit im Schlamm nach Futter.',w:12,price:25,cm:[30,80]},
  {id:'forelle',art:'eine',name:'Forelle',home:'see',fact:'Mag kaltes, sauberes Wasser. Man erkennt sie an ihren roten Punkten.',w:9,price:30,cm:[20,50]},
  {id:'zander',name:'Zander',home:'see',fact:'Hat große, glänzende Augen und sieht im trüben Wasser und in der Dämmerung sehr gut.',w:5,price:50,cm:[40,80]},
- {id:'hecht',name:'Hecht',home:'see',fact:'Lauert gut versteckt zwischen Wasserpflanzen und schießt dann blitzschnell los.',w:4,price:60,cm:[40,110]}
+ {id:'hecht',name:'Hecht',home:'see',fact:'Lauert gut versteckt zwischen Wasserpflanzen und schießt dann blitzschnell los.',w:4,price:60,cm:[40,110]},
+ // Fische aus den Flüssen in Deutschland. home:'fluss' = beißen nur dort (welche wo, steht bei SPOTS). Viele See-Fische leben auch in Flüssen.
+ {id:'barbe',art:'eine',name:'Barbe',home:'fluss',fact:'Hat vier Barteln am Maul. Damit sucht sie am Grund nach Futter. Barben lieben schnell fließendes Wasser mit Kies.',w:16,price:22,cm:[30,70]},
+ {id:'nase',art:'eine',name:'Nase',home:'fluss',fact:'Ihre Schnauze steht vor wie eine Nase. Mit der harten Unterlippe schabt sie Algen von den Steinen.',w:12,price:18,cm:[25,45]},
+ {id:'aesche',art:'eine',name:'Äsche',home:'fluss',fact:'Hat eine große, bunte Rückenflosse wie eine Fahne. Sie braucht kaltes, sauberes Wasser.',w:8,price:35,cm:[25,45]},
+ {id:'brachse',art:'eine',name:'Brachse',home:'fluss',fact:'Hoch und flach wie ein Teller. Sie sucht im Schlamm nach Würmern und Mückenlarven.',w:20,price:10,cm:[30,60]},
+ {id:'aland',name:'Aland',home:'fluss',fact:'Hat silbrig-goldene Seiten und rötliche Flossen. Eine gezüchtete orange Form heißt Goldorfe.',w:14,price:16,cm:[30,60]},
+ {id:'rapfen',name:'Rapfen',home:'fluss',fact:'Jagt kleine Fische an der Wasseroberfläche. Dabei spritzt es laut!',w:7,price:40,cm:[40,80]},
+ {id:'quappe',art:'eine',name:'Quappe',home:'fluss',fact:'Der einzige Dorsch, der im Süßwasser lebt. Sie ist nachts unterwegs und legt im Winter ihre Eier.',w:6,price:30,cm:[30,60]},
+ {id:'aal',name:'Aal',home:'fluss',fact:'Schwimmt zum Eierlegen über 5.000 Kilometer weit bis ins Sargassomeer. Der Aal ist selten geworden.',w:6,price:45,cm:[40,90]},
+ {id:'wels',name:'Wels',home:'fluss',fact:'Der größte Süßwasserfisch Europas! Er hat sechs Barteln, zwei davon sind ganz lang.',w:3,price:90,cm:[60,200]},
+ {id:'lachs',name:'Lachs',home:'fluss',fact:'Wächst im Meer auf und schwimmt dann den Fluss hinauf, zurück zu dem Ort, wo er geschlüpft ist.',w:2.5,price:80,cm:[50,100]},
+ {id:'huchen',name:'Huchen',home:'fluss',fact:'Lebt nur in der Donau und ihren Nebenflüssen. Er heißt auch Donaulachs und kann über einen Meter lang werden.',w:1.5,price:150,cm:[60,120]},
+ {id:'stoer',name:'Stör',home:'fluss',fact:'Hat Knochenplatten wie eine Ritterrüstung. Störe gab es schon zur Zeit der Dinosaurier!',w:1.5,price:150,cm:[80,200]}
 ];
 const fishHome=f=>f.home||'amazonas';
 // Echte Fotos (nur frei lizenzierte, z. B. Wikimedia Commons). Dateien liegen im Ordner fotos/, Nachweis in fotos/BILDNACHWEIS.md.
@@ -357,7 +375,20 @@ const FOTOS={
  karpfen:{src:'fotos/karpfen.jpg',von:'Reaperman',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Carp_(Cyprinus_carpio)_in_aquarium.JPG'},
  forelle:{src:'fotos/forelle.jpg',von:'Tylwyth Eldar',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Oniria_-_Truite_fario_03.jpg'},
  zander:{src:'fotos/zander.jpg',von:'Emőke Dénes',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Hal_-_Sander_lucioperca_-_1.jpg'},
- hecht:{src:'fotos/hecht.jpg',von:'Karelj',lizenz:'Public domain',link:'https://commons.wikimedia.org/wiki/File:Esox_lucius_Prague_Vltava_2.jpg'}
+ hecht:{src:'fotos/hecht.jpg',von:'Karelj',lizenz:'Public domain',link:'https://commons.wikimedia.org/wiki/File:Esox_lucius_Prague_Vltava_2.jpg'},
+ // Fische aus den Flüssen in Deutschland
+ barbe:{src:'fotos/barbe.jpg',von:'Linie29',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Barbe_Tiergarten_Schoenbrunn_(cropped).jpg'},
+ nase:{src:'fotos/nase.jpg',von:'André Karwath aka Aka',lizenz:'CC BY-SA 2.5',link:'https://commons.wikimedia.org/wiki/File:Chondrostoma_nasus_(aka).jpg'},
+ aesche:{src:'fotos/aesche.jpg',von:'Gilles San Martin',lizenz:'CC BY-SA 2.0',link:'https://commons.wikimedia.org/wiki/File:Thymallus_thymallus2_(cropped).jpg'},
+ brachse:{src:'fotos/brachse.jpg',von:'Karelj',lizenz:'Public domain',link:'https://commons.wikimedia.org/wiki/File:Abramis_brama_Prague_Vltava_1_(cropped).jpg'},
+ aland:{src:'fotos/aland.jpg',von:'Anastasiya Lvova',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:%D0%9E%D0%B1%D0%B8%D1%82%D0%B0%D1%82%D0%B5%D0%BB%D0%B8_%D0%BF%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D0%9E%D0%BA%D0%B5%D0%B0%D0%BD%D0%B0%D1%80%D0%B8%D1%83%D0%BC%D0%B0_42.jpg'},
+ rapfen:{src:'fotos/rapfen.jpg',von:'Karelj',lizenz:'Public domain',link:'https://commons.wikimedia.org/wiki/File:Aspius_aspius_Prague_Vltava_3_(cropped).jpg'},
+ quappe:{src:'fotos/quappe.jpg',von:'Achim R. Schloeffel',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Tr%C3%BCsche_Walchensee.jpg'},
+ aal:{src:'fotos/aal.jpg',von:'jujurenoult',lizenz:'CC BY 4.0',link:'https://commons.wikimedia.org/wiki/File:Anguilla_anguilla_France_(cropped).jpg'},
+ wels:{src:'fotos/wels.jpg',von:'HalbsHännile',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Freischwimmender_Wels_(cropped).jpg'},
+ lachs:{src:'fotos/lachs.jpg',von:'Hans-Petter Fjeld',lizenz:'CC BY-SA 2.5',link:'https://commons.wikimedia.org/wiki/File:Salmo_salar-Atlantic_Salmon-Atlanterhavsparken_Norway_(cropped).JPG'},
+ huchen:{src:'fotos/huchen.jpg',von:'Liquid Art',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Danube_Salmon_-_Huchen_(Hucho_hucho)_(cropped).jpg'},
+ stoer:{src:'fotos/stoer.jpg',von:'NoonIcarus',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Acipenser_oxyrinchus_Montreal_Biodome_(cropped).JPG'}
 };
 const FISH_BY={};FISH.forEach(f=>FISH_BY[f.id]=f);
 // Angeln: je besser, desto schneller beißen die Fische und desto öfter kommen seltene
@@ -369,16 +400,16 @@ const RODS=[
 const BAITS={
  wurm:{name:'Wurm',ico:'🪱',like:[],x:1},
  frucht:{name:'Früchte',ico:'🍒',like:['tambaqui','pacu','doebel'],x:4},
- blinker:{name:'Blinker',ico:'✨',like:['pfauen','dorado','arowana','hecht','zander','barsch','forelle'],x:3}};
+ blinker:{name:'Blinker',ico:'✨',like:['pfauen','dorado','arowana','hecht','zander','barsch','forelle','rapfen','huchen'],x:3}};
 // Angelarten: Posenangeln hat jeder, Spinnrute und Grundrute gibt es bei Opa Tiago.
 // like = beißen viel öfter (×3), no = beißen kaum (×0,15)
 const METHODS={
  pose:{name:'Posenangeln',ico:'🎣',like:[],no:[],hint:'Posenangeln: Die Pose schwimmt oben. Taucht sie unter, beißt ein Fisch!'},
- spin:{name:'Spinnfischen',ico:'🌀',like:['hecht','zander','barsch','forelle','doebel','pfauen','dorado','arowana','piranha'],
-   no:['neon','beil','skalar','diskus','karausche','schleie','karpfen','rotfeder','tambaqui','pacu'],
+ spin:{name:'Spinnfischen',ico:'🌀',like:['hecht','zander','barsch','forelle','doebel','pfauen','dorado','arowana','piranha','rapfen','huchen'],
+   no:['neon','beil','skalar','diskus','karausche','schleie','karpfen','rotfeder','tambaqui','pacu','brachse','nase','quappe','aal','stoer'],
    hint:'Spinnfischen: Der Kunstköder kommt von selbst zu dir zurück. Raubfische jagen ihm nach!'},
- grund:{name:'Grundangeln',ico:'⚓',like:['karpfen','schleie','karausche','antennen','piraiba','rochen','tambaqui','pacu'],
-   no:['neon','beil','skalar','diskus','arowana'],hint:'Grundangeln: Das Blei liegt am Grund. Warte, bis der Bissanzeiger piept!'}};
+ grund:{name:'Grundangeln',ico:'⚓',like:['karpfen','schleie','karausche','antennen','piraiba','rochen','tambaqui','pacu','barbe','brachse','wels','aal','quappe','stoer'],
+   no:['neon','beil','skalar','diskus','arowana','rapfen'],hint:'Grundangeln: Das Blei liegt am Grund. Warte, bis der Bissanzeiger piept!'}};
 const methodNow=()=>state.method!=='pose'&&state.methods[state.method]?state.method:'pose';
 // Opa Tiagos Angelladen
 const TIAGO_TABS=[['angeln','Angeln'],['koeder','Köder'],['boot','Boot'],['kleidung','Kleidung']];
@@ -432,7 +463,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],fluss:{},flussAt:'',
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -473,6 +504,11 @@ state.angelschein=state.angelschein===true;
 state.methods=Object.assign({spin:false,grund:false},isObj(state.methods)?state.methods:{});
 if(!['pose','spin','grund'].includes(state.method))state.method='pose';
 if(!Array.isArray(state.infoRead))state.infoRead=[];
+// Flüsse in Deutschland: pro Flussplatz f = gefangene Fischarten dort, q = Rätsel gelöst, s = Stempel, r = Tafel gelesen
+if(!isObj(state.fluss))state.fluss={};
+for(const id in state.fluss){if(!isObj(state.fluss[id]))state.fluss[id]={};const p=state.fluss[id];
+  p.f=Array.isArray(p.f)?p.f.filter(x=>typeof x==='string'):[];p.q=p.q===true;p.s=p.s===true;p.r=p.r===true;}
+if(typeof state.flussAt!=='string')state.flussAt='';
 state.traps=state.traps.filter(t=>isObj(t)&&Number.isFinite(t.x)&&Number.isFinite(t.z));
 state.traps.forEach(t=>{if(!Number.isFinite(t.t))t.t=Date.now();});
 // Fische, die es im Spiel nicht mehr gibt: Rosa kauft sie ab, damit nichts verloren geht
@@ -552,11 +588,25 @@ const VX=riverX(0)+24, VZ=0;
 const riverHalf=z=>RIVER_HALF+22*(1-smooth(ISLE.b,ISLE.b+70,Math.abs(z-ISLE.z)));
 // Der Heimat-See: ein See wie in Deutschland, weit weg vom Amazonas. Hin kommt man mit dem Flugzeug.
 const LAKE={x:0,z:-900,a:52,b:40,zone:-600,w:95,l:85};
-const atLake=()=>player.pos.z<LAKE.zone;
+// Flüsse in Deutschland: noch weiter im Süden liegt EIN Flussplatz. Je nachdem, wohin man fliegt (SPOTS weiter unten),
+// wird er neu gebaut: anderer Fluss, andere Breite, andere Berge, anderes Wahrzeichen. Der Fluss fließt hier entlang x.
+const DE={z:-1800,zone:-1300,w:110,l:110};
+let deP=null; // Werte des Flussplatzes, an dem man gerade ist (null = noch keiner gebaut)
+const atDE=()=>player.pos.z<DE.zone;
+const atLake=()=>player.pos.z<LAKE.zone&&!atDE();
+const riverZ=x=>DE.z+deP.bend*Math.sin(x*deP.k);
+function deHeight(x,z){if(!deP)return 3;
+  const rz=riverZ(x),sl=deP.bend*deP.k*Math.cos(x*deP.k),d=Math.abs(z-rz)/Math.sqrt(1+sl*sl),HW=deP.hw,north=z>rz;
+  let land=1.3+0.35*Math.sin(x*0.07)*Math.cos(z*0.06)+0.2*Math.sin(x*0.15+z*0.11);
+  // Berge am Rand des Tals (auf der Seite mit dem Flugzeug erst weiter weg)
+  land+=deP.hills*smooth(HW+(north?6:24),HW+(north?40:75),d)*(0.75+0.25*Math.sin(x*0.05+(north?1:3)));
+  const da=Math.hypot(x,z-(DE.z-HW-12));land+=(1.2-land)*(1-smooth(14,24,da)); // Landeplatz schön flach
+  return -2.6+(land+2.6)*smooth(HW-3,HW+3,d);}
 function lakeHeight(x,z){const r=Math.hypot((x-LAKE.x)/LAKE.a,(z-LAKE.z)/LAKE.b);
   const land=1.3+0.45*Math.sin(x*0.07)*Math.cos(z*0.06)+0.25*Math.sin(x*0.15+z*0.11);
   return -2.5+(land+2.5)*smooth(0.82,1.06,r);}
 function heightAt(x,z){
+  if(z<DE.zone)return deHeight(x,z);
   if(z<LAKE.zone)return lakeHeight(x,z);
   const rx=riverX(z),d=Math.abs(x-rx),RH=riverHalf(z);
   let land=1.6+0.7*(1.2*Math.sin(x*0.05)*Math.cos(z*0.04)+0.6*Math.sin(x*0.13+z*0.07));
@@ -575,8 +625,10 @@ function downstream(z){const dx=(riverX(z+1)-riverX(z-1))/2,l=Math.hypot(dx,1);r
 const DOCK={x0:riverX(0)+5,x1:riverX(0)+16.4,z0:-1.3,z1:1.3,y:0.6};
 // Steg am Heimat-See (geht von Süden in den See hinein)
 const LDOCK={x0:LAKE.x-1.3,x1:LAKE.x+1.3,z0:LAKE.z-LAKE.b-7,z1:LAKE.z-LAKE.b+12,y:DOCK.y};
+// Steg am deutschen Fluss (wird mit dem Flussplatz neu gesetzt)
+const DDOCK={x0:-1.3,x1:1.3,z0:0,z1:0,y:DOCK.y};
 const inRect=(R,x,z)=>x>=R.x0&&x<=R.x1&&z>=R.z0&&z<=R.z1;
-const onDock=(x,z)=>inRect(DOCK,x,z)||inRect(LDOCK,x,z);
+const onDock=(x,z)=>inRect(DOCK,x,z)||inRect(LDOCK,x,z)||(!!deP&&inRect(DDOCK,x,z));
 // Bauplatz für das eigene Pfahlhaus am Fluss: 5×5 Felder, jedes 2 m groß
 const PLOT={n:5,c:2,x0:riverX(23)+8.5,z0:18};PLOT.x1=PLOT.x0+PLOT.n*PLOT.c;PLOT.z1=PLOT.z0+PLOT.n*PLOT.c;
 PLOT.y=(()=>{let m=-9;for(let i=0;i<=10;i++)for(let j=0;j<=10;j++)m=Math.max(m,heightAt(PLOT.x0+i,PLOT.z0+j));return m+0.25;})();
@@ -631,7 +683,7 @@ const water=new THREE.Mesh(new THREE.PlaneGeometry(WORLD,480),new THREE.MeshPhon
 water.rotation.x=-Math.PI/2;scene.add(water);
 
 /* ---- Pflanzen ---- */
-const colliders=[];
+const colliders=[],deCols=[]; // deCols: Hindernisse am deutschen Fluss (werden mit dem Flussplatz neu gebaut)
 const treeA=merge([
   part(new THREE.CylinderGeometry(0.35,0.55,7,6),'#6b4a2e',M(0,3.5,0)),
   part(new THREE.IcosahedronGeometry(2.6,0),'#2f6b2c',M(0,7.6,0,0,0,0,1,0.75,1)),
@@ -740,14 +792,16 @@ function updateFoam(dt,t){for(const f of foam){const near=Math.abs(player.pos.z-
 const tmpV=new THREE.Vector3(),tmpQ=new THREE.Quaternion(),tmpS=new THREE.Vector3();
 
 /* ---- Schilder am Ufer: wie weit bist du gefahren? ---- */
-function makeSign(text,sub,x,z,col){const cv=document.createElement('canvas');cv.width=512;cv.height=220;const c=cv.getContext('2d');
+// Schrift so klein machen, dass sie auf die Tafel passt
+function fitFont(c,t,w,size,weight){do{c.font=weight+' '+size+'px "Trebuchet MS",sans-serif';size-=3;}while(c.measureText(t).width>w&&size>16);}
+function makeSign(text,sub,x,z,col,parent,cols,rot){const cv=document.createElement('canvas');cv.width=512;cv.height=220;const c=cv.getContext('2d');
   c.fillStyle='#fbf3df';c.fillRect(0,0,512,220);c.strokeStyle='#1b2a20';c.lineWidth=14;c.strokeRect(7,7,498,206);
-  c.fillStyle=col||'#1b2a20';c.font='800 70px "Trebuchet MS",sans-serif';c.textAlign='center';c.fillText(text,256,sub?100:135);
-  if(sub){c.fillStyle='#1b2a20';c.font='700 40px "Trebuchet MS",sans-serif';c.fillText(sub,256,170);}
+  c.fillStyle=col||'#1b2a20';fitFont(c,text,470,70,800);c.textAlign='center';c.fillText(text,256,sub?100:135);
+  if(sub){c.fillStyle='#1b2a20';fitFont(c,sub,470,40,700);c.fillText(sub,256,170);}
   const y=heightAt(x,z),g=new THREE.Group();
-  const sign=new THREE.Mesh(new THREE.PlaneGeometry(2.3,1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));sign.position.y=1.9;g.add(sign);
+  const sign=new THREE.Mesh(new THREE.PlaneGeometry(2.3,1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));sign.position.y=1.9;sign.userData.tex=true;g.add(sign);
   const post=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,1.9,6),mat('#5e4128'));post.position.y=0.95;g.add(post);
-  g.position.set(x,y,z);g.rotation.y=-Math.PI/2;scene.add(g);colliders.push({x,z,r:0.3});}
+  g.position.set(x,y,z);g.rotation.y=rot==null?-Math.PI/2:rot;(parent||scene).add(g);(cols||colliders).push({x,z,r:0.3});}
 const bankX=z=>riverX(z)+riverHalf(z)+5;
 [500,1000,1500,2000].forEach(z=>makeSign(z<1000?z+' m':(z/1000+'').replace('.',',')+' km','vom Dorf',bankX(z),z));
 RAPIDS.forEach(r=>makeSign('Achtung!','Stromschnellen',bankX(r.z-r.len/2-14),r.z-r.len/2-14,'#c2401f'));
@@ -763,21 +817,24 @@ const INFOBOARDS=[
  {id:'regeln',x:LAKE.x+4,z:LAKE.z-LAKE.b-7.5,ico:'📏',title:'Regeln am See'},
  {id:'seefische',x:LAKE.x-11,z:LAKE.z-LAKE.b-6,ico:'🐟',title:'Fische im See'},
  {id:'ruecksicht',x:LAKE.x+11,z:LAKE.z-LAKE.b-5,ico:'💚',title:'Angeln mit Rücksicht'}];
-(function(){INFOBOARDS.forEach(b=>{
+// Eine Infotafel bauen. (tx,tz) = wohin sie schaut: man liest sie, wenn man davor steht und dorthin blickt
+function makeBoard(b,tx,tz,parent,cols){
   const cv=document.createElement('canvas');cv.width=512;cv.height=320;const c=cv.getContext('2d');
   c.fillStyle='#fbf3df';c.fillRect(0,0,512,320);c.strokeStyle='#5e4128';c.lineWidth=18;c.strokeRect(9,9,494,302);
   c.fillStyle='#2f7fd8';c.fillRect(18,18,476,70);c.fillStyle='#fff';c.font='800 46px "Trebuchet MS",sans-serif';c.textAlign='center';c.fillText('ℹ️ INFOTAFEL',256,68);
-  c.fillStyle='#1b2a20';c.font='800 50px "Trebuchet MS",sans-serif';c.fillText(b.ico+' '+b.title,256,175);
+  c.fillStyle='#1b2a20';fitFont(c,b.ico+' '+b.title,470,50,800);c.fillText(b.ico+' '+b.title,256,175);
   c.fillStyle='#5d6b5f';c.font='700 32px "Trebuchet MS",sans-serif';c.fillText('Komm näher und lies!',256,255);
   const y=heightAt(b.x,b.z),g=new THREE.Group();
-  const board=new THREE.Mesh(new THREE.PlaneGeometry(2.4,1.5),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));board.position.y=1.85;g.add(board);
+  const board=new THREE.Mesh(new THREE.PlaneGeometry(2.4,1.5),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));board.position.y=1.85;board.userData.tex=true;g.add(board);
   const back=new THREE.Mesh(new THREE.BoxGeometry(2.6,1.7,0.08),mat('#7a5a3a'));back.position.set(0,1.85,-0.06);g.add(back);
   const roof=new THREE.Mesh(new THREE.BoxGeometry(2.9,0.12,0.7),mat('#c2401f'));roof.position.set(0,2.8,0.05);roof.rotation.x=0.25;g.add(roof);
   for(const s of[-1,1]){const post=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,2.8,6),mat('#5e4128'));post.position.set(s*1.2,1.4,-0.06);g.add(post);}
-  // die Tafel schaut zum Wasser hin, dort kommt man meist vorbei
-  const tx=b.z<LAKE.zone?LAKE.x:riverX(b.z),tz=b.z<LAKE.zone?LAKE.z:b.z;g.rotation.y=Math.atan2(tx-b.x,tz-b.z)+Math.PI;
-  g.position.set(b.x,y,b.z);scene.add(g);colliders.push({x:b.x,z:b.z,r:0.6});});})();
-const infoNear=()=>INFOBOARDS.find(b=>Math.hypot(player.pos.x-b.x,player.pos.z-b.z)<4);
+  g.rotation.y=Math.atan2(tx-b.x,tz-b.z)+Math.PI;
+  g.position.set(b.x,y,b.z);(parent||scene).add(g);(cols||colliders).push({x:b.x,z:b.z,r:0.6});}
+// die Tafeln schauen zum Wasser hin, dort kommt man meist vorbei
+INFOBOARDS.forEach(b=>makeBoard(b,b.z<LAKE.zone?LAKE.x:riverX(b.z),b.z<LAKE.zone?LAKE.z:b.z));
+const infoNear=()=>INFOBOARDS.find(b=>Math.hypot(player.pos.x-b.x,player.pos.z-b.z)<4)||
+  (atDE()&&curSpot&&Math.hypot(player.pos.x-deBoard.x,player.pos.z-deBoard.z)<4?deBoard:null);
 
 /* ---- Dorf: Steg, Hütte, Rosa ---- */
 (function(){
@@ -1102,9 +1159,10 @@ addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;input.keys[e
 addEventListener('keyup',e=>{input.keys[e.code]=false;});
 
 /* =================== Bewegung =================== */
-const inBounds=(x,z)=>(Math.abs(x)<BOUND&&z>Z_MIN+8&&z<Z_MAX-8)||(Math.abs(x-LAKE.x)<LAKE.w&&Math.abs(z-LAKE.z)<LAKE.l);
+const inBounds=(x,z)=>(Math.abs(x)<BOUND&&z>Z_MIN+8&&z<Z_MAX-8)||(Math.abs(x-LAKE.x)<LAKE.w&&Math.abs(z-LAKE.z)<LAKE.l)||
+  (!!deP&&Math.abs(x)<DE.w-6&&Math.abs(z-DE.z)<DE.l-6);
 function hitsList(list,x,z,r){for(const c of list){const rr=c.r+r;if((c.x-x)**2+(c.z-z)**2<rr*rr)return true;}return false;}
-function hitsCollider(x,z,r){if(hitsList(colliders,x,z,r))return true;const k=chunkOf(z);
+function hitsCollider(x,z,r){if(hitsList(colliders,x,z,r))return true;if(z<DE.zone)return hitsList(deCols,x,z,r);const k=chunkOf(z);
   for(let i=k-1;i<=k+1;i++){const ch=chunks[i];if(ch&&hitsList(ch.cols,x,z,r))return true;}return false;}
 function hitsWall(x,z,r){for(const s of houseSegs){const dx=s.bx-s.ax,dz=s.bz-s.az,l=dx*dx+dz*dz;
     const k=Math.max(0,Math.min(1,((x-s.ax)*dx+(z-s.az)*dz)/l));if((s.ax+dx*k-x)**2+(s.az+dz*k-z)**2<r*r)return true;}return false;}
@@ -1257,8 +1315,8 @@ function updateFishing(dt,t){
     lineGeo.attributes.position.needsUpdate=true;}
 }
 function chooseFish(){
-  const here=atLake()?'see':'amazonas';
-  const pool=FISH.filter(f=>fishHome(f)===here&&(!f.boat||player.inBoat));
+  const here=atDE()?'fluss':atLake()?'see':'amazonas';
+  const pool=here==='fluss'&&curSpot?curSpot.fish.map(id=>FISH_BY[id]).filter(Boolean):FISH.filter(f=>fishHome(f)===here&&(!f.boat||player.inBoat));
   const sc=schoolAt(fishing.target.x,fishing.target.z);
   const bt=BAITS[fishing.bait]||BAITS.wurm;
   const me=METHODS[fishing.method]||METHODS.pose;
@@ -1273,10 +1331,15 @@ function catchFish(){
   const cm=Math.round(f.cm[0]+(f.cm[1]-f.cm[0])*k);const value=Math.max(1,Math.round(f.price*(0.85+k*0.4)));
   const sc=schoolAt(fishing.target.x,fishing.target.z);if(sc&&--sc.n<=0)placeSchool(sc);
   const isNew=!state.book[f.id];
-  const b=state.book[f.id]||{n:0,best:0};b.n++;b.best=Math.max(b.best,cm);state.book[f.id]=b;save();
+  const b=state.book[f.id]||{n:0,best:0};b.n++;b.best=Math.max(b.best,cm);state.book[f.id]=b;
+  // Am Flussplatz: neue Fischart für den Fluss-Stempel
+  let extra=null;if(atDE()&&curSpot){const p=prog(curSpot.id);
+    if(!p.f.includes(f.id)){p.f.push(f.id);if(!p.s)extra='🏅 Neue Fischart hier: '+Math.min(p.f.length,STAMP_FISH)+' von '+STAMP_FISH+' für den Fluss-Stempel.'+(p.f.length>=STAMP_FISH&&!p.q?' Jetzt noch das Rätsel an der Infotafel!':'');}
+    const res=tryStamp(curSpot.id);if(res)pendingStamp={s:curSpot,res};}
+  save();
   splash(fishing.target.x,fishing.target.z,true);sfxSplash();sfxCatch();
   stopFishing();
-  showCatch(f,cm,value,isNew);
+  showCatch(f,cm,value,isNew,extra);
 }
 
 
@@ -1343,7 +1406,12 @@ const RULES={
  zander:{min:45,von:[4,1],bis:[5,15],why:'Der Zander legt im Frühling seine Eier, und der Vater bewacht das Nest.'},
  forelle:{min:25,von:[10,1],bis:[2,28],why:'Die Bachforelle legt im Herbst und Winter ihre Eier in den Kies.'},
  schleie:{min:25,von:[5,15],bis:[6,30],why:'Die Schleie legt im Frühsommer ihre Eier zwischen Wasserpflanzen.'},
- karpfen:{min:35}};
+ karpfen:{min:35},
+ // Seltene Fische aus den Flüssen: im Spiel setzen wir sie immer zurück, damit es wieder mehr von ihnen gibt
+ aal:{selten:true,why:'Er ist sehr selten geworden.'},
+ lachs:{selten:true,why:'Lachse kommen gerade erst langsam in unsere Flüsse zurück.'},
+ stoer:{selten:true,why:'Er war bei uns ausgestorben. Jetzt werden wieder junge Störe ausgesetzt.'},
+ huchen:{selten:true,why:'Es gibt nur noch wenige Huchen.'}};
 const RELEASE_BONUS=5;
 const dateText=d=>d[1]+'.'+d[0]+'.';
 function inSeason(r,d){if(!r.von)return false;d=d||new Date();const md=(d.getMonth()+1)*100+d.getDate(),a=r.von[0]*100+r.von[1],b=r.bis[0]*100+r.bis[1];
@@ -1351,6 +1419,7 @@ function inSeason(r,d){if(!r.von)return false;d=d||new Date();const md=(d.getMon
 const pron=f=>f.art==='eine'?'sie':f.art==='ein'?'es':'ihn';
 // Darf dieser Fisch mitgenommen werden? Sonst: warum nicht
 function ruleProblem(f,cm){const r=RULES[f.id];if(!r)return null;
+  if(r.selten)return {ico:'💚',t:'Seltener Fisch!',d:r.why+' Darum setzen wir '+(f.art==='eine'?'die':'den')+' '+f.name+' im Spiel immer vorsichtig zurück.',note:'Seltene Fische schützen wir. Danke!'};
   if(inSeason(r))return {ico:'🌸',t:'Schonzeit!',d:'Vom '+dateText(r.von)+' bis '+dateText(r.bis)+' hat '+(f.art==='eine'?'die':'der')+' '+f.name+' Schonzeit. '+r.why+' Darum setzt man '+pron(f)+' jetzt vorsichtig zurück.'};
   if(cm<r.min)return {ico:'📏',t:'Zu klein!',d:'Das Mindestmaß ist '+r.min+' cm, '+(f.art==='eine'?'deine':'dein')+' '+f.name+' ist erst '+cm+' cm lang. Setz '+pron(f)+' zurück, dann kann '+(f.art==='eine'?'sie':'er')+' weiterwachsen.'};
   return null;}
@@ -1368,7 +1437,9 @@ const TIPS=[
  'Kaltes Wasser enthält mehr Sauerstoff als warmes. Darum mögen Forellen kühle Bäche.',
  'Auf dem Boot gilt: Schwimmweste an! Das machen echte Angler auch.',
  'Beim Spinnfischen holst du den Köder gleichmäßig ein. Dann sieht er aus wie ein kleiner Fisch.',
- 'Beim Grundangeln brauchst du Geduld. Karpfen sind vorsichtig und beißen oft erst nach einer Weile.'];
+ 'Beim Grundangeln brauchst du Geduld. Karpfen sind vorsichtig und beißen oft erst nach einer Weile.',
+ 'Auf Landkarten ist Norden fast immer oben. Merkspruch für die Himmelsrichtungen im Uhrzeigersinn: Nie Ohne Seife Waschen.',
+ 'Ein Fluss beginnt an der Quelle und endet an der Mündung, zum Beispiel im Meer.'];
 // Quiz bei Opa Tiago. a = richtige Antwort, w = falsche Antworten, e = Erklärung. Die ids nie ändern (stehen im Spielstand).
 const QUIZ=[
  {id:'kiemen',k:'🐟 Fische',q:'Womit atmen Fische unter Wasser?',a:'Mit den Kiemen',w:['Mit der Lunge','Mit den Flossen'],e:'Die Kiemen holen den Sauerstoff aus dem Wasser.'},
@@ -1399,7 +1470,20 @@ const QUIZ=[
  {id:'mindestmass',k:'📜 Regeln',q:'Was ist das Mindestmaß?',a:'So lang muss ein Fisch sein, damit man ihn mitnehmen darf',w:['Die Länge der Angel','Die Tiefe des Sees'],e:'Kleinere Fische sollen erst groß werden und selbst Eier legen können.'},
  {id:'zuklein',k:'📜 Regeln',q:'Was machst du mit einem Fisch, der zu klein ist?',a:'Ich setze ihn vorsichtig ins Wasser zurück',w:['Ich nehme ihn trotzdem mit','Ich lege ihn ans Ufer'],e:'Mit nassen Händen und schnell zurück ins Wasser, dann geht es ihm gut.'},
  {id:'umsetzen',k:'📜 Regeln',q:'Warum darf man Fische nicht einfach in einen anderen See bringen?',a:'Sie könnten dort Krankheiten mitbringen',w:['Weil sie Heimweh bekommen','Weil der See sonst überläuft'],e:'Neue Fische setzen nur Fachleute ein. So bleibt jeder See gesund.'},
- {id:'leise',k:'📜 Regeln',q:'Wie verhältst du dich am Wasser?',a:'Leise sein und Tiere und Pflanzen schützen',w:['Laut rufen, damit die Fische kommen','Steine ins Wasser werfen'],e:'Fische spüren Erschütterungen am Ufer. Und viele Vögel brüten im Schilf.'}];
+ {id:'leise',k:'📜 Regeln',q:'Wie verhältst du dich am Wasser?',a:'Leise sein und Tiere und Pflanzen schützen',w:['Laut rufen, damit die Fische kommen','Steine ins Wasser werfen'],e:'Fische spüren Erschütterungen am Ufer. Und viele Vögel brüten im Schilf.'},
+ {id:'lachs',k:'🐟 Fische',q:'Welcher Fisch wächst im Meer auf und schwimmt zum Eierlegen den Fluss hinauf?',a:'Der Lachs',w:['Der Karpfen','Die Schleie'],e:'Lachse schwimmen zurück in den Fluss, in dem sie geschlüpft sind. Im Rhein kommen sie langsam wieder.'},
+ {id:'aesche',k:'🐟 Fische',q:'Welcher Fisch hat eine große, bunte Rückenflosse wie eine Fahne?',a:'Die Äsche',w:['Der Aal','Die Brachse'],e:'Die Äsche braucht kaltes, sauberes Wasser mit viel Sauerstoff.'},
+ {id:'wels',k:'🐟 Fische',q:'Welcher Fisch ist der größte Süßwasserfisch Europas?',a:'Der Wels',w:['Der Barsch','Die Forelle'],e:'Welse können über 2 Meter lang werden. Am Maul haben sie sechs Barteln.'},
+ {id:'aal',k:'🐟 Fische',q:'Wohin schwimmt der Aal, um seine Eier zu legen?',a:'Ins Sargassomeer, über 5.000 Kilometer weit',w:['In den Bodensee','In einen Gartenteich'],e:'Das Sargassomeer liegt im Atlantik. Die jungen Aale schwimmen danach den ganzen Weg zurück zu uns.'},
+ {id:'quelle',k:'🌊 Flüsse',q:'Wie heißt die Stelle, an der ein Fluss beginnt?',a:'Die Quelle',w:['Die Mündung','Der Hafen'],e:'An der Quelle kommt das Wasser aus der Erde. Die Donau beginnt zum Beispiel in Donaueschingen.'},
+ {id:'muendung',k:'🌊 Flüsse',q:'Was ist die Mündung?',a:'Wo ein Fluss in ein Meer, einen See oder einen anderen Fluss fließt',w:['Wo ein Fluss beginnt','Eine Brücke über den Fluss'],e:'Der Rhein mündet in die Nordsee. Der Neckar mündet in den Rhein.'},
+ {id:'nebenfluss',k:'🌊 Flüsse',q:'Der Neckar fließt in den Rhein. Was ist der Neckar für den Rhein?',a:'Ein Nebenfluss',w:['Eine Quelle','Ein Meer'],e:'Ein Nebenfluss fließt in einen größeren Fluss. Auch Main und Mosel sind Nebenflüsse vom Rhein.'},
+ {id:'bergab',k:'🌊 Flüsse',q:'Warum kommen viele Flüsse aus den Bergen?',a:'Weil Wasser bergab fließt',w:['Weil es dort wärmer ist','Weil dort das Meer ist'],e:'Wasser fließt nach unten. Darum fließt ein Fluss von der Quelle in den Bergen bis zur Mündung.'},
+ {id:'bundeslaender',k:'🗺️ Deutschland',q:'Wie viele Bundesländer hat Deutschland?',a:'16',w:['10','25'],e:'Drei davon sind Stadtstaaten: Berlin, Hamburg und Bremen.'},
+ {id:'norden',k:'🗺️ Deutschland',q:'Wo ist auf einer Landkarte meistens Norden?',a:'Oben',w:['Unten','Links'],e:'Darum liegen Nordsee und Ostsee auf der Deutschland-Karte oben.'},
+ {id:'meere',k:'🗺️ Deutschland',q:'An welchen zwei Meeren liegt Deutschland?',a:'Nordsee und Ostsee',w:['Mittelmeer und Nordsee','Schwarzes Meer und Ostsee'],e:'Die Nordsee liegt im Nordwesten, die Ostsee im Nordosten.'},
+ {id:'nachbarn',k:'🗺️ Deutschland',q:'Wie viele Nachbarländer hat Deutschland?',a:'9',w:['3','20'],e:'Dänemark, Polen, Tschechien, Österreich, die Schweiz, Frankreich, Luxemburg, Belgien und die Niederlande.'},
+ {id:'hauptstadt',k:'🗺️ Deutschland',q:'Wie heißt die Hauptstadt von Deutschland?',a:'Berlin',w:['München','Bonn'],e:'Berlin ist die größte Stadt in Deutschland. Dort arbeitet die Bundesregierung.'}];
 const QUIZ_BY={};QUIZ.forEach(q=>QUIZ_BY[q.id]=q);
 const QUIZ_GOAL=20,QUIZ_LUDINS=10,SCHEIN_LUDINS=100;
 const quizOk=()=>state.quiz.ok.filter(id=>QUIZ_BY[id]);
@@ -1456,13 +1540,14 @@ const INFO_TEXT={
    '🤫 Sei leise am Ufer. Im Schilf brüten Vögel, und Fische spüren jeden Schritt.','🎣 Nimm nur so viele Fische mit, wie du wirklich brauchst.']}};
 const INFO_LUDINS=5;
 function showInfo(b){
+  if(b===deBoard){if(curSpot)showSpotInfo(curSpot);return;}
   const t=INFO_TEXT[b.id];if(!t)return;
   openModal();card.className='card info';card.innerHTML='';
   card.appendChild(el('div','infohead','ℹ️ Infotafel'));
   card.appendChild(el('h2',null,b.ico+' '+esc(b.title)));
   t.p.forEach(x=>card.appendChild(el('p',null,x)));
   if(t.rules){const tb=el('table','rules');tb.innerHTML='<tr><th>Fisch</th><th>Mindestmaß</th><th>Schonzeit</th></tr>';
-    Object.keys(RULES).forEach(id=>{const r=RULES[id],f=FISH_BY[id];if(!f)return;const now=inSeason(r);
+    Object.keys(RULES).forEach(id=>{const r=RULES[id],f=FISH_BY[id];if(!f||r.selten)return;const now=inSeason(r);
       const tr=el('tr',now?'now':'','<td>'+esc(f.name)+'</td><td>'+r.min+' cm</td><td>'+(r.von?dateText(r.von)+' – '+dateText(r.bis)+(now?' <b>jetzt!</b>':''):'keine')+'</td>');tb.appendChild(tr);});
     card.appendChild(tb);card.appendChild(el('p','small','Allgemeine Regeln in Baden-Württemberg. An manchen Gewässern gelten andere Regeln.'));}
   if(t.fish&&t.fish.length){const g=el('div','catches');
@@ -1471,24 +1556,25 @@ function showInfo(b){
     card.appendChild(el('p','qe','📚 Neues Wissen! +'+INFO_LUDINS+' Ludins. Du hast '+state.infoRead.filter(id=>INFO_TEXT[id]).length+' von '+INFOBOARDS.length+' Infotafeln gelesen.'));}
   const bt=el('div','btns');const c=el('button','b','Fertig');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
 }
-function showCatch(f,cm,value,isNew){
+function showCatch(f,cm,value,isNew,extra){
   openModal();card.className='card catch';card.innerHTML='';
   if(isNew)card.appendChild(el('span','badge','NEU im Fischbuch!'));
   card.appendChild(el('h2',null,'Du hast '+(f.art||'einen')+' '+esc(f.akk||f.name)+' gefangen!'));
   card.appendChild(fishPic(f));
   card.appendChild(el('div','stats','<span class="stat">'+cm+' cm</span><span class="stat">Wert: '+value+' Ludins</span>'));
   card.appendChild(el('p',null,esc(f.fact)));
+  if(extra)card.appendChild(el('p','tipline',esc(extra)));
   const prob=ruleProblem(f,cm);
-  if(prob){card.appendChild(el('div','rule','<b>'+prob.ico+' '+prob.t+'</b><p>'+esc(prob.d)+'</p><small>Im Spiel gelten die Regeln aus Baden-Württemberg. An manchen Gewässern gelten andere Regeln.</small>'));
+  if(prob){card.appendChild(el('div','rule','<b>'+prob.ico+' '+prob.t+'</b><p>'+esc(prob.d)+'</p><small>'+(prob.note||'Im Spiel gelten die Regeln aus Baden-Württemberg. An manchen Gewässern gelten andere Regeln.')+'</small>'));
     const bt=el('div','btns');const back=el('button','b go','Zurücksetzen (+'+RELEASE_BONUS+' Ludins)');back.onclick=()=>{
       state.ludins+=RELEASE_BONUS;save();refreshHud(true);closeModal();splash(player.pos.x+Math.sin(player.facing)*3,player.pos.z+Math.cos(player.facing)*3);
-      toast('Gut gemacht! Opa Tiago wäre stolz auf dich.');};
+      toast('Gut gemacht! Opa Tiago wäre stolz auf dich.');afterCatch();};
     bt.appendChild(back);card.appendChild(bt);return;}
   if(Math.random()<0.4)card.appendChild(el('p','tipline','💡 '+esc(TIPS[Math.floor(Math.random()*TIPS.length)])));
   const bt=el('div','btns');
   const keep=el('button','b go','In den Eimer');keep.onclick=()=>{state.bucket.push({id:f.id,cm,value});save();refreshHud();closeModal();
-    if(state.bucket.length>=bucketMax())toast('Dein Eimer ist jetzt voll!');};
-  const rel=el('button','b alt','Freilassen');rel.onclick=()=>{closeModal();splash(player.pos.x+Math.sin(player.facing)*3,player.pos.z+Math.cos(player.facing)*3);toast('Tschüss, '+({ein:'kleines',eine:'kleine'}[f.art]||'kleiner')+' '+f.name+'!');};
+    if(state.bucket.length>=bucketMax())toast('Dein Eimer ist jetzt voll!');afterCatch();};
+  const rel=el('button','b alt','Freilassen');rel.onclick=()=>{closeModal();splash(player.pos.x+Math.sin(player.facing)*3,player.pos.z+Math.cos(player.facing)*3);toast('Tschüss, '+({ein:'kleines',eine:'kleine'}[f.art]||'kleiner')+' '+f.name+'!');afterCatch();};
   bt.append(keep,rel);card.appendChild(bt);
 }
 function showBucket(){
@@ -1507,7 +1593,8 @@ function showBook(){
   const n=Object.keys(state.book).length;
   card.appendChild(el('h2',null,'Fischbuch'));
   card.appendChild(el('p',null,'Du hast '+n+' von '+FISH.length+' Fischarten gefunden.'));
-  const parts=[['amazonas','Amazonas'],['see','Heimat-See']];if(atLake())parts.reverse(); // wo du gerade bist, steht oben
+  const parts=[['amazonas','Amazonas'],['see','Heimat-See'],['fluss','Flüsse in Deutschland']]; // wo du gerade bist, steht oben
+  if(atLake())parts.unshift(parts.splice(1,1)[0]);else if(atDE())parts.unshift(parts.splice(2,1)[0]);
   parts.forEach(([home,title])=>{
     const list=FISH.filter(f=>fishHome(f)===home),got=list.filter(f=>state.book[f.id]).length;
     card.appendChild(el('h3','bookhead',title+' <span>'+got+' von '+list.length+'</span>'));
@@ -1515,7 +1602,7 @@ function showBook(){
     list.forEach(f=>{const b=state.book[f.id];const c=el(b?'button':'div','bk');c.appendChild(b?fishImg(f,'bkimg'):el('div','bkimg nofoto unknown','?'));
       if(b)c.onclick=()=>showFishPage(f);
       if(b)c.appendChild(el('b',null,esc(f.name))),c.appendChild(el('span',null,b.n+'× gefangen · größter: '+b.best+' cm'));
-      else c.appendChild(el('b',null,'???')),c.appendChild(el('span',null,f.boat?'Nur vom Boot aus':home==='see'?'Lebt im Heimat-See':'Noch nicht gefangen'));
+      else c.appendChild(el('b',null,'???')),c.appendChild(el('span',null,f.boat?'Nur vom Boot aus':home==='see'?'Lebt im Heimat-See':home==='fluss'?'Lebt in Flüssen in Deutschland':'Noch nicht gefangen'));
       g.appendChild(c);});
     card.appendChild(g);});
   const c=el('button','b','Fertig');c.onclick=closeModal;const bt=el('div','btns');bt.appendChild(c);card.appendChild(bt);
@@ -1595,7 +1682,7 @@ function updateCtx(){
     else if(onPlot(p.x,p.z))a='build';
     else if(state.hasBoat&&Math.hypot(p.x-boat.pos.x,p.z-boat.pos.z)<BOAT_REACH+(state.hasYacht?3:0))a='board';
   }else{exitSpot=findExit();if(exitSpot)a='exit';else if(trapNear())a='trap';}
-  if(!a&&state.reusen>0&&fishing.state==='idle'&&trapSpot())a='placetrap';
+  if(!a&&state.reusen>0&&fishing.state==='idle'&&!atDE()&&trapSpot())a='placetrap';
   if(a!==ctxAction){ctxAction=a;const b=$('#btnCtx');b.hidden=!a;
     b.textContent=a==='info'?'📋 Infotafel lesen':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
@@ -1624,9 +1711,13 @@ function tipText(){
   const found=Object.keys(state.book).length;
   if(fishing.state!=='idle')return '';
   if(found===0)return 'Lauf über den Holzsteg bis ans Wasser. Dann tippe auf „Angeln“.';
-  if(state.bucket.length>=bucketMax())return atLake()?'Dein Eimer ist voll! Flieg zurück zum Amazonas und verkaufe die Fische bei Rosa.':'Dein Eimer ist voll! Bring die Fische zu Rosa an die Hütte.';
+  if(state.bucket.length>=bucketMax())return atLake()||atDE()?'Dein Eimer ist voll! Flieg zurück zum Amazonas und verkaufe die Fische bei Rosa.':'Dein Eimer ist voll! Bring die Fische zu Rosa an die Hütte.';
   if(atLake()&&!Object.keys(state.book).some(id=>FISH_BY[id]&&fishHome(FISH_BY[id])==='see'))return 'Lauf über den Steg bis ans Wasser und wirf die Angel aus!';
+  if(atDE()&&curSpot){const p=prog(curSpot.id);
+    if(!p.s)return p.f.length<STAMP_FISH?'Fluss-Stempel: Fang hier '+STAMP_FISH+' Fischarten ('+p.f.length+' von '+STAMP_FISH+') und lies die Infotafel.':'Super! Jetzt noch das Rätsel an der Infotafel lösen.';
+    const nx=linksOf(curSpot.id).map(k=>SPOTS_BY[k.to]).find(x=>!stamped(x.id));if(nx)return 'Du hast den Stempel! Mit dem Flugzeug kannst du weiter, zum Beispiel: '+nx.name+'.';}
   if(!state.visitedLake&&found>=5)return 'Neben dem Dorf steht ein Flugzeug. Damit fliegst du zum Heimat-See!';
+  if(state.visitedLake&&!Object.keys(state.fluss).length&&found>=8&&!atDE())return 'Neu: Mit dem Flugzeug fliegst du zu Flüssen in Deutschland!';
   if(!state.metTiago&&state.ludins>=40)return 'Neu: Opa Tiago hat einen Angelladen neben Rosas Hütte!';
   if(state.metTiago&&!state.builtOnce&&state.ludins>=20)return 'Hinter Opa Tiagos Hütte ist am Fluss ein Bauplatz für dein eigenes Haus!';
   if(!state.hasBoat&&state.ludins>=300)return 'Du hast genug Ludins! Kauf dir bei Opa Tiago ein Boot.';
@@ -1967,6 +2058,13 @@ function showCatches(e){
 }
 $('#btnRank').onclick=$('#btnRanking').onclick=()=>{audio();stopFishing();save();showRanking();};
 
+// Bäume wie in Deutschland: Fichten und Birken (am Heimat-See und an den Flüssen)
+const FICHTE=merge([part(new THREE.CylinderGeometry(0.22,0.3,2,6),'#5e4128',M(0,1,0)),
+    part(new THREE.ConeGeometry(2.2,3.4,7),'#2b5a33',M(0,3.2,0)),part(new THREE.ConeGeometry(1.7,2.8,7),'#2f6338',M(0,4.8,0)),part(new THREE.ConeGeometry(1.1,2.2,7),'#356b3c',M(0,6.2,0))]);
+const BIRKE=merge([part(new THREE.CylinderGeometry(0.16,0.22,5,6),'#ece8dc',M(0,2.5,0)),
+    part(new THREE.CylinderGeometry(0.17,0.17,0.25,6),'#2a2a2a',M(0,1.6,0)),part(new THREE.CylinderGeometry(0.17,0.17,0.2,6),'#2a2a2a',M(0,3.1,0)),
+    part(new THREE.IcosahedronGeometry(1.6,0),'#8dbb4a',M(0,5.6,0,0,0,0,1,1.3,1))]);
+const REED=merge([part(new THREE.CylinderGeometry(0.03,0.04,1.8,4),'#7d8f3a',M(0,0.9,0)),part(new THREE.CylinderGeometry(0.07,0.07,0.35,5),'#6b4a2e',M(0,1.75,0))]);
 /* ---- Der Heimat-See: Wiese, Nadelbäume, Birken, Schilf, Steg ---- */
 (function(){
   const R=rng(4711),W=LAKE.w*2,L=LAKE.l*2;
@@ -1979,12 +2077,6 @@ $('#btnRank').onclick=$('#btnRanking').onclick=()=>{audio();stopFishing();save()
     c.set(cy<-0.4?'#4f5a3a':cy<0.4?(n<.5?'#b9a77a':'#a9976c'):GR[Math.floor(n*4)]);
     for(let q=0;q<3;q++){cols[(i+q)*3]=c.r;cols[(i+q)*3+1]=c.g;cols[(i+q)*3+2]=c.b;}}
   g.setAttribute('color',new THREE.BufferAttribute(cols,3));scene.add(new THREE.Mesh(g,vcMat));
-  // Bäume: Fichten, Birken und Laubbäume
-  const fichte=merge([part(new THREE.CylinderGeometry(0.22,0.3,2,6),'#5e4128',M(0,1,0)),
-    part(new THREE.ConeGeometry(2.2,3.4,7),'#2b5a33',M(0,3.2,0)),part(new THREE.ConeGeometry(1.7,2.8,7),'#2f6338',M(0,4.8,0)),part(new THREE.ConeGeometry(1.1,2.2,7),'#356b3c',M(0,6.2,0))]);
-  const birke=merge([part(new THREE.CylinderGeometry(0.16,0.22,5,6),'#ece8dc',M(0,2.5,0)),
-    part(new THREE.CylinderGeometry(0.17,0.17,0.25,6),'#2a2a2a',M(0,1.6,0)),part(new THREE.CylinderGeometry(0.17,0.17,0.2,6),'#2a2a2a',M(0,3.1,0)),
-    part(new THREE.IcosahedronGeometry(1.6,0),'#8dbb4a',M(0,5.6,0,0,0,0,1,1.3,1))]);
   const sets=[[],[],[]];
   for(let i=0;i<4000&&sets[0].length+sets[1].length+sets[2].length<170;i++){
     const x=LAKE.x+(R()*2-1)*(LAKE.w-4),z=LAKE.z+(R()*2-1)*(LAKE.l-4),h=lakeHeight(x,z);
@@ -1992,12 +2084,11 @@ $('#btnRank').onclick=$('#btnRanking').onclick=()=>{audio();stopFishing();save()
     if(colliders.some(o=>(o.x-x)**2+(o.z-z)**2<10))continue;
     const t=R()<0.45?0:R()<0.6?1:2,sc=0.8+R()*0.5;
     sets[t].push(M(x,h-0.2,z,0,R()*6.28,0,sc,sc*(0.9+R()*0.3),sc));colliders.push({x,z,r:0.55*sc});}
-  [fichte,birke,treeC].forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,vcMat,sets[i].length);sets[i].forEach((m,q)=>im.setMatrixAt(q,m));scene.add(im);});
+  [FICHTE,BIRKE,treeC].forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,vcMat,sets[i].length);sets[i].forEach((m,q)=>im.setMatrixAt(q,m));scene.add(im);});
   // Schilf am Ufer
-  const reed=merge([part(new THREE.CylinderGeometry(0.03,0.04,1.8,4),'#7d8f3a',M(0,0.9,0)),part(new THREE.CylinderGeometry(0.07,0.07,0.35,5),'#6b4a2e',M(0,1.75,0))]);
   const reeds=[];for(let i=0;i<3000&&reeds.length<420;i++){const a=R()*Math.PI*2,r=0.84+R()*0.12,x=LAKE.x+Math.cos(a)*LAKE.a*r,z=LAKE.z+Math.sin(a)*LAKE.b*r;
     if(Math.abs(x-LAKE.x)<5&&z<LAKE.z)continue;reeds.push(M(x,lakeHeight(x,z)-0.2,z,(R()-0.5)*0.2,R()*6,(R()-0.5)*0.2,1,0.8+R()*0.6,1));}
-  const rm=new THREE.InstancedMesh(reed,vcMat,reeds.length);reeds.forEach((m,q)=>rm.setMatrixAt(q,m));scene.add(rm);
+  const rm=new THREE.InstancedMesh(REED,vcMat,reeds.length);reeds.forEach((m,q)=>rm.setMatrixAt(q,m));scene.add(rm);
   // Seerosen mit weißen Blüten
   const lily=merge([part(new THREE.CylinderGeometry(0.6,0.6,0.04,12),'#4f8a3a'),part(new THREE.SphereGeometry(0.16,7,5),'#ffffff',M(0.15,0.08,0.1))]);
   const lilies=[];for(let i=0;i<400&&lilies.length<36;i++){const a=R()*Math.PI*2,r=0.55+R()*0.25,x=LAKE.x+Math.cos(a)*LAKE.a*r,z=LAKE.z+Math.sin(a)*LAKE.b*r;
@@ -2010,8 +2101,8 @@ $('#btnRank').onclick=$('#btnRanking').onclick=()=>{audio();stopFishing();save()
   makeSign('Heimat-See','Fische wie in Deutschland',LAKE.x-5,LAKE.z-LAKE.b-12,'#2f7fd8');
 })();
 
-/* ---- Flugzeug: fliegt zwischen Amazonas und Heimat-See hin und her ---- */
-function makePlane(x,z,rot){const g=new THREE.Group();
+/* ---- Flugzeug: fliegt zum Amazonas, zum Heimat-See und zu den Flüssen in Deutschland ---- */
+function makePlane(x,z,rot,parent,cols){const g=new THREE.Group();
   const body=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.4,5.2,10),mat('#f2f0e6'));body.rotation.z=Math.PI/2;body.position.y=1.5;g.add(body);
   const nose=new THREE.Mesh(new THREE.SphereGeometry(0.55,10,8),mat('#e2412b'));nose.position.set(2.6,1.5,0);g.add(nose);
   const wing=new THREE.Mesh(new THREE.BoxGeometry(1.4,0.12,7.4),mat('#e2412b'));wing.position.set(0.5,2.05,0);g.add(wing);
@@ -2021,23 +2112,532 @@ function makePlane(x,z,rot){const g=new THREE.Group();
   const prop=new THREE.Mesh(new THREE.BoxGeometry(0.06,1.6,0.16),mat('#333333'));prop.position.set(3.15,1.5,0);g.add(prop);g.userData.prop=prop;
   for(const sd of[-1,1]){const w=new THREE.Mesh(new THREE.CylinderGeometry(0.28,0.28,0.18,10),mat('#2a2a2a'));w.rotation.x=Math.PI/2;w.position.set(1,0.28,sd*0.9);g.add(w);}
   const back=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.15,0.12,8),mat('#2a2a2a'));back.rotation.x=Math.PI/2;back.position.set(-2.3,0.15,0);g.add(back);
-  g.position.set(x,heightAt(x,z),z);g.rotation.y=rot;scene.add(g);colliders.push({x,z,r:2.6});return g;}
+  g.position.set(x,heightAt(x,z),z);g.rotation.y=rot;(parent||scene).add(g);(cols||colliders).push({x,z,r:2.6});return g;}
+// Flugzeuge: im Dorf, am Heimat-See und am Flussplatz (das dritte wird mit dem Flussplatz gebaut). Alle öffnen die Deutschland-Karte.
 const PLANES=[
-  {x:VX+13,z:1,to:'see',land:{x:VX+9.3,z:1,f:-Math.PI/2},label:'✈️ Zum Heimat-See'},
-  {x:LAKE.x+12,z:LAKE.z-LAKE.b-14,to:'amazonas',land:{x:LAKE.x+4,z:LAKE.z-LAKE.b-11,f:0},label:'✈️ Zum Amazonas'}];
-PLANES.forEach(p=>{p.mesh=makePlane(p.x,p.z,p.to==='see'?Math.PI:-Math.PI/2);});
-const planeNear=()=>PLANES.find(p=>Math.hypot(player.pos.x-p.x,player.pos.z-p.z)<5.2);
-function fly(p){
-  stopFishing();const ov=$('#flight');const dest=PLANES.find(q=>q.to!==p.to);
-  ov.querySelector('b').textContent=p.to==='see'?'Flug zum Heimat-See':'Flug zum Amazonas';
+  {id:'amazonas',x:VX+13,z:1,land:{x:VX+9.3,z:1,f:-Math.PI/2},label:'✈️ Fliegen'},
+  {id:'see',x:LAKE.x+12,z:LAKE.z-LAKE.b-14,land:{x:LAKE.x+4,z:LAKE.z-LAKE.b-11,f:0},label:'✈️ Fliegen'},
+  {id:'de',x:0,z:DE.z,land:{x:0,z:DE.z,f:0},label:'✈️ Fliegen'}];
+PLANES[0].mesh=makePlane(PLANES[0].x,PLANES[0].z,Math.PI);PLANES[1].mesh=makePlane(PLANES[1].x,PLANES[1].z,-Math.PI/2);
+const planeNear=()=>PLANES.find(p=>(p.id!=='de'||deP)&&Math.hypot(player.pos.x-p.x,player.pos.z-p.z)<5.2);
+function fly(){showGermany('fly');}
+
+const DEMAP={"w":645,"h":840,"states":{"sn":[[570,429,563,426,560,432,569,438,567,442,560,442,547,450,543,450,535,458,517,459,511,470,506,467,500,473,497,472,492,480,483,481,480,490,471,486,466,487,463,490,452,491,441,504,439,514,435,504,432,504,429,499,419,495,419,492,413,487,419,475,423,477,425,474,429,474,432,467,438,465,440,463,435,458,438,454,436,451,446,448,452,442,457,442,460,440,453,432,450,424,434,421,429,413,428,401,432,396,430,385,434,374,447,373,448,370,461,370,465,366,469,367,474,363,493,373,496,380,494,392,507,388,516,394,543,394,553,379,559,376,566,379,580,374,602,383,605,386,606,397,609,406,605,424,594,448,589,448,584,445,585,438,580,439,581,432,575,426,570,429]],"by":[[426,499,425,506,431,512,431,518,435,526,448,532,449,537,453,540,448,552,444,556,451,563,451,568,459,579,460,587,469,597,474,598,475,596,482,600,494,618,501,621,511,636,515,633,521,635,522,641,528,643,534,653,532,658,534,660,533,669,527,678,522,674,511,673,508,692,500,699,484,704,466,719,482,745,476,758,484,759,487,764,483,783,478,783,469,774,471,769,468,763,461,762,451,767,446,761,435,762,435,757,431,759,433,765,431,770,416,769,409,772,396,771,392,779,383,779,380,783,381,786,372,791,369,787,362,791,356,791,355,787,348,782,350,778,348,777,342,778,331,774,327,777,321,772,321,790,314,800,306,803,308,793,299,794,298,790,300,787,296,781,293,782,291,776,284,776,281,771,274,778,267,777,270,771,280,768,286,762,292,764,298,762,299,765,300,762,302,762,300,751,303,748,300,744,300,733,303,721,298,700,293,692,298,683,303,681,304,683,314,677,315,668,311,663,313,660,318,664,322,660,322,663,326,660,322,655,323,636,317,627,312,625,309,620,311,615,304,610,302,593,305,592,303,587,300,576,296,582,291,582,289,572,284,575,287,569,284,561,282,558,277,561,276,558,274,561,272,561,272,552,253,552,252,557,255,560,259,559,258,565,251,566,248,572,239,572,236,569,241,556,234,539,234,532,235,532,234,526,230,525,233,520,239,517,241,520,246,516,252,516,257,521,264,519,264,506,273,507,274,502,278,500,281,489,286,490,293,486,302,474,315,481,320,490,323,490,326,495,329,494,332,506,339,509,341,505,348,505,339,498,340,494,344,491,353,491,356,495,364,494,367,497,366,500,369,503,373,502,375,494,373,483,379,478,384,479,384,486,390,492,406,489,409,491,416,488,419,495,426,499]],"rp":[[50,524,52,514,54,512,53,509,61,503,62,500,70,497,69,492,73,496,81,492,83,495,94,494,92,483,95,481,99,484,99,478,103,474,116,470,119,466,128,467,131,460,144,457,150,452,149,449,155,446,154,439,157,437,160,438,160,442,167,446,173,461,178,462,178,476,176,477,172,475,170,478,170,484,168,490,174,497,177,503,172,504,171,508,164,510,164,519,160,518,155,525,162,533,180,525,184,526,190,534,190,541,196,553,199,553,193,559,192,564,198,583,197,585,201,587,199,600,194,607,192,619,187,629,182,634,165,626,146,626,139,622,136,615,127,612,124,606,131,594,125,591,122,587,126,582,124,572,120,574,115,570,103,567,82,577,66,578,69,564,75,559,75,550,63,546,58,541,50,524]],"sl":[[66,584,66,578,82,577,103,567,115,570,120,574,124,572,126,582,122,587,125,591,131,594,126,605,125,609,130,613,124,620,112,616,109,619,107,612,102,609,96,609,95,615,89,614,88,609,79,597,80,594,76,588,69,584,66,584]],"sh":[[221,39,244,45,247,50,260,49,268,43,268,47,278,49,284,54,288,53,288,51,291,52,296,60,290,63,297,63,296,74,292,79,284,82,304,81,307,84,303,98,309,89,314,86,340,99,353,92,366,91,361,94,363,102,361,112,352,119,345,120,342,125,345,130,349,130,351,137,355,139,350,138,342,145,342,155,352,161,354,165,353,175,346,174,346,178,335,185,334,191,330,194,315,187,306,178,305,173,308,167,305,162,306,157,300,158,298,162,283,171,280,167,278,173,275,172,266,166,265,159,259,155,257,147,248,141,229,139,221,126,232,127,233,120,230,115,223,118,220,112,222,104,227,103,230,98,212,103,207,99,208,95,213,94,209,94,210,89,225,88,233,82,225,70,221,70,223,68,220,63,212,56,210,48,211,40,221,39],[192,35,194,41,210,41,197,43,190,42,188,47,187,56,188,39,193,26,195,24,198,25,194,26,196,27,192,31,192,35]],"ni":[[111,246,118,233,119,206,122,198,130,200,126,197,109,195,110,179,115,176,113,170,126,162,138,162,166,158,171,159,172,166,180,175,178,178,173,180,175,184,183,189,189,182,187,177,184,178,186,169,190,168,194,172,204,176,200,181,201,194,201,180,204,178,207,181,210,177,209,170,201,168,200,160,205,144,210,141,223,147,249,144,267,170,280,175,286,187,288,185,289,188,293,189,300,185,306,190,316,187,330,194,339,193,341,199,363,216,367,213,379,223,385,222,394,226,392,229,389,230,389,236,383,240,373,242,358,239,354,244,342,246,345,258,352,268,356,269,354,274,357,280,354,280,353,284,362,292,357,296,358,301,362,306,358,311,361,315,354,320,354,324,336,326,330,329,335,334,333,338,335,341,331,345,331,350,338,366,334,369,335,374,327,374,318,371,313,381,308,383,304,387,297,387,291,392,288,388,286,389,286,393,282,389,276,394,279,397,281,396,277,401,266,394,268,390,272,390,272,383,269,378,272,373,275,373,271,367,264,367,262,364,255,366,261,344,252,344,252,338,248,338,250,333,243,331,244,322,241,317,232,317,231,311,235,311,236,306,231,304,232,298,236,295,240,289,240,283,238,280,232,284,229,289,221,291,214,290,213,282,210,278,200,279,196,285,188,285,190,290,197,295,200,312,194,319,186,317,180,322,172,323,168,326,162,321,169,318,170,313,163,310,165,300,168,298,163,292,158,294,151,289,149,284,144,283,142,292,125,303,108,306,110,294,105,285,100,287,90,285,87,282,86,276,90,274,88,272,90,266,108,267,111,246]],"nw":[[92,319,96,319,108,306,125,303,142,293,145,282,150,284,151,289,158,294,163,292,168,298,165,300,163,310,170,313,169,318,162,321,168,326,172,323,180,322,186,317,194,319,200,312,197,295,190,290,188,285,196,285,200,279,210,278,213,282,214,290,221,291,229,289,233,282,238,280,240,283,240,289,236,295,232,298,231,304,236,306,235,311,231,311,232,317,241,317,244,322,243,331,250,333,248,338,252,338,252,344,261,344,255,364,256,366,259,365,253,369,253,375,242,386,233,379,226,382,228,391,212,394,205,402,207,406,214,403,216,412,213,419,202,421,203,428,198,438,192,444,187,442,181,447,178,452,180,456,178,462,173,461,167,446,160,442,160,438,157,437,154,439,155,446,149,449,150,452,144,457,131,460,128,467,119,466,116,470,103,474,99,478,99,484,95,481,92,483,94,494,83,495,81,492,73,496,69,492,71,497,67,498,65,493,65,482,57,481,54,476,60,469,54,468,50,460,45,459,43,456,42,450,47,445,48,439,44,437,44,433,36,434,35,426,40,427,53,415,52,412,48,413,47,409,57,391,56,379,49,370,50,366,44,362,45,358,40,357,42,352,39,349,49,345,54,346,50,342,52,340,66,348,68,347,68,344,73,345,90,339,95,332,86,325,92,319]],"bw":[[266,777,243,763,233,762,226,765,219,758,214,760,214,754,210,751,208,754,206,750,198,754,194,761,194,764,198,766,207,764,204,771,202,768,196,772,184,768,172,774,164,774,163,771,158,770,155,774,148,775,145,774,148,770,143,772,139,759,145,733,142,720,154,696,153,689,158,678,157,668,167,654,175,649,180,636,186,631,192,619,194,607,199,600,201,587,197,585,195,572,199,571,205,577,208,575,207,569,212,568,214,575,225,579,221,583,220,589,222,590,228,585,229,580,240,579,236,573,248,572,251,566,258,565,259,559,255,560,252,557,253,552,272,552,271,560,274,561,276,558,277,561,280,559,282,558,284,561,287,569,284,575,289,572,291,582,296,582,300,576,303,579,302,586,305,592,302,593,304,610,311,615,309,620,312,625,317,627,323,636,322,655,326,660,322,663,322,660,318,664,313,660,311,663,315,668,314,677,304,683,303,681,298,683,293,692,298,700,303,721,300,733,300,744,303,748,300,751,302,762,300,762,299,765,298,762,292,764,286,762,280,768,270,771,266,777]],"bb":[[583,270,586,272,583,278,585,280,579,288,579,292,582,301,590,306,588,318,593,322,588,339,582,348,592,367,589,376,580,374,566,379,555,377,549,383,543,394,530,395,516,394,507,388,494,391,495,378,493,373,486,368,494,360,492,352,497,344,486,344,462,331,455,333,449,328,447,329,444,327,436,317,432,311,435,305,433,300,438,278,433,276,430,278,430,275,428,275,430,266,434,263,432,256,434,249,433,243,413,240,405,230,401,232,396,228,396,225,385,222,379,223,374,218,382,219,383,216,390,218,392,215,390,210,394,207,400,205,404,208,410,207,408,205,421,200,424,194,432,193,447,203,459,204,466,208,467,210,479,210,479,213,482,213,492,204,497,207,500,201,507,203,512,200,517,190,527,182,533,182,531,176,537,179,540,187,560,187,559,194,552,203,561,204,570,197,573,205,569,211,568,223,554,234,556,240,553,245,569,256,583,270]],"mv":[[562,160,564,179,570,197,561,204,552,203,559,194,560,187,540,187,537,179,531,176,533,182,527,182,517,190,512,200,507,203,500,201,497,207,492,204,482,213,479,213,479,210,467,210,466,207,447,203,433,193,427,193,417,202,408,205,410,207,404,208,400,205,395,206,390,210,392,217,383,216,382,219,374,218,367,213,363,216,341,199,339,193,332,193,334,185,346,178,347,173,351,173,353,175,354,173,354,162,342,155,343,152,342,144,350,138,355,139,352,138,351,134,360,129,369,128,372,132,372,136,378,134,386,139,390,126,393,126,400,114,408,115,425,111,427,120,426,115,429,112,427,112,441,100,453,81,457,85,478,87,474,88,463,87,453,93,447,91,442,99,443,103,448,104,446,103,450,97,463,89,465,89,463,93,464,90,466,92,469,91,471,94,480,87,485,87,484,90,488,93,490,102,501,107,504,112,503,113,508,113,506,115,509,115,512,120,514,121,512,118,527,113,526,115,533,120,529,126,539,136,534,145,548,154,557,156,561,154,562,156,558,159,562,160],[558,136,556,139,558,142,535,145,534,144,541,140,539,130,543,131,543,136,544,134,548,136,548,130,544,124,540,124,536,130,537,125,531,128,534,120,530,115,532,112,538,120,546,124,558,136],[526,91,530,96,528,102,526,102,527,100,523,100,527,97,521,98,526,95,514,96,505,102,505,105,509,103,509,107,504,106,502,105,504,102,499,104,495,100,492,101,494,99,490,96,492,92,499,91,496,87,492,87,500,82,497,78,493,78,492,76,498,74,501,78,506,72,504,78,506,77,506,74,510,81,514,81,515,73,510,74,506,69,498,74,501,66,497,66,497,65,509,61,510,63,506,66,508,71,520,71,524,73,525,76,518,83,521,89,526,91]],"hb":[[204,178,205,175,201,168,204,169,209,170,208,171,209,173,210,177,208,180,207,181,206,180,205,180,204,178],[202,207,205,209,206,208,212,211,216,211,216,212,218,213,221,213,223,215,225,216,226,216,228,214,230,216,229,218,229,218,231,221,230,222,230,224,227,227,226,228,223,225,223,226,222,227,218,224,213,225,213,222,209,217,209,214,208,212,205,212,201,210,200,208,202,207]],"hh":[[280,175,283,176,284,176,283,174,281,173,278,173,279,170,280,167,281,167,283,168,282,170,283,171,290,165,292,165,294,165,295,163,298,162,299,159,300,158,303,159,306,157,306,157,306,158,305,162,307,164,308,166,308,166,308,171,305,173,306,177,308,178,310,181,312,182,314,184,315,184,315,187,312,187,310,189,305,189,300,185,296,186,296,187,294,188,292,189,291,188,289,188,288,185,287,186,286,187,283,184,282,181,280,179,280,175]],"he":[[291,392,291,400,298,402,299,408,309,412,307,418,305,416,302,416,305,418,303,424,307,427,307,430,298,429,297,436,292,436,298,442,296,447,291,448,287,466,291,467,291,464,298,463,297,480,289,489,281,489,278,500,274,502,273,507,264,506,264,519,257,521,252,516,246,516,241,520,239,517,233,520,230,525,234,526,235,532,234,532,234,539,241,551,240,560,236,569,240,579,229,580,228,585,222,590,220,589,221,583,225,579,214,575,212,568,207,569,208,575,205,577,199,571,195,572,192,561,199,553,196,553,190,541,190,534,184,526,180,525,162,533,155,525,160,518,164,519,164,510,169,507,171,508,172,504,177,503,172,493,168,490,170,484,170,478,172,475,176,477,179,471,177,465,180,456,178,452,187,442,192,444,198,439,203,428,202,421,213,419,216,412,214,403,208,406,205,402,212,394,228,391,226,382,233,379,242,386,253,375,253,369,262,364,264,367,271,367,275,373,272,373,269,378,272,389,268,390,268,394,265,393,268,396,277,401,281,396,279,397,276,394,282,389,286,393,286,389,288,388,291,392]],"th":[[291,400,290,393,297,387,304,387,306,382,313,381,318,371,322,371,327,374,335,374,335,368,345,367,354,370,352,373,355,388,375,391,380,394,386,403,378,408,384,414,385,421,399,420,403,428,411,428,420,435,429,435,432,437,437,429,435,426,436,422,450,424,460,441,458,443,452,442,446,448,436,451,438,454,435,458,440,463,438,465,432,467,429,474,425,474,423,477,419,475,415,480,416,484,414,488,409,491,406,489,390,492,384,486,384,479,379,478,373,483,374,495,373,502,369,503,364,494,356,495,353,491,344,491,340,494,339,498,347,503,347,506,341,505,340,509,333,508,331,497,329,494,326,495,323,490,320,490,315,481,302,474,298,478,298,463,291,464,291,467,287,467,291,448,296,447,298,442,295,438,293,439,292,436,297,436,298,429,307,430,307,427,303,424,305,418,302,416,305,416,307,418,309,412,299,408,298,402,291,400]],"st":[[339,367,331,352,335,334,330,329,336,326,355,324,354,320,360,316,358,311,362,307,357,296,362,292,353,284,354,280,357,280,354,274,356,269,352,268,345,258,342,246,354,244,358,239,373,242,383,240,389,236,389,230,396,225,396,228,401,232,405,230,413,240,433,244,434,249,432,256,434,263,430,266,428,274,430,275,429,277,431,278,433,276,438,278,433,300,435,305,432,311,444,327,458,334,462,331,487,345,497,344,492,352,494,360,486,368,474,363,469,367,465,366,461,370,448,370,447,373,435,374,432,377,430,385,432,396,428,401,429,413,434,421,436,422,435,426,437,429,434,436,420,435,411,428,404,429,399,420,384,420,384,414,378,408,386,403,380,394,375,391,355,388,352,373,354,372,354,370,339,367]],"be":[[512,264,514,266,514,269,518,274,521,276,523,276,522,281,524,281,530,285,528,288,527,290,527,293,524,294,524,296,523,296,522,292,516,290,513,290,512,289,511,288,509,289,509,292,507,292,506,291,504,289,502,290,501,289,498,290,496,288,492,290,490,290,488,289,490,286,489,284,490,283,492,280,491,278,492,270,496,271,496,269,496,267,499,267,501,264,502,264,502,267,503,268,505,268,506,267,508,265,510,266,512,264]]},"nb":{"FRA":[[-75,421,-75,500,-74,504,-71,503,-69,505,-72,509,-74,517,-70,517,-68,523,-73,528,-73,532,-54,537,-41,532,-39,522,-30,514,-27,516,-32,534,-28,539,-28,551,-21,550,-14,555,-8,561,-3,561,0,564,0,569,2,567,6,570,10,580,16,578,19,579,22,576,26,577,28,575,34,580,39,582,41,586,48,585,52,580,56,580,64,584,69,584,76,588,80,594,79,597,84,603,86,609,88,609,89,614,95,615,96,609,102,609,107,612,109,619,112,616,116,619,124,620,128,614,132,613,136,615,136,617,139,622,146,626,165,626,182,634,175,649,170,654,167,654,166,659,157,668,158,678,155,680,153,689,154,696,150,699,150,705,143,717,143,725,145,733,142,742,139,759,143,772,137,776,138,777,137,781,132,781,133,784,130,787,121,788,117,786,118,781,105,781,106,785,102,788,98,795,107,793,109,796,104,801,104,806,87,822,86,828,72,836,71,854,51,872,53,875,48,884,47,888,52,893,50,905,41,910,43,913,41,917,46,915,51,916,62,906,57,898,63,891,78,884,92,887,93,890,91,895,96,903,92,915,98,919,97,925,101,925,106,931,108,938,103,944,99,946,98,947,94,947,94,958,95,960,117,960,82,960,150,960,-75,960,-75,421]],"CZE":[[596,444,607,444,608,434,605,431,608,428,615,432,617,429,618,432,622,432,625,435,624,440,626,444,629,447,630,452,636,450,651,457,657,456,661,462,669,462,670,466,669,470,676,465,682,468,685,464,691,466,697,473,695,474,693,481,688,481,684,485,683,489,685,490,687,494,692,493,694,498,698,500,704,509,706,516,712,521,714,520,720,513,721,487,721,670,721,658,713,657,710,652,699,650,693,657,676,656,663,647,659,643,650,644,636,636,625,631,623,635,617,636,616,631,607,629,604,654,595,652,594,658,589,663,588,672,582,668,579,669,574,666,570,671,565,674,548,670,546,666,547,663,544,659,534,653,528,643,522,641,521,635,515,633,513,636,509,634,501,621,494,618,482,600,475,596,474,598,469,597,464,590,460,587,459,579,456,578,454,570,451,568,451,563,446,560,444,556,448,552,453,540,449,537,448,532,435,526,431,518,431,512,425,506,427,502,425,498,429,499,432,504,435,504,434,506,439,514,441,504,452,491,463,490,466,487,471,486,480,490,482,487,483,481,492,480,497,472,500,473,506,467,511,470,515,464,515,461,517,459,535,458,538,456,538,452,543,450,547,450,557,445,560,442,567,442,569,438,564,435,564,433,560,432,563,426,569,429,575,426,581,432,580,439,585,438,584,445,589,448,594,449,596,444]],"SWE":[[721,-120,721,-120,681,-120,676,-112,673,-96,661,-79,657,-81,660,-86,654,-86,648,-90,645,-86,645,-91,639,-88,638,-85,633,-88,631,-84,626,-85,628,-85,626,-89,620,-85,618,-87,614,-86,612,-89,610,-88,611,-85,605,-87,598,-86,597,-84,594,-87,589,-86,588,-82,593,-73,590,-70,589,-72,584,-71,583,-76,576,-74,560,-56,557,-43,562,-37,562,-34,568,-24,558,-10,551,-9,539,-14,523,-12,519,-9,502,-4,481,-10,472,-8,474,-14,478,-12,480,-15,482,-15,477,-25,478,-28,485,-34,486,-39,483,-43,478,-45,478,-53,471,-59,467,-70,458,-82,451,-98,448,-100,460,-96,464,-92,470,-93,472,-98,459,-112,461,-116,464,-117,472,-114,476,-116,479,-120,364,-120,721,-120],[721,-120,710,-120,706,-109,701,-94,697,-92,696,-100,696,-120,721,-120],[652,-82,653,-82,652,-77,648,-80,650,-82,652,-82]],"LUX":[[51,518,50,525,54,536,55,534,58,541,63,546,75,550,75,559,69,564,70,566,66,573,66,584,56,580,52,580,48,585,41,586,39,582,34,580,31,576,34,574,33,572,37,566,34,563,34,559,32,558,30,553,27,550,27,544,29,544,26,542,32,532,32,530,36,520,40,517,42,513,44,512,46,515,49,514,51,518]],"BEL":[[-75,421,-75,392,-75,410,-74,403,-68,397,-68,393,-62,401,-63,403,-61,400,-63,399,-65,393,-56,394,-58,386,-48,382,-49,387,-42,388,-34,380,-30,384,-30,389,-33,387,-34,389,-24,391,-18,383,-15,384,-14,392,-11,399,-6,399,-5,404,6,404,12,401,17,409,22,412,27,412,30,415,33,414,34,420,32,420,31,424,30,424,30,428,26,434,29,434,20,445,20,447,25,450,26,455,28,453,31,455,44,455,45,459,50,460,54,468,60,469,54,476,57,481,65,482,65,493,67,498,66,499,62,500,61,503,54,508,54,512,52,514,51,518,49,514,46,515,44,512,42,513,36,523,32,530,32,532,26,542,29,544,27,544,27,550,30,553,32,558,34,559,34,563,37,566,33,572,34,574,31,576,22,576,19,579,16,578,11,580,6,570,2,567,0,568,0,564,-3,561,-8,561,-14,555,-21,550,-28,551,-28,539,-32,534,-30,524,-27,522,-27,515,-32,515,-39,522,-40,531,-52,536,-69,535,-73,532,-73,528,-68,523,-70,517,-74,517,-72,509,-69,505,-71,503,-74,504,-75,500,-75,421]],"DNK":[[211,40,212,35,209,28,212,17,204,16,204,20,200,23,198,20,200,10,206,12,204,15,212,16,208,-14,197,-16,189,-26,190,-27,189,-28,184,-26,186,-23,184,-22,189,-19,189,-17,175,-25,181,-43,177,-69,181,-57,181,-51,191,-57,194,-61,189,-69,188,-75,185,-79,179,-81,178,-70,176,-71,177,-120,207,-120,210,-118,217,-120,212,-120,289,-120,218,-120,335,-120,282,-120,317,-120,307,-120,306,-117,309,-118,309,-120,349,-120,355,-114,352,-103,342,-93,341,-86,337,-86,335,-89,337,-90,338,-92,334,-94,329,-88,330,-81,327,-80,325,-84,327,-86,320,-86,317,-90,321,-92,324,-90,325,-92,324,-94,326,-98,322,-100,320,-100,311,-89,308,-85,311,-77,309,-72,312,-72,310,-62,306,-57,306,-53,301,-58,286,-55,297,-51,296,-46,298,-45,296,-44,295,-40,282,-37,275,-41,267,-41,268,-40,273,-39,278,-33,285,-33,277,-26,276,-24,267,-22,263,-19,270,-20,273,-18,272,-14,269,-13,270,-7,272,-4,272,-2,276,5,274,11,268,11,262,14,264,17,260,17,264,18,267,22,259,26,260,28,268,25,278,30,280,40,276,41,278,43,279,46,271,44,270,40,272,39,270,37,260,46,259,49,256,48,252,50,246,49,244,45,226,40,211,40],[410,57,408,59,410,60,408,64,395,63,386,67,369,57,358,53,358,50,363,49,364,47,358,41,359,38,363,36,373,34,378,38,380,42,394,49,393,45,398,43,398,39,406,47,406,49,410,53,410,57],[323,40,327,45,318,47,308,36,306,32,313,36,317,41,319,40,319,38,321,43,323,43,323,40],[446,27,454,30,454,35,442,34,433,41,427,39,429,33,431,33,431,31,434,32,438,31,436,24,441,27,446,27],[295,32,298,42,292,44,287,41,288,40,294,43,291,40,283,40,281,38,279,32,285,35,281,30,282,28,276,29,274,27,276,25,271,25,277,22,282,22,295,32],[348,26,351,18,353,14,354,15,352,27,340,56,337,56,336,50,332,46,335,46,337,41,340,41,340,39,337,39,338,37,348,26],[617,17,615,28,612,31,594,25,588,20,590,6,593,-1,598,5,606,8,608,11,617,17],[199,-4,196,-6,192,-13,193,-16,195,-17,196,-13,198,-13,199,-4],[336,24,331,24,328,27,309,21,307,21,307,24,303,21,299,21,304,16,302,12,295,10,296,17,294,17,293,9,287,5,287,-5,282,-6,281,-8,284,-10,276,-16,283,-14,274,-20,279,-24,284,-25,288,-21,309,-31,312,-31,312,-28,314,-32,327,-23,324,-23,325,-20,321,-16,322,-14,333,-19,330,-22,333,-23,333,-31,336,-30,341,-21,341,-19,339,-17,330,-16,329,-14,332,-14,332,-16,337,-15,344,-6,347,1,344,-1,343,1,346,9,344,18,340,23,336,24],[458,-39,462,-30,455,-25,452,-32,458,-40,458,-39],[330,-57,331,-61,327,-65,329,-70,331,-64,334,-62,333,-58,334,-57,336,-58,331,-46,327,-49,327,-52,330,-57],[422,41,426,40,430,46,424,51,417,61,418,73,415,72,412,64,414,58,412,57,412,54,408,49,402,36,404,33,408,35,412,32,410,27,396,21,409,25,402,17,408,15,403,14,402,9,398,12,384,8,376,9,377,10,374,10,372,6,374,6,375,4,372,5,372,2,367,-2,369,-4,366,-5,364,-3,363,-6,371,-10,367,-20,362,-21,363,-23,366,-24,366,-28,363,-33,353,-36,363,-36,355,-42,349,-44,359,-43,367,-45,365,-44,369,-40,371,-41,369,-44,373,-43,379,-46,381,-51,379,-54,382,-53,387,-54,389,-61,387,-64,376,-67,374,-70,382,-66,395,-64,405,-67,404,-62,404,-60,402,-61,402,-62,399,-61,403,-53,402,-51,398,-51,395,-48,404,-50,405,-45,398,-43,404,-43,407,-39,406,-36,408,-38,411,-43,412,-50,416,-52,417,-55,414,-62,416,-63,420,-60,423,-44,422,-42,418,-42,414,-36,417,-36,420,-40,422,-37,420,-37,424,-35,426,-43,422,-64,419,-66,411,-64,411,-67,435,-83,450,-80,459,-74,452,-63,458,-50,458,-41,450,-31,445,-32,441,-30,432,-19,434,-14,447,-6,449,1,444,4,431,7,427,11,426,16,425,12,421,13,423,16,430,17,431,20,427,23,430,28,429,31,422,33,416,29,413,30,413,37,415,38,417,35,422,41]],"POL":[[721,579,721,487,720,513,714,520,712,521,706,516,704,509,698,500,694,498,692,493,687,494,685,490,683,489,684,485,688,481,693,481,695,474,697,473,691,466,685,464,682,468,676,465,669,470,670,466,669,462,661,462,657,456,651,457,636,450,630,452,629,447,626,444,624,440,625,435,622,432,618,432,617,429,615,432,608,428,605,431,608,434,607,444,596,444,605,424,609,403,606,397,604,385,590,377,592,369,591,364,586,358,585,353,582,350,582,346,588,339,589,331,593,322,588,318,590,306,582,301,579,292,579,288,585,280,583,278,586,272,572,261,569,256,553,245,556,240,554,234,567,225,570,217,569,211,573,205,570,202,568,186,564,177,564,170,562,164,562,160,564,159,563,156,571,162,578,164,582,170,584,166,579,160,581,153,584,153,585,145,582,149,581,148,581,144,573,143,572,139,568,142,571,143,570,146,565,148,556,139,558,136,571,138,594,126,650,110,662,105,679,102,675,104,682,104,681,102,684,102,684,100,679,101,688,94,685,98,691,95,691,93,688,94,698,81,698,83,700,82,700,80,698,81,702,77,706,74,719,72,721,70,721,579]],"AUT":[[721,670,721,762,716,761,714,757,706,755,696,764,710,768,714,776,710,781,711,785,701,791,699,789,698,790,697,796,700,802,697,806,696,811,698,812,698,815,702,816,699,822,701,825,697,828,701,830,688,830,684,836,677,843,669,847,669,856,672,863,661,858,654,860,648,858,647,862,642,863,640,867,637,868,632,865,612,865,608,866,606,870,604,868,598,870,595,879,590,881,588,884,582,887,579,892,577,888,573,889,570,886,554,886,548,882,544,882,536,878,524,878,512,874,497,875,492,872,472,869,466,866,454,865,445,861,441,854,437,851,436,843,428,839,427,831,433,825,431,822,414,827,404,833,394,830,390,831,387,829,383,833,377,831,368,834,363,839,360,848,357,853,349,854,340,851,341,848,336,844,325,845,323,844,323,836,318,830,314,834,313,838,309,838,307,843,303,845,299,844,287,837,286,828,274,824,268,824,270,819,266,813,267,810,264,804,272,790,273,785,268,782,266,776,274,778,280,771,282,772,283,776,291,776,293,782,296,781,300,787,298,790,300,794,308,793,304,803,314,800,321,790,323,786,321,781,321,772,323,772,323,776,327,777,331,774,342,778,348,777,350,778,348,782,355,787,356,791,362,791,369,787,372,791,376,786,381,786,380,783,383,779,392,779,396,771,409,772,410,770,416,769,431,770,433,765,431,759,435,757,435,762,446,761,451,767,461,762,468,763,467,765,471,769,469,770,469,774,478,783,483,783,485,781,484,776,487,764,484,759,480,760,476,758,482,745,467,722,466,718,474,710,478,709,484,704,500,699,508,692,511,673,515,672,522,674,527,678,533,669,534,660,532,658,534,653,545,660,547,664,546,667,550,671,566,674,570,671,574,666,579,669,582,668,588,672,589,663,594,658,595,652,604,654,607,629,616,631,617,636,623,635,625,631,636,636,650,644,659,643,676,656,693,657,699,650,710,652,713,657,721,658,721,670]],"ITA":[[108,938,112,942,118,942,124,939,131,938,140,932,147,933,150,937,159,939,163,932,168,930,171,921,176,917,177,910,174,904,187,893,189,887,194,885,197,886,197,906,201,909,208,918,212,920,214,919,220,921,222,923,217,932,224,935,226,942,226,947,232,948,236,940,231,934,233,931,232,927,236,924,238,916,246,907,249,897,247,886,250,880,254,880,256,883,259,880,260,892,266,900,274,901,277,895,280,896,289,893,292,894,297,908,299,908,304,904,300,897,303,890,296,885,297,877,300,870,306,867,309,868,309,872,314,875,322,876,323,868,319,866,318,863,321,854,321,850,323,844,328,846,335,844,341,847,340,851,349,854,357,853,360,848,363,839,368,834,377,831,383,833,387,829,390,831,394,830,404,833,414,827,431,822,433,825,427,831,428,839,436,843,437,851,441,854,445,861,454,865,466,866,472,869,492,872,497,875,512,874,526,878,525,885,520,886,516,891,510,895,505,901,508,909,510,909,509,907,512,908,523,913,521,918,514,923,511,929,514,933,520,932,522,933,518,944,519,949,538,960,527,960,533,960,528,960,522,953,517,951,515,954,517,956,511,960,506,960,509,960,509,958,496,952,492,955,489,953,490,956,487,959,487,960,491,960,429,960,721,960,82,960,117,960,95,960,94,958,94,947,98,947,99,946,103,944,108,938]],"CHE":[[323,844,321,850,321,854,318,863,319,866,323,868,322,876,314,875,309,872,309,868,306,867,300,870,297,877,296,885,303,890,300,896,304,904,302,907,297,908,292,894,289,893,280,896,277,895,274,901,266,900,260,892,259,880,256,883,253,880,248,882,247,886,249,897,246,907,238,916,236,924,232,927,233,931,231,934,236,940,232,948,226,947,226,942,224,935,217,932,222,923,220,921,214,919,212,920,208,918,201,909,197,906,196,885,189,887,187,893,174,904,177,910,176,917,171,921,168,930,163,932,159,939,150,937,147,933,140,932,129,939,124,939,116,942,111,941,101,925,97,925,98,919,92,915,96,903,91,895,93,890,92,887,78,884,63,891,57,898,62,906,51,916,46,915,41,917,43,913,41,909,50,905,52,893,47,888,48,884,53,875,51,872,71,854,72,836,86,828,86,824,90,818,104,806,104,801,109,796,107,793,98,795,102,788,106,785,105,781,118,781,117,786,121,788,132,786,132,781,137,781,138,777,137,776,146,770,148,770,147,773,145,774,149,776,155,774,158,770,163,771,164,774,175,773,180,768,184,768,191,772,197,772,202,768,204,771,207,764,198,766,194,764,194,760,198,754,204,752,204,750,207,750,208,754,210,751,214,754,214,760,217,760,218,758,219,758,224,764,228,765,233,762,249,765,266,776,268,782,273,785,272,790,262,809,264,819,262,824,274,824,286,828,287,837,302,845,307,843,309,838,313,838,314,834,318,830,323,836,323,844]],"NLD":[[119,206,117,216,119,230,110,248,109,265,108,267,90,266,88,268,88,272,90,274,86,276,89,284,100,287,105,285,110,294,107,302,108,307,96,319,91,320,86,325,93,330,95,334,89,340,83,340,73,345,68,344,68,347,66,348,60,343,52,340,50,342,54,346,49,345,40,348,42,352,40,357,45,358,44,362,50,366,49,370,56,379,57,384,56,396,47,409,48,413,52,412,54,412,52,414,53,415,43,422,40,427,36,425,35,426,36,434,44,433,44,437,48,439,47,445,44,446,44,450,42,450,44,455,31,455,28,453,26,455,25,450,20,447,20,445,29,434,26,434,30,428,30,424,31,424,32,420,34,420,33,414,30,415,27,412,22,412,17,409,12,401,6,404,-2,404,-5,404,-6,399,-11,399,-15,392,-14,386,-17,382,-24,391,-34,389,-33,387,-30,389,-30,384,-34,380,-42,388,-49,387,-48,382,-58,386,-55,393,-57,395,-65,393,-67,388,-75,389,-75,384,-75,391,-75,369,-75,385,-65,386,-63,383,-66,378,-75,376,-75,369,-68,371,-75,365,-74,362,-70,361,-75,358,-75,331,-64,319,-50,296,-44,279,-36,234,-30,233,-31,237,-27,240,-14,235,1,222,5,220,9,208,18,200,43,189,61,189,63,190,75,186,90,184,96,185,98,187,100,195,108,199,112,199,112,203,119,206],[-26,219,-24,220,-27,225,-34,231,-37,227,-34,219,-28,211,-26,212,-26,219],[-26,208,-20,201,-15,199,-12,199,-14,200,-24,209,-26,208],[8,187,18,185,5,190,-6,195,-8,195,-8,192,8,187],[23,183,41,184,24,187,21,185,23,183],[57,179,65,180,52,184,52,182,57,179]],"LIE":[[264,804,267,810,266,813,270,819,268,824,262,824,264,819,262,812,264,804]]},"lakes":{"Bodensee":[[277,775,278,778,275,778,274,780,272,780,272,779,270,780,269,780,266,779,263,781,257,776,255,772,245,765,243,763,245,763,245,762,243,758,241,754,236,751,234,749,234,748,236,748,243,753,245,754,246,758,252,762,257,762,260,764,262,765,264,766,266,770,269,771,274,775,277,775]],"Müritz":[[468,186,469,188,469,191,466,192,464,195,464,196,465,196,464,197,463,196,463,191,463,190,461,190,461,189,460,190,459,188,457,187,456,187,456,187,458,185,462,178,464,179,462,181,465,185,468,186]]},"rivers":{"Rhein":[[243,763,266,777,267,779],[240,763,234,760,224,764],[240,763,243,763],[258,846,265,841,266,837,262,824,264,819,262,809,272,790,273,785,267,779],[214,868,215,863,221,861,225,857,258,846],[224,764,218,761,209,760,204,774,199,771,191,772,188,771,187,768,184,768,172,774,164,774,163,771,158,770,156,774,149,776,143,773,144,769,139,762,140,750,143,736,145,733,142,720,145,712,150,705,150,699,154,696,153,689,155,680,158,678,157,668,167,658,167,654,170,654,175,649,180,636,184,634],[46,342,37,331,20,335,10,331,2,334],[184,634,192,619,193,607,200,599,198,598,201,587,197,585,198,583,192,564,193,559,197,557,199,553,196,553,190,541,190,534,182,526,162,533,154,524,152,514,147,512,143,505,147,504,144,498,145,492,143,489,131,485,120,470,118,460,105,446,110,441,105,439,104,436,106,433,104,427,97,422,99,419,97,414,94,415,94,412,90,410,89,407,92,406,88,403,90,397,85,394,90,391,89,383,87,382,89,379,86,375,87,374,81,372,81,364,74,362,70,358,69,355,65,353,61,348,49,345,45,342,42,344,39,342,35,345,29,341,15,340,10,341,2,349,0,347,-8,348,-20,348]],"Donau":[[452,637,452,637],[452,637,452,638],[180,721,184,725,187,725,190,730,196,733,199,737,202,735,208,738,217,736,218,733,225,726,227,727,226,729,229,728,230,725,235,721,256,723,266,706,276,706,279,702,283,701,289,697,297,686,318,680,321,673,330,670,345,658,350,657,381,655,385,653,398,652,405,646,407,640,421,637,422,636,420,634,422,631,422,627,432,629,439,628,442,630,440,633,449,634,453,636,452,637],[707,716,697,707,690,692,676,694,667,694,660,689,656,690,646,687,637,689,634,693,632,702,628,706,618,708,613,712,607,709,604,706,600,706,596,709,588,712,582,706,574,706,570,703,564,697,563,699,556,696,548,697,545,688,533,683,522,673,497,668,490,663,488,658,483,658,484,654,480,646,474,645,471,647,468,646,467,642,462,640,459,639,456,641,454,640,454,638,452,637]],"Elbe":[[299,184,297,177,284,175],[299,184,283,176],[299,184,299,184],[451,342,449,344,448,342,443,345,439,341,434,344,432,342,421,343,413,333,413,328,410,328,406,326,404,327,398,319,400,312,402,309,401,306,406,297,411,296,416,292,416,290,419,286,418,276,422,254,421,242,409,237,410,234,408,234,405,230,401,232,400,229,396,228,396,225,394,226,385,222,379,223,373,216,371,215,369,216,367,213,363,216,341,199,339,193,330,194,316,187,305,189,299,184],[451,342,451,342],[494,383,494,381,492,382,486,379,483,374,484,370,476,363,473,363,470,351,472,348,461,344,452,344,451,342],[644,461,647,471,654,476,654,483,663,490,665,493],[665,493,665,493],[665,493,666,495,659,506,658,519,661,522,657,525,632,525,623,528,620,526,617,517,612,512,606,514,588,512,583,506,581,507,578,501,576,500,574,491,569,487,568,483,565,483,563,487,561,487,558,478,549,477,547,472,550,469,548,465,557,462,558,460,557,454,560,450,559,440,549,437,551,435,550,434,539,433,533,423,530,424,518,418,508,409,508,405,506,400,501,399,500,395,498,395,498,392,496,389,494,383],[696,494,705,508,706,514,705,522,697,520,691,522,686,518,679,517,668,509,660,508]],"Main":[[391,544,394,547,396,546,397,535,392,534,383,521,372,517,364,510,355,519,352,530,348,532,348,538,343,537,340,534,325,527,318,529,310,525,306,531,306,539,305,542,308,544,305,544,308,550,304,551,305,556,302,561,304,562,302,563,298,562,291,552,287,549,283,537,280,535,276,526,273,526,268,529,267,533,270,543,268,548,270,550,267,552,263,550,253,552,248,560,243,556,243,551,240,549,242,541,239,535,241,533,236,532,234,526,231,525,231,522,226,518,218,516,217,519,204,520,196,529,187,531]],"Neckar":[[197,707,201,708,205,716,208,715,208,711,205,698,211,691,209,688,210,686,214,684,223,684,245,674,248,669,252,666,256,658,250,655,246,649,248,638,244,634,244,631,242,627,242,620,245,611,236,589,230,583,220,590,211,588,206,582,197,578]],"Mosel":[[102,728,98,730,95,734,92,734,87,728,82,727,82,721,76,717,76,715,72,714,68,699,60,690,63,685,62,680,53,670,48,668,45,665,38,665,37,663,40,662,44,655,52,653,51,648,49,647,50,642,47,640,46,631,49,622,57,614,56,603,54,594,66,585,66,573,70,566,69,564,76,559,82,558,83,554,87,552,88,548,94,550,97,550,97,546,100,548,100,542,102,541,102,544,105,539,110,538,106,533,107,532,111,533,113,532,114,535,114,525,118,528,114,520,118,522,118,520,121,519,121,515,118,516,117,514,129,512,131,508,135,507,136,499,139,498,142,493,144,494]],"Saar":[[117,675,108,659,110,653,107,649,112,636,109,630,114,626,115,622,110,617,107,606,97,604,94,602,84,587,81,580,82,574,79,570,80,564,79,559]],"Weser":[[356,481,355,484,349,489,342,488,335,485,333,479,321,476,318,468,316,455,314,453,313,450,304,446,295,446,292,444,294,443,301,429,308,430,308,425,311,424,311,422,316,422,312,421,313,419,309,416,307,417,304,411,298,411,294,408,294,405,295,404,292,399,291,400,291,398,288,398,282,392,272,388,272,383,269,378,270,375,268,370,266,369,267,366,264,367,262,364,257,366,255,365,257,362,256,352,258,350,257,348,260,347,261,342,257,339,261,339,260,338,264,337,264,330,260,331,258,326,255,323,255,321,248,314,236,310,226,313,221,308,227,304,227,297,231,289,234,287,234,281,237,282,236,280,238,279,237,277,239,276,240,270,244,265,243,260,246,260,246,257,244,255,244,252,242,249,246,245,243,244,245,243,243,240,243,234,238,233,236,230,231,230,231,229,225,227,224,224,220,223,214,217,210,216,208,212,201,210,200,206,201,194]],"Saale":[[407,515,411,508,414,508,415,498,408,488,401,488,402,474,396,468,382,467,378,460,393,450,395,443,394,437,399,430,403,415,408,412,410,413,418,408,423,402,422,398,416,386,416,377,409,375,400,358,401,352,406,348,405,343,407,338,412,336,414,333]],"Spree":[[597,419,604,412,602,407,601,396,598,391,587,388,584,392,581,393,576,383,571,378,569,370],[570,363,566,345,550,345,544,342,539,336,538,328,539,319,545,317,557,320],[489,287,480,294],[558,319,562,306,557,297,553,294,542,291,534,292,525,286],[476,287,473,283,469,282,451,290],[522,285,516,284,508,278,498,276,495,279],[448,289,446,286,447,280,440,275,440,264,434,261,432,257,433,251,422,245],[557,320,558,319],[525,286,522,285],[480,294,476,287],[451,290,448,289],[495,279,493,285,489,287],[569,370,570,363]],"Oder":[[706,405,701,407,697,400,700,393,698,388,699,380,701,378,699,373,692,368,692,366,685,361,677,364,666,359,665,357,661,357,658,353,655,353,654,350,658,342,656,340,658,336,656,332,651,333,648,329,648,326,634,324,631,325,621,322,614,325,610,322,601,324,593,322,589,319,590,306,582,301,579,288,585,280,583,278,586,272,573,262,569,256,553,245,556,240,554,234,565,227,568,223,569,210,584,180,582,170]],"Fulda":[[181,434,187,424,203,429,205,429,207,426,214,426,223,418,226,411,231,412,234,410,245,416,256,417,260,414,263,400,266,396,265,393,268,394,267,392,272,390,272,387]],"Ems":[[218,342,197,350,188,345,189,339,178,333,169,335,157,332,152,326,149,326,147,322,145,322,143,317,146,313,141,312,138,306,136,304,134,300,129,297,128,291,127,291,128,287,122,270,122,264,125,260,122,249,126,242,125,236,126,227,124,223,125,221,129,218,130,213,133,208,130,200]],"Inn":[[279,890,279,886,300,859,301,853,319,846,336,824,334,818,330,816,331,813,339,808,345,807,349,803,359,799,380,802,395,798,414,783,423,779,429,772,433,766,432,762,428,752,430,746,429,735,435,723,434,722,436,718,436,716,441,714,441,712,445,712,448,710,451,708,449,706,465,703,468,704,471,702,475,705,478,709,484,704,500,699,509,691,511,678,510,674,513,672]],"Isar":[[383,793,374,792,373,787,377,777,390,772,394,767,390,746,385,735,400,703,405,689,414,686,418,680,426,677,436,670,469,660,471,659,476,652,482,650]],"Havel":[[481,187,481,202,491,212,503,232,508,243,498,255,495,266,495,276,489,287,478,292,465,290,454,289,445,280,441,269,432,258,424,248,415,236]],"Werra":[[357,483,352,487,340,487,329,480,321,473,313,460,309,449,293,447,298,434,301,422,298,411,286,396,273,388]]}};
+
+/* =================== Flüsse in Deutschland (Sachkunde wie in der Grundschule, 4. Klasse) ===================
+   Man startet in Baden-Württemberg. An jedem Angelplatz gibt es einen Fluss-Stempel: 3 verschiedene Fischarten fangen
+   und das Fluss-Rätsel an der Infotafel lösen. Mit dem Stempel öffnen sich die Nachbar-Plätze (LINKS): man folgt dem Fluss.
+   Die ids in SPOTS nie ändern (stehen im Spielstand: state.fluss und state.flussAt). Fakten geprüft, siehe .claude/skills/sachkunde-grundschule. */
+// Die 16 Bundesländer. hs = Landeshauptstadt, at = [Länge, Breite] der Hauptstadt, lab = wo der Name auf der Karte steht
+const BL={
+ bw:{name:'Baden-Württemberg',hs:'Stuttgart',at:[9.18,48.78],lab:[9.0,48.45,'Baden-\nWürttemberg']},
+ by:{name:'Bayern',hs:'München',at:[11.58,48.14],lab:[11.55,49.1,'Bayern']},
+ be:{name:'Berlin',hs:'Berlin',at:[13.40,52.52],lab:[13.45,52.2,'Berlin']},
+ bb:{name:'Brandenburg',hs:'Potsdam',at:[13.06,52.40],lab:[13.0,52.95,'Branden-\nburg']},
+ hb:{name:'Bremen',hs:'Bremen',at:[8.80,53.08],lab:[8.2,53.22,'Bremen']},
+ hh:{name:'Hamburg',hs:'Hamburg',at:[10.0,53.55],lab:[10.62,53.45,'Hamburg']},
+ he:{name:'Hessen',hs:'Wiesbaden',at:[8.24,50.08],lab:[9.0,50.65,'Hessen']},
+ mv:{name:'Mecklenburg-Vorpommern',hs:'Schwerin',at:[11.41,53.63],lab:[12.7,53.75,'Mecklenburg-\nVorpommern']},
+ ni:{name:'Niedersachsen',hs:'Hannover',at:[9.73,52.37],lab:[9.15,52.8,'Nieder-\nsachsen']},
+ nw:{name:'Nordrhein-Westfalen',hs:'Düsseldorf',at:[6.78,51.23],lab:[7.55,51.55,'Nordrhein-\nWestfalen']},
+ rp:{name:'Rheinland-Pfalz',hs:'Mainz',at:[8.27,50.0],lab:[7.25,49.75,'Rheinland-\nPfalz']},
+ sl:{name:'Saarland',hs:'Saarbrücken',at:[6.99,49.24],lab:[7.05,49.2,'Saar-\nland']},
+ sn:{name:'Sachsen',hs:'Dresden',at:[13.74,51.05],lab:[13.05,50.75,'Sachsen']},
+ st:{name:'Sachsen-Anhalt',hs:'Magdeburg',at:[11.63,52.13],lab:[11.55,51.75,'Sachsen-\nAnhalt']},
+ sh:{name:'Schleswig-Holstein',hs:'Kiel',at:[10.13,54.32],lab:[9.55,54.5,'Schleswig-\nHolstein']},
+ th:{name:'Thüringen',hs:'Erfurt',at:[11.03,50.98],lab:[10.75,50.62,'Thüringen']}};
+// Die Angelplätze. hw = halbe Flussbreite, hills = Berge am Tal, bend/k = Kurven, look = Wahrzeichen, ship = Schiffe fahren vorbei.
+// p = Text der Infotafel, q = Fluss-Rätsel (a = richtig, w = falsch). Die Antworten stehen alle auf der Tafel.
+const SPOTS=[
+ {id:'bw-neckar',bl:'bw',river:'Neckar',name:'Neckar in Heidelberg',at:[8.71,49.41],hw:9,hills:10,bend:8,k:0.02,look:'heidelberg',ship:'fracht',
+  fish:['barbe','doebel','rotauge','brachse','zander','aal','karpfen','wels'],
+  p:['Der Neckar entspringt bei Villingen-Schwenningen. Er fließt durch Stuttgart, die Landeshauptstadt von Baden-Württemberg, und mündet bei Mannheim in den Rhein.',
+   'Über Heidelberg steht ein Schloss aus rotem Sandstein. Ein Teil davon ist heute eine Ruine. Unten führt die Alte Brücke über den Neckar.'],
+  q:[{q:'Wie heißt die Landeshauptstadt von Baden-Württemberg?',a:'Stuttgart',w:['Heidelberg','München']},
+   {q:'In welchen Fluss fließt der Neckar?',a:'In den Rhein',w:['In die Donau','In die Elbe']}]},
+ {id:'bw-rhein',bl:'bw',river:'Rhein',name:'Rhein bei Breisach',at:[7.58,48.03],hw:16,hills:4,bend:5,k:0.015,look:'breisach',ship:'fracht',wein:true,
+  fish:['barbe','nase','doebel','rotauge','brachse','zander','lachs','aal','wels'],
+  p:['Der Rhein kommt aus den Alpen in der Schweiz. Hier bildet er die Grenze zwischen Deutschland und Frankreich.',
+   'Er fließt nach Norden und mündet in den Niederlanden in die Nordsee. Mit etwa 1.230 Kilometern ist er einer der längsten Flüsse in Europa.',
+   'Auf dem Berg in Breisach steht das Münster. Am Kaiserstuhl gleich nebenan wächst Wein. Früher gab es im Rhein viele Lachse. Heute kommen sie langsam zurück.'],
+  q:[{q:'Welches Land liegt hier auf der anderen Seite vom Rhein?',a:'Frankreich',w:['Österreich','Polen']},
+   {q:'In welches Meer fließt der Rhein?',a:'In die Nordsee',w:['In die Ostsee','Ins Schwarze Meer']}]},
+ {id:'bw-donau',bl:'bw',river:'Donau',name:'Donau bei Sigmaringen',at:[9.22,48.09],hw:9,hills:14,bend:8,k:0.022,look:'sigmaringen',
+  fish:['aesche','forelle','barbe','nase','doebel','hecht','rotauge','barsch'],
+  p:['Die Donau beginnt in Donaueschingen in Baden-Württemberg. Dort fließen die Bäche Brigach und Breg zusammen.',
+   'Die Donau fließt nach Osten bis ins Schwarze Meer. Sie fließt durch 10 Länder, so viele wie kein anderer Fluss der Erde!',
+   'Hier im Donautal stehen hohe Felsen aus Kalkstein. Oben auf einem Felsen steht das Schloss Sigmaringen. Weiter flussabwärts liegt Ulm. Das Ulmer Münster hat den höchsten Kirchturm in Deutschland.'],
+  q:[{q:'In welche Himmelsrichtung fließt die Donau?',a:'Nach Osten',w:['Nach Norden','Nach Westen']},
+   {q:'Wo beginnt die Donau?',a:'In Donaueschingen',w:['In Hamburg','In der Schweiz']}]},
+ {id:'by-donau',bl:'by',river:'Donau',name:'Donau in Passau',at:[13.43,48.57],hw:14,hills:8,bend:6,k:0.018,look:'passau',ship:'fracht',
+  fish:['huchen','nase','barbe','rapfen','zander','wels','doebel','hecht'],
+  p:['Bayern ist das größte Bundesland. Die Landeshauptstadt ist München. In Bayern steht auch der höchste Berg Deutschlands, die Zugspitze.',
+   'Passau heißt Dreiflüssestadt. Hier fließen drei Flüsse zusammen: Donau, Inn und Ilz.',
+   'Nur in der Donau und ihren Nebenflüssen lebt der Huchen. Man nennt ihn auch Donaulachs.'],
+  q:[{q:'Wie heißt die Landeshauptstadt von Bayern?',a:'München',w:['Passau','Nürnberg']},
+   {q:'Wie viele Flüsse fließen in Passau zusammen?',a:'Drei',w:['Zwei','Fünf']}]},
+ {id:'rp-rhein',bl:'rp',river:'Rhein',name:'Rhein an der Loreley',at:[7.73,50.14],hw:13,hills:18,bend:10,k:0.02,look:'loreley',ship:'fracht',wein:true,
+  fish:['barbe','brachse','zander','aal','lachs','wels','rapfen','doebel','rotauge'],
+  p:['Du bist in Rheinland-Pfalz. Die Landeshauptstadt ist Mainz. Hier wächst so viel Wein wie in keinem anderen Bundesland.',
+   'Die Loreley ist ein hoher Felsen am Rhein. Hier ist der Fluss eng und tief. Darum mussten die Schiffer früher gut aufpassen.',
+   'Bei Koblenz fließt die Mosel in den Rhein. Die Ecke heißt Deutsches Eck.'],
+  q:[{q:'Wie heißt der hohe Felsen am Rhein?',a:'Loreley',w:['Zugspitze','Bastei']},
+   {q:'Welcher Fluss mündet bei Koblenz in den Rhein?',a:'Die Mosel',w:['Die Elbe','Die Spree']}]},
+ {id:'sl-saar',bl:'sl',river:'Saar',name:'Saarschleife bei Mettlach',at:[6.56,49.50],hw:9,hills:14,bend:40,k:0.03,look:'saarschleife',
+  fish:['barbe','brachse','zander','hecht','doebel','rotauge','aal','wels'],
+  p:['Das Saarland ist das kleinste Flächenland. So heißt ein Bundesland, das nicht nur aus einer Stadt besteht. Die Landeshauptstadt ist Saarbrücken.',
+   'Die Saar macht hier eine riesige Kurve: die Saarschleife. Von einem Aussichtsturm kann man sie gut sehen.',
+   'Die Saar kommt aus Frankreich. Sie fließt in die Mosel, und die Mosel fließt in den Rhein.'],
+  q:[{q:'Wie heißt die Landeshauptstadt vom Saarland?',a:'Saarbrücken',w:['Mainz','Trier']},
+   {q:'In welchen Fluss fließt die Saar?',a:'In die Mosel',w:['In die Donau','In die Weser']}]},
+ {id:'he-main',bl:'he',river:'Main',name:'Main in Frankfurt',at:[8.68,50.11],hw:11,hills:1,bend:5,k:0.02,look:'frankfurt',ship:'fracht',
+  fish:['barbe','brachse','zander','aal','doebel','rotauge','wels','karpfen'],
+  p:['In Hessen ist Wiesbaden die Landeshauptstadt, nicht Frankfurt, auch wenn Frankfurt viel größer ist!',
+   'In Frankfurt stehen viele Hochhäuser. Darum nennt man die Stadt auch Mainhattan.',
+   'Der Main fließt bei Mainz in den Rhein. Über den Main-Donau-Kanal fahren Schiffe sogar bis zur Donau.'],
+  q:[{q:'Wie heißt die Landeshauptstadt von Hessen?',a:'Wiesbaden',w:['Frankfurt','Kassel']},
+   {q:'Welcher Kanal verbindet Main und Donau?',a:'Der Main-Donau-Kanal',w:['Der Nord-Ostsee-Kanal','Der Panamakanal']}]},
+ {id:'nw-rhein',bl:'nw',river:'Rhein',name:'Rhein in Köln',at:[6.96,50.94],hw:18,hills:1,bend:4,k:0.015,look:'koeln',ship:'fracht',
+  fish:['lachs','barbe','brachse','zander','aal','rapfen','wels','rotauge','barsch'],
+  p:['In Nordrhein-Westfalen wohnen die meisten Menschen, etwa 18 Millionen. Die Landeshauptstadt ist Düsseldorf. Auch Düsseldorf liegt am Rhein.',
+   'Der Kölner Dom hat zwei Türme. Sie sind etwa 157 Meter hoch.',
+   'Auf dem Rhein fahren sehr viele Schiffe. Er ist eine der wichtigsten Wasserstraßen in Europa.'],
+  q:[{q:'Wie heißt die Landeshauptstadt von Nordrhein-Westfalen?',a:'Düsseldorf',w:['Köln','Bonn']},
+   {q:'Wie viele Türme hat der Kölner Dom?',a:'Zwei',w:['Einen','Vier']}]},
+ {id:'ni-weser',bl:'ni',river:'Weser',name:'Weser in Hann. Münden',at:[9.65,51.42],hw:10,hills:9,bend:6,k:0.02,look:'fachwerk',ship:'fracht',
+  fish:['barbe','brachse','aal','zander','doebel','rotauge','lachs','barsch'],
+  p:['Niedersachsen ist das zweitgrößte Bundesland. Die Landeshauptstadt ist Hannover.',
+   'In Hann. Münden fließen die Werra und die Fulda zusammen. Ab hier heißt der Fluss Weser.',
+   'Die Weser fließt nach Norden durch Bremen und mündet bei Bremerhaven in die Nordsee. In Hann. Münden stehen viele alte Fachwerkhäuser.'],
+  q:[{q:'Welche zwei Flüsse werden in Hann. Münden zur Weser?',a:'Werra und Fulda',w:['Rhein und Main','Elbe und Saale']},
+   {q:'Wie heißt die Landeshauptstadt von Niedersachsen?',a:'Hannover',w:['Hann. Münden','Bremen']}]},
+ {id:'hb-weser',bl:'hb',river:'Weser',name:'Weser in Bremen',at:[8.80,53.08],hw:13,hills:0,bend:3,k:0.02,look:'bremen',ship:'fracht',
+  fish:['brachse','aal','zander','aland','barsch','rotauge','hecht'],
+  p:['Bremen ist das kleinste Bundesland. Es besteht aus zwei Städten: Bremen und Bremerhaven. Ein Bundesland, das vor allem aus einer Stadt besteht, heißt Stadtstaat.',
+   'Kennst du das Märchen von den Bremer Stadtmusikanten? Esel, Hund, Katze und Hahn wollten nach Bremen. Hier steht ihr Denkmal!',
+   'Die Weser fließt bei Bremerhaven in die Nordsee.'],
+  q:[{q:'Welche Tiere sind die Bremer Stadtmusikanten?',a:'Esel, Hund, Katze und Hahn',w:['Pferd, Kuh, Schaf und Gans','Bär, Wolf, Fuchs und Eule']},
+   {q:'Aus welchen zwei Städten besteht das Land Bremen?',a:'Bremen und Bremerhaven',w:['Bremen und Hamburg','Bremen und Hannover']}]},
+ {id:'th-saale',bl:'th',river:'Saale',name:'Saale an der Leuchtenburg',at:[11.58,50.80],hw:7,hills:14,bend:10,k:0.025,look:'leuchtenburg',
+  fish:['barbe','doebel','hecht','rotauge','quappe','zander','barsch'],
+  p:['Thüringen nennt man das grüne Herz Deutschlands. Es liegt fast in der Mitte und hat viel Wald. Die Landeshauptstadt ist Erfurt.',
+   'Die Saale entspringt im Fichtelgebirge in Bayern. Sie fließt nach Norden und mündet in die Elbe.',
+   'Hoch über dem Saaletal steht die Leuchtenburg.'],
+  q:[{q:'Wie nennt man Thüringen?',a:'Das grüne Herz Deutschlands',w:['Das Land am Meer','Das Land der Vulkane']},
+   {q:'Wie heißt die Landeshauptstadt von Thüringen?',a:'Erfurt',w:['Jena','Weimar']}]},
+ {id:'st-elbe',bl:'st',river:'Elbe',name:'Elbe bei Magdeburg',at:[11.63,52.13],hw:15,hills:0,bend:4,k:0.015,look:'magdeburg',ship:'fracht',
+  fish:['rapfen','aland','zander','brachse','aal','wels','quappe','hecht','barsch'],
+  p:['Die Landeshauptstadt von Sachsen-Anhalt ist Magdeburg. Sie liegt an der Elbe.',
+   'Bei Magdeburg fließt ein Kanal auf einer Brücke über die Elbe. Schiffe fahren hier über einen Fluss! Die Brücke ist 918 Meter lang.',
+   'In Sachsen-Anhalt fließt auch die Saale in die Elbe.'],
+  q:[{q:'Was ist bei Magdeburg besonders?',a:'Schiffe fahren auf einer Brücke über die Elbe',w:['Die Elbe fließt bergauf','Die Elbe ist hier ein Meer']},
+   {q:'Wie heißt die Landeshauptstadt von Sachsen-Anhalt?',a:'Magdeburg',w:['Halle','Dessau']}]},
+ {id:'sn-elbe',bl:'sn',river:'Elbe',name:'Elbe in der Sächsischen Schweiz',at:[14.07,50.96],hw:12,hills:20,bend:8,k:0.02,look:'bastei',ship:'dampfer',
+  fish:['rapfen','aland','barbe','zander','lachs','quappe','doebel','aal'],
+  p:['Die Landeshauptstadt von Sachsen ist Dresden. Auch Dresden liegt an der Elbe.',
+   'Die Elbe kommt aus dem Riesengebirge in Tschechien. Sie fließt durch Deutschland nach Norden und mündet bei Cuxhaven in die Nordsee.',
+   'Hier stehen hohe Felsen aus Sandstein. Über sie führt die Basteibrücke. Auf der Elbe fahren alte Dampfer mit Schaufelrädern.'],
+  q:[{q:'Woraus sind die hohen Felsen hier?',a:'Aus Sandstein',w:['Aus Eis','Aus Glas']},
+   {q:'Wie heißt die Landeshauptstadt von Sachsen?',a:'Dresden',w:['Leipzig','Chemnitz']}]},
+ {id:'mv-elbe',bl:'mv',river:'Elbe',name:'Elbe bei Dömitz',at:[11.25,53.14],hw:15,hills:0,bend:5,k:0.015,look:'storch',ship:'fracht',
+  fish:['zander','aland','brachse','aal','hecht','barsch','rapfen','quappe'],
+  p:['Mecklenburg-Vorpommern liegt an der Ostsee. Die Landeshauptstadt ist Schwerin. Hier liegt die Müritz, der größte See, der ganz in Deutschland liegt.',
+   'An der Elbe gibt es große Wiesen, die Elbauen. Dort brüten viele Weißstörche.',
+   'Die Havel beginnt in Mecklenburg-Vorpommern. Sie fließt durch Berlin und mündet in die Elbe.'],
+  q:[{q:'Welcher große See liegt in Mecklenburg-Vorpommern?',a:'Die Müritz',w:['Der Bodensee','Der Chiemsee']},
+   {q:'Welcher Vogel brütet gern in den Elbauen?',a:'Der Weißstorch',w:['Der Pinguin','Der Ara']}]},
+ {id:'hh-elbe',bl:'hh',river:'Elbe',name:'Elbe in Hamburg',at:[9.97,53.54],hw:20,hills:0,bend:3,k:0.012,look:'hafen',ship:'gross',
+  fish:['zander','aal','brachse','aland','barsch','stoer','rotauge'],
+  p:['Hamburg ist ein Stadtstaat: eine Stadt und ein Bundesland zugleich. Es ist die zweitgrößte Stadt in Deutschland.',
+   'Der Hamburger Hafen an der Elbe ist einer der größten Häfen in Europa. Riesige Kräne laden Container auf die Schiffe.',
+   'Ebbe und Flut spürt man sogar hier, obwohl die Nordsee über 100 Kilometer weit weg ist.'],
+  q:[{q:'Was gibt es in Hamburg an der Elbe?',a:'Einen riesigen Hafen',w:['Einen Vulkan','Eine Wüste']},
+   {q:'Was ist ein Stadtstaat?',a:'Eine Stadt, die zugleich ein Bundesland ist',w:['Eine Stadt ohne Häuser','Ein Land ohne Städte']}]},
+ {id:'sh-elbe',bl:'sh',river:'Elbe',name:'Elbmündung bei Brunsbüttel',at:[9.14,53.90],hw:22,hills:0,bend:2,k:0.01,look:'leuchtturm',ship:'gross',
+  fish:['aal','stoer','zander','aland','brachse','barsch'],
+  p:['Schleswig-Holstein liegt zwischen zwei Meeren: Nordsee und Ostsee. Kein anderes Bundesland hat das. Die Landeshauptstadt ist Kiel.',
+   'Hier ist die Elbe schon sehr breit. Bald fließt sie in die Nordsee. Das Wasser schmeckt hier schon ein bisschen salzig.',
+   'Auf dem Deich grasen Schafe. Der Deich schützt das Land vor Sturmfluten.'],
+  q:[{q:'An welchen zwei Meeren liegt Schleswig-Holstein?',a:'Nordsee und Ostsee',w:['Mittelmeer und Nordsee','Schwarzes Meer und Ostsee']},
+   {q:'Wozu ist der Deich da?',a:'Er schützt das Land vor Sturmfluten',w:['Damit die Schafe Wasser trinken','Er ist ein Parkplatz für Schiffe']}]},
+ {id:'bb-spree',bl:'bb',river:'Spree',name:'Spree im Spreewald',at:[13.96,51.87],hw:6,hills:0,bend:6,k:0.03,look:'spreewald',
+  fish:['hecht','zander','barsch','schleie','aal','wels','brachse','rotauge','karausche'],
+  p:['Brandenburg liegt rund um Berlin. Die Landeshauptstadt ist Potsdam.',
+   'Im Spreewald teilt sich die Spree in viele kleine Wasserwege. Sie heißen Fließe. In manchen Dörfern bringt der Briefträger die Post mit dem Kahn, einem flachen Boot.',
+   'Berühmt sind die Spreewaldgurken. Die Spree entspringt in Sachsen.'],
+  q:[{q:'Wie heißen die kleinen Wasserwege im Spreewald?',a:'Fließe',w:['Gletscher','Dünen']},
+   {q:'Womit kommt im Spreewald manchmal die Post?',a:'Mit dem Kahn',w:['Mit dem Hubschrauber','Mit dem Schlitten']}]},
+ {id:'be-spree',bl:'be',river:'Spree',name:'Spree in Berlin',at:[13.40,52.52],hw:9,hills:0,bend:3,k:0.02,look:'berlin',ship:'fracht',
+  fish:['hecht','zander','barsch','brachse','aal','wels','rotauge','schleie'],
+  p:['Berlin ist die Hauptstadt von Deutschland. Berlin ist auch ein Stadtstaat und die größte Stadt Deutschlands.',
+   'Der Fernsehturm ist 368 Meter hoch. Er ist das höchste Bauwerk in Deutschland.',
+   'Die Spree fließt mitten durch die Stadt und mündet in Berlin-Spandau in die Havel.'],
+  q:[{q:'Was ist die Hauptstadt von Deutschland?',a:'Berlin',w:['Bonn','Hamburg']},
+   {q:'Wie hoch ist der Berliner Fernsehturm?',a:'368 Meter',w:['36 Meter','3.680 Meter']}]}];
+const SPOTS_BY={};SPOTS.forEach(s=>SPOTS_BY[s.id]=s);
+// Wege zwischen den Plätzen: [Platz, Platz, Fluss, warum]. Hat man an einem Ende den Stempel, öffnet sich das andere.
+const LINKS=[
+ ['bw-neckar','bw-rhein','Neckar','Der Neckar fließt bei Mannheim in den Rhein.'],
+ ['bw-rhein','rp-rhein','Rhein','Der Rhein fließt nach Norden nach Rheinland-Pfalz.'],
+ ['rp-rhein','nw-rhein','Rhein','Der Rhein fließt weiter nach Nordrhein-Westfalen.'],
+ ['rp-rhein','he-main','Main','Der Main fließt bei Mainz in den Rhein.'],
+ ['rp-rhein','sl-saar','Mosel','Die Saar fließt in die Mosel, die Mosel in den Rhein.'],
+ ['bw-donau','by-donau','Donau','Die Donau fließt nach Osten nach Bayern.'],
+ ['by-donau','he-main','Main-Donau-Kanal','Der Main-Donau-Kanal verbindet die Donau mit dem Main.'],
+ ['by-donau','th-saale','Saale','Die Saale entspringt in Bayern und fließt nach Thüringen.'],
+ ['he-main','ni-weser','Fulda','Die Fulda fließt von Hessen nach Hann. Münden.'],
+ ['nw-rhein','ni-weser','Weser','Die Weser fließt auch durch Nordrhein-Westfalen.'],
+ ['th-saale','ni-weser','Werra','Die Werra fließt von Thüringen nach Hann. Münden.'],
+ ['ni-weser','hb-weser','Weser','Die Weser fließt nach Norden nach Bremen.'],
+ ['th-saale','st-elbe','Saale','Die Saale fließt in Sachsen-Anhalt in die Elbe.'],
+ ['st-elbe','sn-elbe','Elbe','Die Elbe kommt aus Sachsen.'],
+ ['st-elbe','mv-elbe','Elbe','Die Elbe fließt weiter nach Norden.'],
+ ['mv-elbe','hh-elbe','Elbe','Die Elbe fließt nach Hamburg.'],
+ ['hh-elbe','sh-elbe','Elbe','Hinter Hamburg fließt die Elbe zur Nordsee.'],
+ ['sn-elbe','bb-spree','Spree','Die Spree entspringt in Sachsen.'],
+ ['bb-spree','be-spree','Spree','Die Spree fließt vom Spreewald nach Berlin.'],
+ ['be-spree','st-elbe','Havel','Die Havel fließt von Berlin zur Elbe.'],
+ ['be-spree','mv-elbe','Havel','Die Havel kommt aus Mecklenburg-Vorpommern.']];
+const START_SPOTS=['bw-neckar','bw-rhein','bw-donau']; // Baden-Württemberg: hier geht es los
+const STAMP_FISH=3,STAMP_LUDINS=25;
+
+/* ---- Der Flussplatz in 3D: Tal, Bäume, Steg, Flugzeug, Infotafel, Wahrzeichen, Schiffe ---- */
+let deGroup=null,curSpot=null,deShip=null;
+const deBoard={id:'de',x:0,z:0,ico:'🌊',title:''};
+const PAPPEL=merge([part(new THREE.CylinderGeometry(0.2,0.3,3,6),'#6b5a44',M(0,1.5,0)),part(new THREE.IcosahedronGeometry(1.3,0),'#4f7f2f',M(0,6,0,0,0,0,1,3,1))]);
+const WEIDE=merge([part(new THREE.CylinderGeometry(0.35,0.45,2.2,6),'#6b5a44',M(0,1.1,0)),part(new THREE.IcosahedronGeometry(2.2,0),'#8aab5a',M(0,3.4,0,0,0,0,1.2,0.8,1.2))]);
+const VINE=merge([part(new THREE.BoxGeometry(0.45,0.9,1.3),'#5f8f2f'),part(new THREE.BoxGeometry(0.08,1.2,0.08),'#6b5a44',M(0,0,0.6))]);
+const containerMat=new THREE.MeshLambertMaterial();
+const nbz=(x,o)=>riverZ(x)+deP.hw+o,sbz=(x,o)=>riverZ(x)-deP.hw-o; // Punkt am Nordufer / Südufer
+// Bauklötze für die Wahrzeichen (y = Unterkante)
+function bx(g,w,h,d,c,x,y,z,ry){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(c));m.position.set(x,y+h/2,z);if(ry)m.rotation.y=ry;g.add(m);return m;}
+function cy(g,rt,rb,h,c,x,y,z,seg){const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||10),mat(c));m.position.set(x,y+h/2,z);g.add(m);return m;}
+function cn(g,r,h,c,x,y,z,seg,ry){const m=new THREE.Mesh(new THREE.ConeGeometry(r,h,seg||8),mat(c));m.position.set(x,y+h/2,z);if(ry)m.rotation.y=ry;g.add(m);return m;}
+function ball(g,r,c,x,y,z,sx,sy,sz){const m=new THREE.Mesh(new THREE.SphereGeometry(r,10,8),mat(c));m.position.set(x,y,z);m.scale.set(sx||1,sy||1,sz||1);g.add(m);return m;}
+// Satteldach: unten w breit, h hoch, len lang (First entlang x)
+function gable(g,w,h,len,c,x,y,z){const geo=new THREE.CylinderGeometry(1,1,len,3);geo.rotateX(-Math.PI/2);geo.rotateY(Math.PI/2);
+  const m=new THREE.Mesh(geo,mat(c));m.scale.set(1,h/1.5,w/1.732);m.position.set(x,y+h/3,z);g.add(m);return m;}
+function grp(g,x,z,dy){const c=new THREE.Group();c.position.set(x,heightAt(x,z)+(dy||0),z);g.add(c);return c;}
+function house(g,x,z,wall,roof,w,d,h){const c=grp(g,x,z,-0.4);bx(c,w,h,d,wall,0,0,0);gable(c,d+0.5,d*0.6,w+0.5,roof,0,h,0);
+  bx(c,0.9,1.6,0.1,'#5e4128',0,0,-d/2-0.02);return c;}
+const WALLS=['#f2e3c6','#e9c9a0','#f4d6d0','#d9e4c8','#f0efe6','#cfe0ea'],ROOFS=['#a24a32','#8a3b2a','#5d6b72','#b5553a'];
+function town(g,R,x0,x1,side,off,noTree){for(let x=x0;x<x1;x+=7+R()*3){const z=side>0?nbz(x,off+R()*8):sbz(x,off+R()*8);
+  house(g,x,z,WALLS[Math.floor(R()*6)],ROOFS[Math.floor(R()*4)],5+R()*2,5,4+R()*3);noTree.push({x,z,r:5});if(side<0)deCols.push({x,z,r:3.6});}}
+function castle(g,x,z,col,roof){const c=grp(g,x,z,-0.6);
+  bx(c,10,9,7,col,0,0,0);gable(c,7.6,3.5,10.4,roof,0,9,0);bx(c,13,6,6,col,10,0,2);
+  for(let i=0;i<6;i++)bx(c,0.9,0.9,0.9,col,4.5+i*2.2,6,4.6);
+  cy(c,2.3,2.5,14,col,-6.5,0,-3.5);cn(c,3,4.5,roof,-6.5,14,-3.5);cy(c,2,2.2,11,col,16,0,-1.5);cn(c,2.6,3.8,roof,16,11,-1.5);
+  for(const [wx,wz] of[[-2.5,3.55],[0,3.55],[2.5,3.55]])bx(c,1,1.6,0.1,'#3a3a3a',wx,5,wz);return c;}
+function church(g,x,z,o){const c=grp(g,x,z,-0.6),L=o.len,W=o.w,H=o.nh,ts=W*0.45;
+  bx(c,L,H,W,o.col,0,0,0);gable(c,W+0.6,W*0.6,L+0.4,o.roof,0,H,0);
+  const tws=o.n===2?[[-L/2-ts/2+0.3,-(W/2-ts/2)],[-L/2-ts/2+0.3,W/2-ts/2]]:[[-L/2-ts/2+0.3,0]];
+  tws.forEach(([tx,tz])=>{bx(c,ts,o.th,ts,o.col,tx,0,tz);
+    if(o.top==='onion'){ball(c,ts*0.55,o.dome,tx,o.th+ts*0.35,tz,1,1.15,1);cn(c,0.25,ts*0.9,o.dome,tx,o.th+ts*0.8,tz);}
+    else cn(c,ts*0.72,o.top==='gothic'?o.th*0.6:ts*1.6,o.top==='gothic'?o.col:o.roof,tx,o.th,tz,4,Math.PI/4);});
+  if(o.dome)ball(c,W*0.32,o.dome,L*0.2,H+W*0.45,0,1,1.1,1);
+  return c;}
+function rock(g,x,z,r,h,col){const m=cy(g,r*0.75,r,h,col,x,heightAt(x,z)-1.5,z,7);m.rotation.y=x*0.7;return heightAt(x,z)-1.5+h;}
+function vineyard(g,x0,x1,d0,d1,side){const ms=[];
+  for(let x=x0;x<x1;x+=2.2)for(let d=d0;d<d1;d+=1.5){const z=side>0?nbz(x,d):sbz(x,d),h=heightAt(x,z);if(h<1.4)continue;ms.push(M(x,h+0.3,z,0,0,0,1,1,1));}
+  const im=new THREE.InstancedMesh(VINE,vcMat,ms.length);im.userData.shared=true;ms.forEach((m,i)=>im.setMatrixAt(i,m));g.add(im);}
+// Brücke quer über den Fluss bei x. Pfeiler nicht dort, wo die Schiffe fahren.
+function bridge(g,x,y,col,o){o=o||{};const z0=riverZ(x)-deP.hw-7,z1=riverZ(x)+deP.hw+7,L=z1-z0,lane=riverZ(x)+deP.hw*0.35,c=new THREE.Group();g.add(c);
+  bx(c,o.w||6,1,L,col,x,y,(z0+z1)/2);
+  for(const s of[-1,1])bx(c,0.3,1,L,o.rail||col,x+s*((o.w||6)/2-0.15),y+1,(z0+z1)/2);
+  const n=o.piers||4;for(let i=1;i<n;i++){const pz=z0+L*i/n;if(Math.abs(pz-lane)<4)continue;bx(c,(o.w||6)*0.8,y+3,2,col,x,-3,pz);}
+  deCols.push({x,z:z0+1.5,r:2.2});return {c,z0,z1};}
+function stork(g,x,y,z,ry){const s=new THREE.Group();s.position.set(x,y,z);s.rotation.y=ry||0;g.add(s);
+  ball(s,0.35,'#f4f4f0',0,1.15,0,1.5,0.9,0.9);bx(s,0.9,0.12,0.75,'#1e1e1e',-0.15,1.05,0);
+  cy(s,0.07,0.09,0.55,'#f4f4f0',0.45,1.2,0);ball(s,0.13,'#f4f4f0',0.5,1.8,0);cn(s,0.05,0.4,'#e2412b',0.75,1.73,0).rotation.z=-Math.PI/2;
+  for(const k of[-0.1,0.1])cy(s,0.025,0.025,0.85,'#e2412b',0,0.25,k);return s;}
+function sheep(g,x,z,ry){const s=grp(g,x,z,0);s.rotation.y=ry;bx(s,1.1,0.6,0.65,'#f2f0e6',0,0.45,0);bx(s,0.35,0.35,0.32,'#2a2a2a',0.68,0.75,0);
+  for(const [a,b] of[[-0.35,-0.2],[-0.35,0.2],[0.35,-0.2],[0.35,0.2]])bx(s,0.12,0.45,0.12,'#2a2a2a',a,0,b);deCols.push({x,z,r:0.7});}
+// Schiffe: fahren langsam auf dem Fluss hin und her
+function makeShip(style){const s=new THREE.Group();
+  if(style==='gross'){bx(s,46,1.6,8,'#a02a20',0,-1.6,0);bx(s,46,3,8,'#2b2f33',0,0,0);bx(s,6,7,7.6,'#f2f0e6',-18,3,0);bx(s,6.1,0.8,7.7,'#7fc4e8',-18,8,0);
+    const cc=['#2f5fa8','#c2401f','#2f9e5b','#f6a623','#8a8f94'];for(let i=0;i<8;i++)for(let j=0;j<2;j++)bx(s,4.4,2.4,7,cc[(i*3+j)%5],-11+i*4.6,3+j*2.4,0);}
+  else if(style==='dampfer'){bx(s,18,1.8,4,'#f4f6f7',0,-0.8,0);bx(s,10,1.8,3.4,'#f4f6f7',1,1,0);bx(s,10.1,0.5,3.5,'#7fc4e8',1,2,0);
+    cy(s,0.5,0.6,3.2,'#2b2f33',1,2.8,0);cy(s,0.62,0.62,0.4,'#f6c13b',1,5.2,0);
+    for(const k of[-2.3,2.3]){const w=new THREE.Mesh(new THREE.CylinderGeometry(1.6,1.6,0.8,12),mat('#c2401f'));w.rotation.x=Math.PI/2;w.position.set(-1,0.6,k);s.add(w);}}
+  else{bx(s,22,2.2,4.2,'#2b3a4a',0,-1.2,0);bx(s,14,1.2,3.6,'#c9a24a',2,1,0);bx(s,3,2.4,3.6,'#f2f0e6',-8.5,1,0);bx(s,3.05,0.5,3.65,'#7fc4e8',-8.5,2.6,0);
+    const f=new THREE.Mesh(new THREE.PlaneGeometry(0.9,0.55),new THREE.MeshLambertMaterial({color:'#e2412b',side:THREE.DoubleSide}));f.position.set(-10.6,3.4,0);f.userData.tex=true;s.add(f);}
+  return s;}
+// Die Wahrzeichen. Jedes baut in die Gruppe g, R = Zufall, noTree = Stellen ohne Bäume
+const LOOKS={
+ heidelberg(g,R,noTree){castle(g,-8,nbz(-8,26),'#a65a4c','#5d6b72');noTree.push({x:0,z:nbz(0,28),r:22});
+  const b=bridge(g,-48,4,'#b06a55',{piers:5});for(const s of[-1,1]){cy(b.c,1.5,1.5,8,'#f2efe6',-48+s*2.6,1,b.z0+1);cn(b.c,1.7,3.2,'#4a5560',-48+s*2.6,9,b.z0+1);}
+  town(g,R,20,90,1,8,noTree);},
+ breisach(g,R,noTree){const x=-42,z=sbz(-42,22);const base=grp(g,x,z,-1);bx(base,22,4,16,'#a89a7a',0,0,0);
+  church(base,0,0,{col:'#c9a27a',roof:'#7a3b2e',len:16,w:8,nh:8,n:2,th:13,top:'pyr'}).position.y=4;deCols.push({x,z,r:11});noTree.push({x,z,r:15});
+  vineyard(g,-100,-62,26,70,-1);vineyard(g,30,100,26,70,-1);
+  makeSign('Frankreich','auf der anderen Seite',10,nbz(10,4),'#2f7fd8',g,deCols,Math.PI);},
+ sigmaringen(g,R,noTree){for(let i=0;i<9;i++){const x=-95+i*22+R()*8;if(Math.abs(x-12)<14)continue;rock(g,x,nbz(x,3+R()*8),5+R()*4,8+R()*8,i%2?'#d8d2c0':'#cbc4b0');}
+  const x=12,z=nbz(12,30),top=rock(g,x,z,9,8,'#d2ccba');const c=castle(g,x,z,'#ece4d0','#4a4f55');c.position.y=top;c.scale.setScalar(0.7);noTree.push({x,z,r:16});},
+ passau(g,R,noTree){church(g,6,nbz(6,16),{col:'#ece8dc',roof:'#5d6b72',len:22,w:11,nh:11,n:2,th:16,top:'onion',dome:'#5f9e7f'});noTree.push({x:6,z:nbz(6,16),r:16});
+  town(g,R,-90,-14,1,6,noTree);town(g,R,24,95,1,6,noTree);},
+ loreley(g,R,noTree){for(let i=0;i<7;i++){const x=22+i*4.5+R()*2;rock(g,x,nbz(x,1+R()*4),6+R()*3,12+i%3*4+R()*4,i%2?'#6f6458':'#7d7062');}
+  noTree.push({x:36,z:nbz(36,6),r:20});castle(g,-36,nbz(-36,30),'#d9cdb4','#5d6b72');noTree.push({x:-30,z:nbz(-30,30),r:14});
+  vineyard(g,-100,-50,20,60,1);vineyard(g,-20,15,15,55,1);vineyard(g,70,104,20,60,1);},
+ saarschleife(g,R,noTree){const x=-6,z=nbz(-6,26),t=grp(g,x,z,-0.5);
+  for(let i=0;i<10;i++){const a=i/10*Math.PI*2;cy(t,0.25,0.25,22,'#8a6340',Math.cos(a)*5,0,Math.sin(a)*5,6);}
+  for(let h=3;h<=21;h+=3){const r=new THREE.Mesh(new THREE.TorusGeometry(5,0.22,5,24),mat('#a07a50'));r.rotation.x=Math.PI/2;r.position.y=h;t.add(r);}
+  cy(t,5.6,5.6,0.5,'#a07a50',0,22,0,16);noTree.push({x,z,r:9});},
+ frankfurt(g,R,noTree){const GL=['#9fb8c9','#c9d6df','#6d8aa0','#b7c4cc','#8aa1b1'];
+  for(let x=-46;x<60;x+=10+R()*3){const z=nbz(x,20+R()*16),w=7+R()*3,h=14+R()*16,c=grp(g,x,z,-0.5);
+    if(Math.abs(x-30)<5){bx(c,7,26,7,'#b0705a',0,0,0);cn(c,5,4,'#8a5040',0,26,0,4,Math.PI/4);}
+    else{bx(c,w,h,w,GL[Math.floor(R()*5)],0,0,0);bx(c,w+0.2,1,w+0.2,'#4a5560',0,h-1,0);}noTree.push({x,z,r:8});}},
+ koeln(g,R,noTree){church(g,10,nbz(10,40),{col:'#6f6b62',roof:'#4a4a48',len:24,w:11,nh:11,n:2,th:20,top:'gothic'});noTree.push({x:10,z:nbz(10,40),r:22});
+  const b=bridge(g,-52,8,'#6f8a80',{w:9,piers:4});const L=b.z1-b.z0;
+  for(let i=0;i<3;i++){const a=new THREE.Mesh(new THREE.TorusGeometry(L/6,0.45,6,20,Math.PI),mat('#6f8a80'));a.rotation.y=Math.PI/2;a.position.set(-52,9,b.z0+L*(i+0.5)/3);b.c.add(a);}
+  town(g,R,-40,-5,1,6,noTree);town(g,R,32,95,1,6,noTree);},
+ fachwerk(g,R,noTree){if(!fachMat){const cv=document.createElement('canvas');cv.width=cv.height=128;const c=cv.getContext('2d');c.fillStyle='#f4efe2';c.fillRect(0,0,128,128);
+    c.strokeStyle='#4a3020';c.lineWidth=9;c.strokeRect(4,4,120,120);c.beginPath();c.moveTo(64,0);c.lineTo(64,128);c.moveTo(0,64);c.lineTo(128,64);c.moveTo(4,124);c.lineTo(60,68);c.moveTo(124,124);c.lineTo(68,68);c.stroke();
+    fachMat=new THREE.MeshLambertMaterial({map:new THREE.CanvasTexture(cv)});}
+  for(let x=-70;x<75;x+=9.5){if(Math.abs(x)<8)continue;const z=nbz(x,7+R()*4),h=6+R()*2.5,c=grp(g,x,z,-0.4);const m=new THREE.Mesh(new THREE.BoxGeometry(7,h,6),fachMat);m.position.y=h/2;c.add(m);
+    gable(c,6.6,4,7.4,ROOFS[Math.floor(R()*2)],0,h,0);noTree.push({x,z,r:6});}
+  church(g,0,nbz(0,22),{col:'#c9b48e',roof:'#5d6b72',len:16,w:9,nh:10,n:1,th:16,top:'pyr'});noTree.push({x:0,z:nbz(0,22),r:14});},
+ bremen(g,R,noTree){const x=-15,z=sbz(-15,5),s=grp(g,x,z,0),B='#6e5530';bx(s,2.4,1.2,1.4,'#8f8a80',0,0,0); // die Stadtmusikanten
+  bx(s,1.6,0.75,0.6,B,0,2.1,0);for(const [a,b] of[[-0.6,-0.2],[-0.6,0.2],[0.6,-0.2],[0.6,0.2]])bx(s,0.18,0.9,0.18,B,a,1.2,b);
+  bx(s,0.35,0.7,0.35,B,0.9,2.6,0);bx(s,0.75,0.35,0.36,B,1.15,3.2,0);bx(s,0.1,0.4,0.1,B,0.95,3.5,-0.1);bx(s,0.1,0.4,0.1,B,0.95,3.5,0.1);
+  bx(s,0.9,0.45,0.36,B,0,2.85,0);bx(s,0.35,0.35,0.3,B,0.55,3.3,0); // Hund
+  bx(s,0.55,0.35,0.26,B,0,3.3,0);bx(s,0.24,0.24,0.24,B,0.32,3.65,0);bx(s,0.08,0.5,0.08,B,-0.3,3.55,0); // Katze
+  ball(s,0.2,B,0,3.85,0,1.2,1,0.8);ball(s,0.1,B,0.2,4.1,0);cn(s,0.16,0.4,B,-0.2,3.85,0,6).rotation.z=0.8; // Hahn
+  deCols.push({x,z,r:1.6});noTree.push({x,z,r:6});
+  const rh=grp(g,8,nbz(8,12),-0.5);bx(rh,24,10,9,'#9a6b4a',0,0,0);gable(rh,9.6,5,24.4,'#5f8f7f',0,10,0);for(let i=0;i<4;i++)cn(rh,1.6,3.5,'#9a6b4a',-9+i*6,10,-4.6,3);
+  noTree.push({x:8,z:nbz(8,12),r:16});town(g,R,24,95,1,6,noTree);town(g,R,-95,-14,1,6,noTree);},
+ leuchtenburg(g,R,noTree){const x=10,z=nbz(10,32),c=castle(g,x,z,'#efe9da','#7a3b2e');c.scale.setScalar(0.8);cy(c,2.6,2.8,18,'#efe9da',4,0,4);cn(c,3.2,4,'#7a3b2e',4,18,4);noTree.push({x,z,r:16});},
+ magdeburg(g,R,noTree){const b=bridge(g,55,6,'#bdbdb8',{w:9,piers:5,rail:'#9a9a96'});const L=b.z1-b.z0,zm=(b.z0+b.z1)/2;
+  bx(b.c,8,0.3,L,'#5aa0c8',55,6.9,zm);const sh=new THREE.Group();sh.position.set(55,7.2,zm);bx(sh,3,1.2,11,'#2f6b4a',0,0,0);bx(sh,2.6,1.4,2.6,'#f2f0e6',0,1.2,-3.5);b.c.add(sh);
+  church(g,-22,nbz(-22,26),{col:'#9a9282',roof:'#5d6b72',len:22,w:10,nh:11,n:2,th:18,top:'gothic'});noTree.push({x:-22,z:nbz(-22,26),r:18});town(g,R,-90,-40,1,6,noTree);},
+ bastei(g,R,noTree){for(let i=0;i<10;i++){const x=-96+i*20+R()*6;if(Math.abs(x-16)<12)continue;rock(g,x,nbz(x,4+R()*12),3+R()*3,10+R()*12,['#c8b48a','#b8a47a','#d6c49a'][i%3]);}
+  const t1=rock(g,8,nbz(8,6),4,20,'#c8b48a'),t2=rock(g,24,nbz(24,6),4,20,'#b8a47a'),y=Math.min(t1,t2);
+  bx(g,16,1.2,3,'#a89a7a',16,y-1.2,(nbz(8,6)+nbz(24,6))/2);for(let i=0;i<3;i++)bx(g,1.4,4,2.6,'#a89a7a',12+i*4,y-5,(nbz(8,6)+nbz(24,6))/2);noTree.push({x:16,z:nbz(16,6),r:14});},
+ storch(g,R,noTree){const hx=-26,hz=sbz(-26,16),h=house(g,hx,hz,'#f0efe6','#a24a32',8,6,4);cy(h,0.5,0.5,2.4,'#a24a32',2,6,0);cy(h,0.9,1,0.45,'#7a5a3a',2,8.4,0);stork(h,2,8.6,0,0.6);
+  deCols.push({x:hx,z:hz,r:5});noTree.push({x:hx,z:hz,r:8});
+  for(const px of[-46,32]){const pz=sbz(px,9),y=heightAt(px,pz);cy(g,0.15,0.18,6,'#6b5a44',px,y,pz,6);cy(g,1,1.1,0.5,'#7a5a3a',px,y+6,pz);stork(g,px,y+6.3,pz,R()*6);deCols.push({x:px,z:pz,r:0.6});noTree.push({x:px,z:pz,r:5});}
+  for(const px of[-60,48,70]){const pz=sbz(px,1.5);stork(g,px,heightAt(px,pz),pz,R()*6);noTree.push({x:px,z:pz,r:3});}},
+ hafen(g,R,noTree){const CC=['#2f5fa8','#c2401f'];
+  for(let i=0;i<4;i++){const x=-55+i*24,z=nbz(x,4),c=grp(g,x,z,-0.3),col=CC[i%2];
+    for(const [a,b] of[[-4,0],[4,0],[-4,8],[4,8]])bx(c,0.9,15,0.9,col,a,0,b);bx(c,10,1.4,10,col,0,15,4);bx(c,1.4,1.4,30,col,0,15.5,-6);noTree.push({x,z,r:12});}
+  const ms=[],cols=[],CCS=['#2f5fa8','#c2401f','#2f9e5b','#f6a623','#8a8f94','#e8e8e8'];
+  for(let x=-90;x<90;x+=6.6)for(let k=0;k<3;k++)for(let j=0;j<1+Math.floor(R()*3);j++){const z=nbz(x,14+k*3);ms.push(M(x,heightAt(x,z)+1.3+j*2.6,z));cols.push(CCS[Math.floor(R()*6)]);}
+  const im=new THREE.InstancedMesh(new THREE.BoxGeometry(6.1,2.6,2.6),containerMat,ms.length);const cc=new THREE.Color();ms.forEach((m,i)=>{im.setMatrixAt(i,m);im.setColorAt(i,cc.set(cols[i]));});g.add(im);
+  noTree.push({x:0,z:nbz(0,18),r:95});
+  const ship=makeShip('gross');ship.position.set(-8,0,nbz(-8,-7));ship.rotation.y=-Math.atan(deP.bend*deP.k*Math.cos(-8*deP.k));g.add(ship);},
+ leuchtturm(g,R,noTree){const x=-20,z=nbz(-20,8),t=grp(g,x,z,-0.3);
+  for(let i=0;i<8;i++)cy(t,1.8-i*0.07,1.85-i*0.07,2,i%2?'#f4f4f0':'#d23a2a',0,i*2,0,16);
+  cy(t,2.1,2.1,0.3,'#2b2f33',0,16,0,16);cy(t,1.1,1.1,1.8,'#bfe6f2',0,16.3,0,12);cn(t,1.5,1.6,'#d23a2a',0,18.1,0,12);
+  deCols.push({x,z,r:2.3});noTree.push({x,z,r:6});
+  for(let i=0;i<14;i++){const sx=(R()<0.5?-90+R()*45:30+R()*60),sz=sbz(sx,8+R()*30);if(Math.abs(sx-x)<6)continue;sheep(g,sx,sz,R()*6);}},
+ spreewald(g,R,noTree){const h=house(g,14,nbz(14,8),'#7a5236','#b49a5a',8,6,3.5);noTree.push({x:14,z:nbz(14,8),r:8});
+  [[7,'#4a3a2a'],[14,'#4a3a2a'],[21,'#f6c13b']].forEach(([x,col])=>{const b=new THREE.Group();b.position.set(x,0.05,riverZ(x)-deP.hw+1.4);g.add(b);
+    bx(b,6,0.35,1.1,col,0,-0.15,0);const p=cy(b,0.04,0.04,4,'#8a6340',2.2,0,0,5);p.rotation.z=0.3;
+    if(col==='#f6c13b'){const cv=document.createElement('canvas');cv.width=128;cv.height=64;const c=cv.getContext('2d');c.fillStyle='#f6c13b';c.fillRect(0,0,128,64);
+      c.fillStyle='#1b2a20';c.font='800 40px "Trebuchet MS",sans-serif';c.textAlign='center';c.fillText('POST',64,46);
+      const s=new THREE.Mesh(new THREE.PlaneGeometry(1.2,0.6),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));s.userData.tex=true;s.position.set(-1.5,0.9,0);b.add(s);cy(b,0.04,0.04,0.8,'#5e4128',-1.5,0,0,5);}});
+  const bz=riverZ(-30),b=new THREE.Group();g.add(b);bx(b,2.4,0.3,2*deP.hw+6,'#8a6340',-30,1.6,bz);for(const s of[-1,1])bx(b,0.15,0.9,2*deP.hw+6,'#6b4a2e',-30+s*1.1,1.9,bz);deCols.push({x:-30,z:sbz(-30,1),r:1.6});},
+ berlin(g,R,noTree){const x=10,z=nbz(10,55),t=grp(g,x,z,-0.5);cy(t,1,1.7,26,'#d9d9d6',0,0,0,12);ball(t,3.2,'#b9bec4',0,29,0);cy(t,3.3,3.3,0.5,'#8a9096',0,28.7,0,20);
+  cy(t,0.6,0.7,4,'#d9d9d6',0,32,0);for(let i=0;i<5;i++)cy(t,0.2,0.25,1.8,i%2?'#f4f4f0':'#d23a2a',0,36+i*1.8,0,8);noTree.push({x,z,r:10});
+  town(g,R,-95,-6,1,6,noTree);town(g,R,26,95,1,6,noTree);}};
+let fachMat=null;
+function disposeGroup(g){g.traverse(o=>{if(!o.isMesh)return;if(!o.userData.shared&&o.geometry)o.geometry.dispose();
+  if(o.userData.tex){if(o.material.map)o.material.map.dispose();o.material.dispose();}});}
+// Den Flussplatz id bauen (der alte wird weggeräumt)
+function buildSpot(id){const s=SPOTS_BY[id];if(!s)return false;
+  if(deGroup){scene.remove(deGroup);disposeGroup(deGroup);}
+  deCols.length=0;deP={hw:s.hw,hills:s.hills,bend:s.bend,k:s.k};curSpot=s;state.flussAt=id;
+  DDOCK.z0=DE.z-s.hw-6;DDOCK.z1=DE.z-s.hw+Math.min(7,s.hw*0.6);
+  const g=new THREE.Group();deGroup=g;scene.add(g);const R=rng(9000+SPOTS.indexOf(s)*131);
+  // Boden: Wasser, Kies, Wiese, Wald auf den Bergen, Felsen
+  const tg=new THREE.PlaneGeometry(DE.w*2,DE.l*2,140,140);tg.rotateX(-Math.PI/2);tg.translate(0,0,DE.z);
+  const tp=tg.attributes.position;for(let i=0;i<tp.count;i++)tp.setY(i,deHeight(tp.getX(i),tp.getZ(i)));
+  const geo=tg.toNonIndexed();tg.dispose();geo.computeVertexNormals();
+  const P=geo.attributes.position,N=geo.attributes.normal,cols=new Float32Array(P.count*3),c=new THREE.Color(),GR=['#5a8f3a','#649a40','#4f8535','#6fa046'],rocky=['loreley','bastei','sigmaringen'].includes(s.look);
+  for(let i=0;i<P.count;i+=3){const cx=(P.getX(i)+P.getX(i+1)+P.getX(i+2))/3,cyy=(P.getY(i)+P.getY(i+1)+P.getY(i+2))/3,cz=(P.getZ(i)+P.getZ(i+1)+P.getZ(i+2))/3;
+    const n=hash(Math.round(cx*3),Math.round(cz*3)),steep=N.getY(i)<0.75;
+    c.set(cyy<-0.4?'#4f5a3a':cyy<0.4?(n<.5?'#b9a77a':'#a9976c'):rocky&&steep&&cyy>3?(n<.5?'#a8987a':'#988a6e'):cyy>6?(n<.5?'#3f7a34':'#477f37'):GR[Math.floor(n*4)]);
+    for(let q=0;q<3;q++){cols[(i+q)*3]=c.r;cols[(i+q)*3+1]=c.g;cols[(i+q)*3+2]=c.b;}}
+  geo.setAttribute('color',new THREE.BufferAttribute(cols,3));g.add(new THREE.Mesh(geo,vcMat));
+  // Steg
+  const len=DDOCK.z1-DDOCK.z0;
+  for(let i=0;i<Math.floor(len/0.55);i++)bx(g,2.7,0.12,0.5,i%3?'#9a7148':'#8a6340',0,DDOCK.y-0.12,DDOCK.z0+0.3+i*0.55);
+  for(let i=0;i<=4;i++)for(const sd of[-1,1])cy(g,0.13,0.13,3.2,'#5e4128',sd*1.3,-2.6,DDOCK.z0+0.2+i*len/4.2,6);
+  // Flugzeug, Schild, Infotafel
+  const pz=DE.z-s.hw-16;Object.assign(PLANES[2],{x:12,z:pz,land:{x:3,z:DE.z-s.hw-13,f:0}});PLANES[2].mesh=makePlane(12,pz,-Math.PI/2,g,deCols);
+  makeSign(s.river,BL[s.bl].name,6.5,DE.z-s.hw-9,'#2f7fd8',g,deCols,Math.PI);
+  Object.assign(deBoard,{x:-2.8,z:DE.z-s.hw-6.5,title:s.name});makeBoard(deBoard,-2.8,DE.z,g,deCols);
+  const noTree=[{x:2,z:DE.z-s.hw-12,r:20}];
+  LOOKS[s.look](g,R,noTree);
+  // Bäume: Laubbäume, Pappeln und Weiden am Wasser, Fichten oben auf den Bergen
+  const sets=[[],[],[],[],[]],geos=[treeC,PAPPEL,WEIDE,FICHTE,BIRKE];
+  for(let i=0;i<6000&&sets.reduce((a,b)=>a+b.length,0)<(s.look==='spreewald'?380:260);i++){
+    const x=(R()*2-1)*(DE.w-4),z=DE.z+(R()*2-1)*(DE.l-4),h=heightAt(x,z);if(h<0.9)continue;
+    if(noTree.some(o=>(o.x-x)**2+(o.z-z)**2<o.r*o.r)||hitsList(deCols,x,z,1.5))continue;
+    const d=Math.abs(z-riverZ(x))-s.hw,t=h>6?(R()<0.7?3:0):d<10?(R()<0.5?1:2):(R()<0.75?0:4),sc=0.8+R()*0.5;
+    sets[t].push(M(x,h-0.2,z,0,R()*6.28,0,sc,sc*(0.9+R()*0.3),sc));if(z<riverZ(x))deCols.push({x,z,r:0.55*sc});}
+  geos.forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,vcMat,sets[i].length);im.userData.shared=true;sets[i].forEach((m,q)=>im.setMatrixAt(q,m));g.add(im);});
+  const bushes=[],fm=new THREE.InstancedMesh(flowerGeo,flowerMat,220),fc=new THREE.Color();let nf=0;
+  for(let i=0;i<4000&&(bushes.length<140||nf<220);i++){const x=(R()*2-1)*(DE.w-4),z=DE.z+(R()*2-1)*(DE.l-4),h=heightAt(x,z);
+    if(h<0.5||noTree.some(o=>(o.x-x)**2+(o.z-z)**2<o.r*o.r*0.5)||hitsList(deCols,x,z,1))continue;
+    if(R()<0.4&&bushes.length<140){const sc=0.5+R()*0.8;bushes.push(M(x,h,z,0,R()*6,0,sc,sc*0.7,sc));}else if(nf<220){fm.setMatrixAt(nf,M(x,h+0.25,z));fm.setColorAt(nf,fc.set(FLOWER_COLS[Math.floor(R()*5)]));nf++;}}
+  fm.count=nf;fm.userData.shared=true;g.add(fm);
+  const bm=new THREE.InstancedMesh(bushGeo,vcMat,bushes.length);bm.userData.shared=true;bushes.forEach((m,q)=>bm.setMatrixAt(q,m));g.add(bm);
+  // Schilf am Ufer
+  const reeds=[];for(let i=0;i<2000&&reeds.length<260;i++){const x=(R()*2-1)*(DE.w-4),side=R()<0.5?-1:1,z=riverZ(x)+side*(s.hw-0.8+R()*1.6);
+    if(Math.abs(x)<4&&side<0)continue;reeds.push(M(x,heightAt(x,z)-0.2,z,(R()-0.5)*0.2,R()*6,(R()-0.5)*0.2,1,0.8+R()*0.6,1));}
+  const rm=new THREE.InstancedMesh(REED,vcMat,reeds.length);rm.userData.shared=true;reeds.forEach((m,q)=>rm.setMatrixAt(q,m));g.add(rm);
+  // Schiff
+  deShip=null;if(s.ship){const sh=makeShip(s.ship);g.add(sh);deShip={g:sh,x:-DE.w*0.4,sp:s.ship==='gross'?1.6:2.2,lane:s.ship==='gross'?0.2:0.35};}
+  return true;}
+function updateDeShip(dt){if(!deShip)return;deShip.g.visible=atDE();if(!deShip.g.visible)return;
+  deShip.x+=deShip.sp*dt;if(deShip.x>DE.w+12)deShip.x=-DE.w-12;const x=deShip.x;
+  deShip.g.position.set(x,0.05,riverZ(x)+deP.hw*deShip.lane);deShip.g.rotation.y=-Math.atan(deP.bend*deP.k*Math.cos(x*deP.k));}
+
+/* ---- Fortschritt: Stempel und freigespielte Plätze ---- */
+const prog=id=>state.fluss[id]||(state.fluss[id]={f:[],q:false,s:false,r:false});
+const stamped=id=>!!(state.fluss[id]&&state.fluss[id].s);
+const spotOpen=id=>START_SPOTS.includes(id)||LINKS.some(l=>(l[0]===id&&stamped(l[1]))||(l[1]===id&&stamped(l[0])));
+const blOpen=b=>SPOTS.some(s=>s.bl===b&&spotOpen(s.id));
+const linksOf=id=>LINKS.filter(l=>l[0]===id||l[1]===id).map(l=>({to:l[0]===id?l[1]:l[0],river:l[2],why:l[3]}));
+let pendingStamp=null;
+// Stempel geben, wenn alles geschafft ist. Gibt zurück, welche Plätze und Bundesländer dadurch neu offen sind.
+function tryStamp(id){const p=prog(id);if(p.s||p.f.length<STAMP_FISH||!p.q)return null;
+  const before=SPOTS.filter(x=>spotOpen(x.id)).map(x=>x.id),blBefore=Object.keys(BL).filter(blOpen);
+  p.s=true;state.ludins+=STAMP_LUDINS;save();refreshHud(true);
+  return {spots:SPOTS.filter(x=>spotOpen(x.id)&&!before.includes(x.id)),bls:Object.keys(BL).filter(b=>blOpen(b)&&!blBefore.includes(b))};}
+function showStamp(s,res){
+  openModal();card.className='card catch';card.innerHTML='';sfxCatch();
+  card.appendChild(el('div','stampbig','🏅'));
+  card.appendChild(el('h2',null,'Fluss-Stempel!'));
+  card.appendChild(el('p',null,'Du hast den Stempel für <b>'+esc(s.name)+'</b>. <b>+'+STAMP_LUDINS+' Ludins</b>'));
+  if(res.bls.length)card.appendChild(el('p','qe','🎉 Neues Bundesland: <b>'+res.bls.map(b=>esc(BL[b].name)).join(', ')+'</b>!'));
+  if(res.spots.length){card.appendChild(el('p',null,'Jetzt kannst du dem Fluss folgen. Mit dem Flugzeug ✈️ kommst du hin:'));const l=el('div','list');
+    res.spots.forEach(x=>{const lk=linksOf(s.id).find(k=>k.to===x.id);l.appendChild(el('div','item shopitem','<div class="shopicon">🌊</div><div class="t"><b>'+esc(x.name)+'</b><span>'+esc(BL[x.bl].name)+(lk?' · '+esc(lk.why):'')+'</span></div><span></span>'));});
+    card.appendChild(l);}
+  else card.appendChild(el('p',null,'Die Nachbar-Plätze sind schon offen. Flieg weiter und sammle mehr Stempel!'));
+  const bt=el('div','btns');const mp=el('button','b','🗺️ Deutschland-Karte');mp.onclick=()=>showGermany('view');
+  const ok=el('button','b go','Weiter angeln');ok.onclick=closeModal;bt.append(mp,ok);card.appendChild(bt);}
+function afterCatch(){if(!pendingStamp)return;const x=pendingStamp;pendingStamp=null;setTimeout(()=>showStamp(x.s,x.res),250);}
+/* ---- Die Infotafel am Flussplatz ---- */
+function showSpotInfo(s){const p=prog(s.id),b=BL[s.bl];
+  openModal();card.className='card info';card.innerHTML='';
+  card.appendChild(el('div','infohead','ℹ️ Infotafel'));
+  card.appendChild(el('h2',null,'🌊 '+esc(s.name)));
+  card.appendChild(el('p',null,'📍 Bundesland: <b>'+esc(b.name)+'</b> · Landeshauptstadt: <b>'+esc(b.hs)+'</b>'));
+  s.p.forEach(x=>card.appendChild(el('p',null,esc(x))));
+  card.appendChild(el('h3','bookhead','Diese Fische leben hier'));
+  const g=el('div','catches');s.fish.forEach(id=>{const f=FISH_BY[id];if(!f)return;const d=el('div');d.appendChild(fishImg(f,'cimg'));
+    d.appendChild(el('b',null,esc(f.name)+(p.f.includes(id)?' ✔':'')));g.appendChild(d);});card.appendChild(g);
+  if(p.s)card.appendChild(el('div','rule','<b>🏅 Du hast den Fluss-Stempel!</b><p>Von hier geht es weiter: '+linksOf(s.id).map(k=>esc(SPOTS_BY[k.to].name)+' ('+esc(k.river)+')').join(', ')+'</p>'));
+  else card.appendChild(el('div','rule','<b>🏅 So bekommst du den Fluss-Stempel</b><p>🐟 Fang hier '+STAMP_FISH+' verschiedene Fischarten: <b>'+Math.min(p.f.length,STAMP_FISH)+' von '+STAMP_FISH+'</b><br>🧩 Löse das Fluss-Rätsel: <b>'+(p.q?'geschafft ✔':'noch nicht')+'</b></p><small>Mit dem Stempel darfst du dem Fluss ins nächste Bundesland folgen.</small>'));
+  if(!p.r){p.r=true;state.ludins+=INFO_LUDINS;save();refreshHud(true);card.appendChild(el('p','qe','📚 Neues Wissen! +'+INFO_LUDINS+' Ludins.'));}
+  const bt=el('div','btns');
+  if(!p.q){const rz=el('button','b go','🧩 Fluss-Rätsel');rz.id='btnRiddle';rz.onclick=()=>showRiddle(s);bt.appendChild(rz);}
+  const mp=el('button','b alt','🗺️ Karte');mp.onclick=()=>showGermany('view');const c=el('button','b','Fertig');c.onclick=closeModal;bt.append(mp,c);card.appendChild(bt);}
+function showRiddle(s,r){r=r||{i:0,right:0};const p=prog(s.id);
+  openModal();card.className='card quiz info';card.innerHTML='';
+  card.appendChild(el('div','infohead','🧩 Fluss-Rätsel'));
+  if(r.i>=s.q.length){
+    if(r.right===s.q.length){p.q=true;save();tone(880,0.15,'triangle',0.15);
+      const res=tryStamp(s.id);if(res){showStamp(s,res);return;}
+      card.appendChild(el('h2',null,'Rätsel gelöst! 🎉'));
+      const miss=STAMP_FISH-p.f.length;card.appendChild(el('p',null,miss>0?'Für den Stempel fehl'+(miss===1?'t':'en')+' dir noch <b>'+miss+(miss===1?' Fischart':' Fischarten')+'</b> von hier. Ab ans Wasser!':'Super gemacht!'));
+      const bt=el('div','btns');const ok=el('button','b go','Weiter angeln');ok.onclick=closeModal;bt.appendChild(ok);card.appendChild(bt);}
+    else{card.appendChild(el('h2',null,'Fast geschafft!'));
+      card.appendChild(el('p',null,'Du hattest '+r.right+' von '+s.q.length+' richtig. Lies die Infotafel noch einmal genau, dann klappt es bestimmt!'));
+      const bt=el('div','btns');const tf=el('button','b alt','📋 Zur Infotafel');tf.onclick=()=>showSpotInfo(s);const ag=el('button','b go','Nochmal');ag.onclick=()=>showRiddle(s);bt.append(tf,ag);card.appendChild(bt);}
+    return;}
+  const q=s.q[r.i];
+  card.appendChild(el('p',null,'Frage '+(r.i+1)+' von '+s.q.length+' · '+esc(s.name)));
+  card.appendChild(el('p','qq',esc(q.q)));
+  const box=el('div','btns col');
+  [q.a].concat(q.w).map(t=>[Math.random(),t]).sort((x,y)=>x[0]-y[0]).forEach(([,t])=>{const b=el('button','b alt qa',esc(t));b.onclick=()=>{
+    if(box.dataset.done)return;box.dataset.done='1';const right=t===q.a;
+    [...box.children].forEach(x=>{if(x.textContent===q.a)x.classList.add('right');});if(!right)b.classList.add('wrong');
+    if(right){r.right++;tone(880,0.15,'triangle',0.15);}else tone(220,0.2,'sine',0.1);
+    card.appendChild(el('p','qe',right?'✅ Richtig!':'Nicht ganz. Richtig ist: '+esc(q.a)));
+    const nx=el('button','b go','Weiter');nx.onclick=()=>{r.i++;showRiddle(s,r);};const bt=el('div','btns');bt.appendChild(nx);card.appendChild(bt);};box.appendChild(b);});
+  card.appendChild(box);}
+/* ---- Die Deutschland-Karte (Grenzen, Flüsse, Seen: Natural Earth, gemeinfrei). Norden ist oben, wie in der Schule. ---- */
+const DEC=Math.cos(51.2*Math.PI/180),geo=(lon,lat)=>[(lon-5.3)*DEC*100,(55.3-lat)*100];
+const BL_COL={ni:0,sn:0,be:0,rp:0,sh:1,hb:1,nw:1,th:1,bb:1,bw:1,hh:2,mv:2,he:2,st:2,sl:2,by:3},BL_PAL=['#f3d36b','#a8d878','#f4b1a4','#c7b6ee'];
+const NB_LAB=[['Dänemark',9.6,55.12],['Polen',15.05,52.2],['Tschechien',13.7,49.95],['Österreich',13.3,47.55],['Schweiz',8.3,47.2],['Frankreich',6.35,48.55],['Lux.',6.12,49.7],['Belgien',5.75,50.45],['Niederlande',5.95,52.35]];
+const RIV_LAB=[['Rhein',7.9,49.3],['Donau',10.9,48.55],['Elbe',12.4,52.05],['Main',9.5,49.95],['Weser',9.25,52.12],['Oder',15.0,52.85],['Neckar',9.5,49.0],['Mosel',6.75,50.1],['Spree',14.5,51.55],['Saale',11.45,51.28],['Havel',12.3,52.72]];
+function inPoly(f,x,y){let c=false;for(let i=0,j=f.length-2;i<f.length;j=i,i+=2){const xi=f[i],yi=f[i+1],xj=f[j],yj=f[j+1];if((yi>y)!==(yj>y)&&x<(xj-xi)*(y-yi)/(yj-yi)+xi)c=!c;}return c;}
+function drawGermany(cv,W){const D=DEMAP,k=W/D.w,H=Math.round(D.h*k),c=hiDPI(cv,W,H),fs=Math.max(9,Math.round(W/52));
+  const path=f=>{c.beginPath();for(let i=0;i<f.length;i+=2){const x=f[i]*k,y=f[i+1]*k;if(i)c.lineTo(x,y);else c.moveTo(x,y);}};
+  const P=(lon,lat)=>{const g=geo(lon,lat);return [g[0]*k,g[1]*k];};
+  const txt=(t,x,y,size,col,style)=>{c.font=(style||'800')+' '+size+'px system-ui,sans-serif';c.textAlign='center';c.textBaseline='middle';
+    t.split('\n').forEach((l,i,a)=>{const yy=y+(i-(a.length-1)/2)*size*1.05;c.lineWidth=3;c.strokeStyle='rgba(255,255,255,.75)';c.strokeText(l,x,yy);c.fillStyle=col;c.fillText(l,x,yy);});};
+  c.fillStyle='#a9d6ea';c.fillRect(0,0,W,H);
+  for(const iso in D.nb)D.nb[iso].forEach(r=>{path(r);c.closePath();c.fillStyle='#efe8d2';c.fill();c.strokeStyle='#cbbf9f';c.lineWidth=1;c.stroke();});
+  for(const id in D.states)D.states[id].forEach(r=>{path(r);c.closePath();c.fillStyle=blOpen(id)?BL_PAL[BL_COL[id]]:'#d9d3c3';c.fill();c.strokeStyle='#1b2a20';c.lineWidth=1;c.stroke();});
+  const here=atDE()&&curSpot?curSpot.bl:null;if(here)D.states[here].forEach(r=>{path(r);c.closePath();c.strokeStyle='#e2412b';c.lineWidth=3;c.stroke();});
+  for(const n in D.lakes)D.lakes[n].forEach(r=>{path(r);c.closePath();c.fillStyle='#3d93b8';c.fill();});
+  c.strokeStyle='#2f6fd8';c.lineWidth=Math.max(1.6,W/300);c.lineJoin=c.lineCap='round';for(const n in D.rivers)D.rivers[n].forEach(l=>{path(l);c.stroke();});
+  NB_LAB.forEach(([t,lo,la])=>{const [x,y]=P(lo,la);txt(t,x,y,fs,'#8a7f66','italic 700');});
+  txt('Nordsee',...P(7.2,54.35),fs+2,'#1e5f8a','italic 800');txt('Ostsee',...P(12.7,54.8),fs+2,'#1e5f8a','italic 800');
+  RIV_LAB.forEach(([t,lo,la])=>{const [x,y]=P(lo,la);txt(t,x,y,fs-1,'#1d4fa8','italic 700');});
+  for(const id in BL){const b=BL[id],[x,y]=P(b.at[0],b.at[1]);c.fillStyle=id==='be'?'#e2412b':'#1b2a20';c.beginPath();c.arc(x,y,id==='be'?4:2.6,0,7);c.fill();
+    const [lx,ly]=P(b.lab[0],b.lab[1]);txt(b.lab[2],lx,ly,fs,'#1b2a20');}
+  // Wege zu den Plätzen, die man als Nächstes freispielen kann
+  c.setLineDash([5,5]);c.strokeStyle='#c27c0e';c.lineWidth=2.5;
+  LINKS.forEach(([a,b2])=>{if(spotOpen(a)===spotOpen(b2))return;const A=P(...SPOTS_BY[a].at),B=P(...SPOTS_BY[b2].at);c.beginPath();c.moveTo(...A);c.lineTo(...B);c.stroke();});
+  c.setLineDash([]);
+  const r=Math.max(12,Math.round(W/34)),hits=[];
+  SPOTS.forEach(s=>{const [x,y]=P(s.at[0],s.at[1]),open=spotOpen(s.id),st=stamped(s.id),me=atDE()&&curSpot===s;
+    c.beginPath();c.arc(x,y,open?r:r*0.8,0,7);c.fillStyle=st?'#f6c13b':open?'#ffffff':'#a49e92';c.fill();c.lineWidth=me?4:2.5;c.strokeStyle=me?'#e2412b':open?'#2f9e5b':'#6d675c';c.stroke();
+    drawIcon(c,st?'🏅':open?'🎣':'🔒',x,y,open?r*1.1:r*0.85);hits.push({s,x,y});});
+  // Norden und Maßstab
+  const nx=W-26,ny=30;c.fillStyle='#1b2a20';c.beginPath();c.moveTo(nx,ny-16);c.lineTo(nx+8,ny+6);c.lineTo(nx,ny+1);c.lineTo(nx-8,ny+6);c.closePath();c.fill();txt('N',nx,ny+18,fs+3,'#1b2a20');
+  const km=100/111*100*k,sx=14,sy=H-16;c.fillStyle='#1b2a20';c.fillRect(sx,sy,km,4);c.fillRect(sx,sy-5,2,9);c.fillRect(sx+km-2,sy-5,2,9);txt('100 km',sx+km/2,sy-10,fs,'#1b2a20');
+  return {k,H,hits};}
+function showGermany(mode){
+  stopFishing();openModal();card.className='card mapcard';card.innerHTML='';
+  card.appendChild(el('h2',null,mode==='fly'?'✈️ Wohin fliegst du?':'🗺️ Deutschland-Karte'));
+  const nOpen=Object.keys(BL).filter(blOpen).length,nSt=SPOTS.filter(s=>stamped(s.id)).length;
+  card.appendChild(el('p',null,'Freigespielt: <b>'+nOpen+' von 16</b> Bundesländern · Fluss-Stempel: <b>'+nSt+' von '+SPOTS.length+'</b>'));
+  card.appendChild(el('p','small','Tippe auf einen Angelplatz oder ein Bundesland. 🎣 offen · 🏅 Stempel geschafft · 🔒 noch zu. Die gestrichelten Linien zeigen, wohin du als Nächstes kannst. Norden ist oben.'));
+  const row=el('div','maprow'),wrap=el('div','mapwrap'),cv=el('canvas');cv.id='deMap';wrap.appendChild(cv);row.appendChild(wrap);
+  const side=el('div','flylist');row.appendChild(side);card.appendChild(row);
+  if(mode==='fly'){
+    const here=atDE()?'de':atLake()?'see':'amazonas';
+    const go=(t,dest,dis)=>{const b=el('button','b'+(dis?' alt':''),t);if(dis)b.disabled=true;else b.onclick=()=>flyTo(dest);b.dataset.dest=dest;side.appendChild(b);};
+    go('🌴 Amazonas'+(here==='amazonas'?' (hier bist du)':''),'amazonas',here==='amazonas');
+    go('🏞️ Heimat-See'+(here==='see'?' (hier bist du)':''),'see',here==='see');
+    side.appendChild(el('h3','maphead','Flüsse in Deutschland'));
+    SPOTS.filter(s=>spotOpen(s.id)).forEach(s=>go((stamped(s.id)?'🏅 ':'🌊 ')+s.name+(here==='de'&&curSpot===s?' (hier bist du)':''),s.id,here==='de'&&curSpot===s));}
+  else{side.appendChild(el('p',null,atDE()&&curSpot?'Du bist am Fluss <b>'+esc(curSpot.river)+'</b> in <b>'+esc(BL[curSpot.bl].name)+'</b>. Der rote Ring zeigt, wo.':'Mit dem Flugzeug ✈️ fliegst du zu den Flüssen.'));
+    [['•','Landeshauptstadt'],['🔴','Berlin, die Hauptstadt von Deutschland'],['〰️','Flüsse'],['🎣','Angelplatz, offen'],['🏅','Stempel geschafft'],['🔒','Noch nicht freigespielt']].forEach(([i,t])=>side.appendChild(el('span',null,i+' '+t)));}
+  card.appendChild(el('p','small','Kartendaten: Natural Earth (gemeinfrei).'));
+  const bt=el('div','btns');const cl=el('button','b alt',mode==='fly'?'Hierbleiben':'Fertig');cl.onclick=closeModal;bt.appendChild(cl);card.appendChild(bt);
+  const W=Math.round(Math.min((card.clientWidth||600)-36,Math.max(260,innerHeight*0.66)*DEMAP.w/DEMAP.h,560));wrap.style.width=W+'px';
+  const m=drawGermany(cv,W);
+  cv.onclick=e=>{const rc=cv.getBoundingClientRect(),x=(e.clientX-rc.left)*W/rc.width,y=(e.clientY-rc.top)*W/rc.width;
+    let best=null,bd=26;m.hits.forEach(h=>{const d=Math.hypot(h.x-x,h.y-y);if(d<bd){bd=d;best=h.s;}});
+    if(best){showSpotPreview(best,mode);return;}
+    for(const id in DEMAP.states)if(DEMAP.states[id].some(r=>inPoly(r,x/m.k,y/m.k))){const b=BL[id];toast(b.name+' · Landeshauptstadt: '+b.hs+(blOpen(id)?'':' · noch nicht freigespielt'));return;}};}
+function showSpotPreview(s,mode){const b=BL[s.bl],open=spotOpen(s.id),here=atDE()&&curSpot===s;
+  openModal();card.className='card';card.innerHTML='';
+  card.appendChild(el('h2',null,(stamped(s.id)?'🏅 ':open?'🌊 ':'🔒 ')+esc(s.name)));
+  card.appendChild(el('p',null,'📍 Bundesland: <b>'+esc(b.name)+'</b> · Landeshauptstadt: <b>'+esc(b.hs)+'</b>'));
+  card.appendChild(el('p',null,esc(s.p[0])));
+  const g=el('div','catches');s.fish.forEach(id=>{const f=FISH_BY[id];if(!f)return;const d=el('div');d.appendChild(fishImg(f,'cimg'));d.appendChild(el('b',null,esc(f.name)));g.appendChild(d);});card.appendChild(g);
+  if(!open){const ls=linksOf(s.id);card.appendChild(el('div','rule','<b>🔒 Noch nicht freigespielt</b><p>Hol dir den Fluss-Stempel an einem dieser Plätze und folge dem Fluss hierher:</p><p>'+
+    ls.map(k=>'• '+esc(SPOTS_BY[k.to].name)+' – '+esc(k.why)).join('<br>')+'</p>'));}
+  const bt=el('div','btns');
+  if(mode==='fly'&&open&&!here){const f=el('button','b go','✈️ Hinfliegen');f.id='btnFlyHere';f.onclick=()=>flyTo(s.id);bt.appendChild(f);}
+  const z=el('button','b alt','Zurück zur Karte');z.onclick=()=>showGermany(mode);bt.appendChild(z);card.appendChild(bt);}
+// Fliegen: zum Amazonas, zum Heimat-See oder zu einem Flussplatz
+function flyTo(dest){const s=SPOTS_BY[dest];if(s&&!spotOpen(dest))return;
+  stopFishing();$('#modal').hidden=true;const ov=$('#flight');
+  ov.querySelector('b').textContent=s?'Flug: '+s.name:dest==='see'?'Flug zum Heimat-See':'Flug zum Amazonas';
   ov.hidden=false;mode='modal';input.jx=input.jy=0;joyId=null;lookId=null;joyBase.hidden=true;tone(392,0.3,'sine',0.08);tone(523,0.4,'sine',0.08,0.25);
-  setTimeout(()=>{const l=dest.land;player.pos.set(l.x,0,l.z);player.facing=l.f;player.y=groundY(l.x,l.z);
-    camYaw=l.f+Math.PI;updateChunks(player.pos.z,true);
-    if(p.to==='see'&&!state.visitedLake){state.visitedLake=true;}
-    saveWhere();},900);
+  setTimeout(()=>{let l;
+    if(s){buildSpot(dest);l=PLANES[2].land;}else if(dest==='see'){l=PLANES[1].land;state.visitedLake=true;}else l=PLANES[0].land;
+    player.inBoat=false;player.pos.set(l.x,0,l.z);player.facing=l.f;player.y=groundY(l.x,l.z);camYaw=l.f+Math.PI;if(s)camPitch=0.1;updateChunks(player.pos.z,true);saveWhere();},900);
   setTimeout(()=>{ov.hidden=true;mode='play';ctxAction='x';updateCtx();
-    toast(p.to==='see'?'Willkommen am Heimat-See! Hier leben Fische wie in Deutschland. Verkaufen kannst du sie bei Rosa.':'Willkommen zurück am Amazonas!');},1900);
-}
+    toast(s?'Willkommen: '+s.name+'! Du bist in '+BL[s.bl].name+'.'+(stamped(dest)?'':' Lies die Infotafel!'):dest==='see'?'Willkommen am Heimat-See! Hier leben Fische wie in Deutschland. Verkaufen kannst du sie bei Rosa.':'Willkommen zurück am Amazonas!');},1900);}
 
 /* ---- Reusen im Wasser ---- */
 const trapMeshes=[];
@@ -2114,7 +2714,7 @@ function hiDPI(cv,w,h){const d=Math.min(2,window.devicePixelRatio||1);cv.width=M
 function mapMarkers(){const m=[
   {x:ROSA.x,z:ROSA.z,ico:'🐟',name:'Rosa'},{x:TIAGO_AT.x,z:TIAGO_AT.z,ico:'🎣',name:'Opa Tiago'},
   {x:(PLOT.x0+PLOT.x1)/2,z:(PLOT.z0+PLOT.z1)/2,ico:'🏠',name:state.builtOnce?'Dein Haus':'Bauplatz'}];
-  PLANES.forEach(p=>m.push({x:p.x,z:p.z,ico:'✈️',name:p.to==='see'?'Flugzeug zum See':'Flugzeug zurück'}));
+  PLANES.forEach(p=>{if(p.id!=='de'||deP)m.push({x:p.x,z:p.z,ico:'✈️',name:'Flugzeug'});});
   if(state.hasBoat&&!player.inBoat)m.push({x:boat.pos.x,z:boat.pos.z,ico:'🛶',name:'Dein Boot'});
   state.traps.forEach(t=>m.push({x:t.x,z:t.z,ico:'🧺',name:'Reuse',full:trapFishCount(t)>0}));
   return m;}
@@ -2156,6 +2756,7 @@ function lakeTerrain(){if(lakeImg)return lakeImg;const W=380,H=Math.round(W*LAKE
 function label(c,t,x,y,size,align){c.font='800 '+size+'px system-ui,sans-serif';c.textAlign=align||'center';c.textBaseline='middle';
   c.lineWidth=4;c.strokeStyle='rgba(251,243,223,.95)';c.strokeText(t,x,y);c.fillStyle='#1b2a20';c.fillText(t,x,y);}
 function showMap(){
+  if(atDE()){showGermany('view');return;}
   stopFishing();openModal();card.className='card mapcard';card.innerHTML='';
   card.appendChild(el('h2',null,'Karte'));
   const where=atLake()?'Du bist am <b>Heimat-See</b>.':'Du bist am <b>Amazonas</b>, '+(Math.abs(player.pos.z)<60?'im Dorf.':Math.round(player.pos.z)+' m '+(player.pos.z>0?'flussaufwärts':'flussabwärts')+' vom Dorf.');
@@ -2168,7 +2769,8 @@ function showMap(){
   const leg=el('div','maplegend');
   [['🐟','Rosa'],['🎣','Opa Tiago'],['🏠',state.builtOnce?'Dein Haus':'Bauplatz'],['✈️','Flugzeug'],['🛶','Boot'],['🧺','Reuse (grün = Fisch drin)'],['⚠️','Stromschnellen']].forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
   row.appendChild(leg);card.appendChild(row);
-  const c3=el('button','b','Fertig');c3.onclick=closeModal;const bt=el('div','btns');bt.appendChild(c3);card.appendChild(bt);
+  const de=el('button','b alt','🗺️ Deutschland-Karte');de.id='btnGermany';de.onclick=()=>showGermany('view');
+  const c3=el('button','b','Fertig');c3.onclick=closeModal;const bt=el('div','btns');bt.append(de,c3);card.appendChild(bt);
   // Amazonas-Streifen
   const W=w1.clientWidth||900,img=amazonTerrain(),H=Math.round(W*img.height/img.width);const c=hiDPI(cv1,W,H);c.drawImage(img,0,0,W,H);
   const kz=W/(AMAP.z1-AMAP.z0),kx=H/(AMAP.x1-AMAP.x0);
@@ -2183,7 +2785,7 @@ function showMap(){
   // Heimat-See
   const LW=w2.clientWidth||240,li=lakeTerrain(),LH=Math.round(LW*li.height/li.width);const d=hiDPI(cv2,LW,LH);d.drawImage(li,0,0,LW,LH);
   const lk=LW/(2*LAKE.l),l2s=(x,z)=>[(z-(LAKE.z-LAKE.l))*lk,(LAKE.x+LAKE.w-x)*(LH/(2*LAKE.w))];
-  mapMarkers().filter(m=>m.z<LAKE.zone).forEach(m=>{const [sx,sy]=l2s(m.x,m.z);drawIcon(d,m.ico,sx,sy,16,m.full?'#2f9e5b':'rgba(251,243,223,.9)');});
+  mapMarkers().filter(m=>m.z<LAKE.zone&&m.z>=DE.zone).forEach(m=>{const [sx,sy]=l2s(m.x,m.z);drawIcon(d,m.ico,sx,sy,16,m.full?'#2f9e5b':'rgba(251,243,223,.9)');});
   if(atLake()){const [sx,sy]=l2s(player.pos.x,player.pos.z);drawMe(d,sx,sy,-player.facing,10);}
 }
 $('#btnMap').onclick=()=>{audio();showMap();};
@@ -2192,6 +2794,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:23,day:'20.10.2026',ico:'🗺️',t:'Flüsse in Deutschland',d:'Mit dem Flugzeug fliegst du jetzt zu Rhein, Donau, Elbe und vielen anderen Flüssen. Dort leben 12 neue Fische. Fang 3 Fischarten und löse das Fluss-Rätsel, dann bekommst du einen Stempel und darfst dem Fluss ins nächste Bundesland folgen!'},
  {v:22,day:'20.10.2026',ico:'📋',t:'Infotafeln',d:'Am Fluss und am Heimat-See stehen jetzt Infotafeln. Geh hin und lies sie! Für jede neue Tafel bekommst du 5 Ludins.'},
  {v:21,day:'20.10.2026',ico:'⏰',t:'15 Minuten Spielzeit',d:'Am Anfang darfst du jetzt 15 Minuten am Tag spielen. Erwachsene können das in der Avatar-Werkstatt (👕) unter „Spielzeit“ ändern.'},
  {v:20,day:'20.10.2026',ico:'🃏',t:'Rekord-Karte als Bild',d:'Deine Rekord-Karte ist jetzt eine bunte Sammelkarte mit deinem Avatar und Fotos von deinen größten Fischen. Du findest sie unter 🏆.'},
@@ -2243,8 +2846,9 @@ let boardOnStart=false;
 (function(){const w=state.where,b=state.boatAt;
   if(state.hasBoat&&b&&boatable(b.x,b.z)){boat.pos.set(b.x,0,b.z);boat.yaw=b.yaw||0;}
   if(!w)return;
+  if(w.z<DE.zone&&SPOTS_BY[state.flussAt]&&spotOpen(state.flussAt))buildSpot(state.flussAt);
   if(w.boat&&state.hasBoat&&b&&boatable(b.x,b.z))boardOnStart=true; // erst nach „Los geht's!“ einsteigen
-  else if(walkable(w.x,w.z)){player.pos.set(w.x,0,w.z);player.facing=w.f||0;player.y=groundY(w.x,w.z);}
+  else if(walkable(w.x,w.z)){player.pos.set(w.x,0,w.z);player.facing=w.f||0;player.y=groundY(w.x,w.z);camYaw=player.facing+Math.PI;if(atDE())camPitch=0.1;}
 })();
 
 /* ---- Baumodus ---- */
@@ -2330,7 +2934,8 @@ function loop(){
   tickPlayTime();
   updateSonar(dt);
   const focusZ=mode==='build'?PLOT.z0:player.pos.z;updateChunks(focusZ,false);
-  water.position.z=Math.round(focusZ/8)*8;updateFoam(dt,t);updateTraps(t);rapidSound(player.pos.x,player.pos.z);
+  water.position.z=Math.round(focusZ/8)*8;{const fd=focusZ<DE.zone;scene.fog.near=fd?70:45;scene.fog.far=fd?260:150;} // am Fluss sieht man weiter
+updateFoam(dt,t);updateTraps(t);updateDeShip(dt);rapidSound(player.pos.x,player.pos.z);
   if(mode==='play'){updatePlayer(dt,t);updateFishing(dt,t);
     slowT+=dt;if(slowT>0.2){slowT=0;updateCtx();updateTip();drawMini();}
     whereT+=dt;if(whereT>3){whereT=0;saveWhere();}}

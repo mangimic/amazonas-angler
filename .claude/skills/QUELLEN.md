@@ -1,7 +1,7 @@
 # Woher die Skills kommen
 
 Skills sind Anleitungen für Claude: Wissen zum Spiele-Bauen, das Claude bei Bedarf nachliest.
-Alle Skills hier sind unverändert kopiert. Die Lizenz liegt in jedem Ordner (`LICENSE`, bei Apache auch `NOTICE`).
+Alle Skills hier sind unverändert kopiert, nur `sachkunde-grundschule` ist für dieses Spiel selbst geschrieben. Die Lizenz liegt in jedem Ordner (`LICENSE`, bei Apache auch `NOTICE`).
 Wichtig: Die Regeln in `CLAUDE.md` gelten immer zuerst.
 
 | Skill | Wofür | Quelle | Lizenz |
@@ -21,6 +21,7 @@ Wichtig: Die Regeln in `CLAUDE.md` gelten immer zuerst.
 | threejs-lighting | Licht und Schatten | CloudAI-X/threejs-skills @ `11ffda7` | MIT |
 | threejs-animation | Bewegung (Fische, Schwimmer, Wellen) | CloudAI-X/threejs-skills @ `11ffda7` | MIT |
 | threejs-textures | Bilder auf 3D-Formen (z. B. Fischfotos) | CloudAI-X/threejs-skills @ `11ffda7` | MIT |
+| sachkunde-grundschule | Sachkunde 3./4. Klasse: Karten, Deutschland, Bundesländer, Flüsse, Fische (geprüfte Fakten) | selbst geschrieben für dieses Spiel, nach dem Bildungsplan BW 2016 (Quellen stehen im Skill) | eigener Text |
 
 ## Bewusst weggelassen
 - Bild-, Ton- und 3D-Generatoren: brauchen bezahlte Zugänge, und die Bilder wären nicht frei lizenziert.

@@ -22,6 +22,7 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [x] Seite „Was ist neu?“ mit Versionsnummer
 - [x] Echte Fotos von den 10 See-Fischen, auch im Eimer, bei Rosa und in der Reuse
 - [x] Mehrere Spieler mit eigenem Spielstand („Wer spielt?“)
+- [x] Flüsse in Deutschland: Deutschland-Karte, 18 Angelplätze, Fluss-Stempel, Bundesländer freispielen
 
 ## Als Nächstes
 - [ ] Haus: Möbel

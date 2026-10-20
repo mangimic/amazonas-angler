@@ -45,11 +45,18 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   `state.methods`, `state.method`. Die Angel-Stufe (Bambus/Profi/Gold) gilt für alle Angelarten.
 - **Infotafeln** (`INFOBOARDS`, Texte in `INFO_TEXT`): 7 Tafeln am Fluss und am Heimat-See. Hingehen, „📋 Infotafel lesen“ tippen.
   Jede neue Tafel bringt +5 Ludins (`state.infoRead`). Die Tafel „Regeln am See“ zeigt die Tabelle aus `RULES`. Tafel-`id`s nie ändern.
+- **Flüsse in Deutschland** (Sachkunde wie in der 4. Klasse, Skill `sachkunde-grundschule`): Mit dem Flugzeug (es öffnet die **Deutschland-Karte**,
+  Norden oben, Bundesländer, Landeshauptstädte, Flüsse, Nachbarländer) fliegt man zu 18 Angelplätzen an echten Flüssen (`SPOTS`, Bundesländer in `BL`).
+  Start in **Baden-Württemberg** (`START_SPOTS`: Neckar, Rhein, Donau). Pro Platz: Infotafel, 2 Rätselfragen, Wahrzeichen (`LOOKS`), typische Fische.
+  **Fluss-Stempel** = 3 verschiedene Fischarten dort fangen + Fluss-Rätsel lösen (+25 Ludins). Ein Stempel öffnet die Nachbar-Plätze in `LINKS`:
+  so folgt man dem Fluss ins nächste Bundesland. `state.fluss` (pro Platz `f`,`q`,`s`,`r`), `state.flussAt`. **`SPOTS`-ids nie ändern.**
+  12 Flussfische (`home:'fluss'`). Aal, Lachs, Stör und Huchen sind „seltene Fische“ und werden immer zurückgesetzt (`RULES` mit `selten`).
+  Der Flussplatz liegt in der Welt bei z um −1800 (`DE`) und wird beim Hinfliegen neu gebaut (`buildSpot`). Kartendaten: Natural Earth (gemeinfrei).
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
   trägt den Avatar-Namen am Rumpf, Fischtank an Bord = 20 Plätze mehr im Eimer. Werte in `YACHT`.
-- **Echte Fotos** von allen 25 Fischen (15 Amazonas, 10 See), Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`.
+- **Echte Fotos** von allen 37 Fischen (15 Amazonas, 10 See, 12 Fluss), Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`.
   Fang, Fischbuch, Eimer, Rosa und Reuse zeigen immer das Foto. Noch nicht gefangene Fische zeigt das Fischbuch als „?“.
 
 ## Technik

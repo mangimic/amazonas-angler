@@ -1,7 +1,7 @@
 # Bildnachweis – Fischfotos
 
 Alle Fotos kommen von [Wikimedia Commons](https://commons.wikimedia.org) und stehen unter freien Lizenzen.
-Sie wurden für das Spiel auf 800 × 600 Pixel zugeschnitten und verkleinert. Bei Pfauenbarsch, Arowana, Rotauge, Barsch, Döbel, Karpfen und Hecht ist der Rand mit einer unscharfen Kopie des Fotos aufgefüllt, damit der ganze Fisch zu sehen ist. Sonst wurde nichts verändert.
+Sie wurden für das Spiel auf 800 × 600 Pixel zugeschnitten und verkleinert. Bei Pfauenbarsch, Arowana, Rotauge, Barsch, Döbel, Karpfen, Hecht und den Flussfischen (außer dem Aland) ist der Rand mit einer unscharfen Kopie des Fotos aufgefüllt, damit der ganze Fisch zu sehen ist. Sonst wurde nichts verändert.
 Im Spiel steht unter jedem Foto der Name des Fotografen und die Lizenz. Die Links stehen nur hier, damit Kinder im Spiel nicht ins Internet gelangen.
 
 | Fisch | Datei | Foto von | Lizenz |
@@ -31,3 +31,15 @@ Im Spiel steht unter jedem Foto der Name des Fotografen und die Lizenz. Die Link
 | Forelle | [Oniria - Truite fario 03.jpg](https://commons.wikimedia.org/wiki/File:Oniria_-_Truite_fario_03.jpg) | Tylwyth Eldar | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
 | Zander | [Hal - Sander lucioperca - 1.jpg](https://commons.wikimedia.org/wiki/File:Hal_-_Sander_lucioperca_-_1.jpg) | Emőke Dénes | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
 | Hecht | [Esox lucius Prague Vltava 2.jpg](https://commons.wikimedia.org/wiki/File:Esox_lucius_Prague_Vltava_2.jpg) | Karelj | Public domain |
+| Barbe | [Barbe Tiergarten Schoenbrunn (cropped).jpg](https://commons.wikimedia.org/wiki/File:Barbe_Tiergarten_Schoenbrunn_(cropped).jpg) | Linie29 | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0) |
+| Nase | [Chondrostoma nasus (aka).jpg](https://commons.wikimedia.org/wiki/File:Chondrostoma_nasus_(aka).jpg) | André Karwath aka Aka | [CC BY-SA 2.5](https://creativecommons.org/licenses/by-sa/2.5) |
+| Äsche | [Thymallus thymallus2 (cropped).jpg](https://commons.wikimedia.org/wiki/File:Thymallus_thymallus2_(cropped).jpg) | Gilles San Martin | [CC BY-SA 2.0](https://creativecommons.org/licenses/by-sa/2.0) |
+| Brachse | [Abramis brama Prague Vltava 1 (cropped).jpg](https://commons.wikimedia.org/wiki/File:Abramis_brama_Prague_Vltava_1_(cropped).jpg) | Karelj | Public domain |
+| Aland | [Обитатели петербургского Океанариума 42.jpg](https://commons.wikimedia.org/wiki/File:%D0%9E%D0%B1%D0%B8%D1%82%D0%B0%D1%82%D0%B5%D0%BB%D0%B8_%D0%BF%D0%B5%D1%82%D0%B5%D1%80%D0%B1%D1%83%D1%80%D0%B3%D1%81%D0%BA%D0%BE%D0%B3%D0%BE_%D0%9E%D0%BA%D0%B5%D0%B0%D0%BD%D0%B0%D1%80%D0%B8%D1%83%D0%BC%D0%B0_42.jpg) | Anastasiya Lvova | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| Rapfen | [Aspius aspius Prague Vltava 3 (cropped).jpg](https://commons.wikimedia.org/wiki/File:Aspius_aspius_Prague_Vltava_3_(cropped).jpg) | Karelj | Public domain |
+| Quappe | [Trüsche Walchensee.jpg](https://commons.wikimedia.org/wiki/File:Tr%C3%BCsche_Walchensee.jpg) | Achim R. Schloeffel | [CC BY-SA 3.0](http://creativecommons.org/licenses/by-sa/3.0/) |
+| Aal | [Anguilla anguilla France (cropped).jpg](https://commons.wikimedia.org/wiki/File:Anguilla_anguilla_France_(cropped).jpg) | jujurenoult | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0) |
+| Wels | [Freischwimmender Wels (cropped).jpg](https://commons.wikimedia.org/wiki/File:Freischwimmender_Wels_(cropped).jpg) | HalbsHännile | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| Lachs | [Salmo salar-Atlantic Salmon-Atlanterhavsparken Norway (cropped).JPG](https://commons.wikimedia.org/wiki/File:Salmo_salar-Atlantic_Salmon-Atlanterhavsparken_Norway_(cropped).JPG) | Hans-Petter Fjeld | [CC BY-SA 2.5](https://creativecommons.org/licenses/by-sa/2.5) |
+| Huchen | [Danube Salmon - Huchen (Hucho hucho) (cropped).jpg](https://commons.wikimedia.org/wiki/File:Danube_Salmon_-_Huchen_(Hucho_hucho)_(cropped).jpg) | Liquid Art | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| Stör | [Acipenser oxyrinchus Montreal Biodome (cropped).JPG](https://commons.wikimedia.org/wiki/File:Acipenser_oxyrinchus_Montreal_Biodome_(cropped).JPG) | NoonIcarus | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0) |
