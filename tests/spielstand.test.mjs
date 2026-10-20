@@ -386,3 +386,64 @@ test('Spielzeit: ein neuer Tag fängt wieder bei null an', async () => {
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Bestenliste: Spieler auf diesem iPad, sortiert nach Ludins', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playerId: 'p1' }),
+    [KEY + '-spieler-p2']: JSON.stringify({ v: 2, ludins: 1210, playerId: 'p2', book: { hecht: { n: 2, best: 95 } }, avatar: { name: 'Papa' } }),
+    [KEY + '-spieler']: JSON.stringify({ list: [{ id: 'p1' }, { id: 'p2', name: 'Papa' }] }) });
+  await startGame(page);
+  await page.locator('#card h2:has-text("Wer spielt?")').waitFor();
+  await page.click('#card button:has-text("Fertig")');
+  await page.click('#btnRanking');
+  const rows = page.locator('#card .rankrow');
+  await rows.first().waitFor();
+  assert.equal(await rows.count(), 2);
+  assert.match(await rows.nth(0).textContent(), /Papa.*1210 L/);
+  assert.match(await rows.nth(1).textContent(), /Testkind.*345 L/);
+  await page.click('#card .tabs button:has-text("Fischarten")');
+  assert.match(await page.locator('#card .rankrow').nth(0).textContent(), /Testkind.*2 \/ 25/);
+  await page.click('#card .rankrow:has-text("Papa")');
+  assert.match(await page.textContent('#card .catches'), /Hecht.*2× · größter 95 cm/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Bestenliste: Rekord-Karten von Freunden tauschen (ohne Internet)', async () => {
+  // Kind A speichert seine Rekord-Karte
+  const a = await newPage();
+  await seed(a.page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], book: { arapaima: { n: 1, best: 250 } } }) });
+  await startGame(a.page);
+  await a.page.click('#btnRanking');
+  const [download] = await Promise.all([a.page.waitForEvent('download'), a.page.click('#btnCardSave')]);
+  assert.equal(download.suggestedFilename(), 'Rekordkarte-Testkind.json');
+  const datei = path.join(here, 'test-rekordkarte.json');
+  await download.saveAs(datei);
+  const karte = JSON.parse(fs.readFileSync(datei, 'utf8'));
+  assert.equal(karte.app, 'amazonas-angler-karte');
+  assert.equal(karte.ludins, 345);
+  assert.equal(karte.bucket, undefined, 'nur Rekorde, kein ganzer Spielstand');
+  // Die eigene Karte kann man nicht als Freund laden
+  await a.page.setInputFiles('#cardFile', datei);
+  await a.page.locator('text=deine eigene Rekord-Karte').waitFor();
+  await a.ctx.close();
+
+  // Kind B lädt die Karte auf seinem iPad
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ v: 2, newsSeen: 999, ludins: 777, book: { hecht: { n: 1, best: 80 } }, avatar: { name: 'Freund' } }) });
+  await startGame(page);
+  await page.click('#btnRanking');
+  await page.setInputFiles('#cardFile', { name: 'kopie.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ app: 'amazonas-angler', state: {} })) });
+  await page.locator('text=Das ist eine Sicherheitskopie').waitFor();
+  await page.setInputFiles('#cardFile', datei);
+  await page.locator('#card .rankrow:has-text("Testkind")').waitFor();
+  fs.unlinkSync(datei); // erst löschen, wenn das Spiel die Datei gelesen hat
+  assert.match(await page.locator('#card .rankrow').nth(0).textContent(), /Freund.*777 L/);
+  assert.match(await page.locator('#card .rankrow').nth(1).textContent(), /Testkind.*Rekord-Karte von Freund.*345 L/);
+  await page.click('#card .tabs button:has-text("Größter Fisch")');
+  assert.match(await page.locator('#card .rankrow').nth(0).textContent(), /Testkind.*Arapaima.*250 cm/);
+  assert.equal(JSON.parse(await read(page, KEY + '-freunde')).cards.length, 1);
+  assert.equal(JSON.parse(await read(page)).ludins, 777, 'der eigene Spielstand bleibt unverändert');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

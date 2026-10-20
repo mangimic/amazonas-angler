@@ -206,6 +206,15 @@ button.bk:active{border-color:var(--ink)}
 .timechip{pointer-events:none}
 .timechip.low{background:#ffd9c9}
 .gate input{font:800 26px var(--display);width:120px;padding:8px;border:3px solid var(--ink);border-radius:12px;text-align:center}
+.rank .place{font:800 22px var(--display);width:40px;text-align:center}
+.rankrow{display:grid;grid-template-columns:40px 56px 1fr auto;gap:10px;align-items:center;width:100%;min-height:68px;background:#f3e8cc;border-radius:14px;padding:6px 10px;border:3px solid transparent;font:inherit;color:inherit;text-align:left;cursor:pointer;box-sizing:border-box}
+.rankrow.me{border-color:var(--gold)}
+.rankrow b{font:800 18px var(--display);display:block;line-height:1.1}
+.rankrow span{font-size:13px;color:var(--muted)}
+.rankrow .val{font:800 18px var(--display);color:var(--ink);text-align:right}
+.catches{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+.catches div{background:#f3e8cc;border-radius:12px;padding:6px;text-align:center;font-size:13px}
+.catches img,.catches .nofoto{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px;font-size:28px}
 #loading{position:fixed;inset:0;display:grid;place-items:center;background:var(--leaf);color:var(--gold);font:800 30px var(--display)}
 @media (prefers-reduced-motion:reduce){.fish.bite{animation:none}.pill.bump{animation:none}}
 </style>
@@ -218,6 +227,7 @@ button.bk:active{border-color:var(--ink)}
     <div class="pill" id="pillLudins"><span class="coin">L</span><span class="sum" id="hudLudins">0</span><small>Ludins</small></div>
     <button class="chip" id="btnBucket" aria-label="Eimer anschauen">🪣 <span class="sum" id="hudBucket">0/15</span></button>
     <button class="chip" id="btnBook">📖 Fischbuch</button>
+    <button class="chip" id="btnRank" aria-label="Bestenliste">🏆</button>
     <span class="chip timechip" id="timeChip" hidden></span>
     <button class="chip" id="btnNews">✨ Neu<span class="newsdot" id="newsDot" hidden></span></button>
     <span class="spacer"></span>
@@ -247,6 +257,7 @@ button.bk:active{border-color:var(--ink)}
   <div class="row" id="rowVest" hidden><span class="lbl">Schwimmweste</span><div class="opts" id="opVest"></div></div>
   <button class="big" id="btnGo">Los geht's!</button>
   <button class="b alt" id="btnPlayers">👥 Spieler wechseln</button>
+  <button class="b alt" id="btnRanking">🏆 Bestenliste</button>
   <button class="b alt" id="btnTime">⏰ Spielzeit</button>
   <button class="b alt" id="btnSaveCode">💾 Spielstand sichern</button>
   <div class="small-note">Laufen: links auf dem Bildschirm wischen · Umschauen: rechts wischen · Am Computer: Pfeiltasten oder WASD, Leertaste zum Angeln</div>
@@ -390,7 +401,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -1565,6 +1576,85 @@ function showTimeSettings(){
   const cl=el('button','b alt','Fertig');cl.onclick=closeModal;bt.append(ch,cl);card.appendChild(bt);}
 $('#btnTime').onclick=()=>{audio();showTimeSettings();};
 
+/* ---- Bestenliste: alle Spieler auf diesem iPad und die Rekord-Karten von Freunden ----
+   Es gibt keinen Server. Eine Rekord-Karte ist eine kleine Datei (Spitzname, Ludins, Fänge).
+   Erwachsene schicken sie sich selbst zu. Freunde-Karten liegen in FRIENDS_KEY und dürfen auch wieder weg. */
+const FRIENDS_KEY=KEY+'-freunde';
+function cleanCard(c){ // nur bekannte Fische und vernünftige Zahlen übernehmen
+  if(!isObj(c)||typeof c.id!=='string'||!c.id)return null;
+  const book={};if(isObj(c.book))for(const id in c.book){const b=c.book[id];if(FISH_BY[id]&&isObj(b))book[id]={n:Math.max(1,Math.round(Number(b.n)||1)),best:Math.max(0,Math.round(Number(b.best)||0))};}
+  const col=v=>typeof v==='string'&&/^#[0-9a-fA-F]{6}$/.test(v)?v:'';
+  return {id:c.id.slice(0,40),name:String(c.name||'Angler').slice(0,14),ludins:Math.min(1e7,Math.max(0,Math.round(Number(c.ludins)||0))),book,skin:col(c.skin),shirt:col(c.shirt),t:Number(c.t)||0};}
+let friends=parseSave(lsGet(FRIENDS_KEY));
+friends=Array.isArray(friends&&friends.cards)?friends.cards.map(cleanCard).filter(Boolean):[];
+const saveFriends=()=>lsSet(FRIENDS_KEY,JSON.stringify({cards:friends}));
+function myCard(){if(!state.cardId){state.cardId='k'+Date.now().toString(36)+Math.random().toString(36).slice(2,8);save();}
+  return {app:'amazonas-angler-karte',v:1,id:state.cardId,name:state.avatar.name||'Angler',ludins:state.ludins,book:state.book,skin:state.avatar.skin,shirt:state.avatar.shirt,t:Date.now()};}
+// Alle Einträge für die Liste: Spieler auf diesem iPad und Freunde
+function rankEntries(){
+  const list=players.list.map(p=>{let s=p.id===state.playerId?state:parseSave(lsGet(slotKey(p.id)));
+    if(!s)s={avatar:{name:p.name},ludins:p.ludins,book:{}};
+    return {name:(s.avatar&&s.avatar.name)||p.name||'Neuer Spieler',ludins:Math.round(Number(s.ludins)||0),book:isObj(s.book)?s.book:{},
+      skin:(s.avatar&&s.avatar.skin)||p.skin,shirt:(s.avatar&&s.avatar.shirt)||p.shirt,me:p.id===state.playerId,here:true};})
+    .filter(e=>e.name!=='Neuer Spieler'||e.ludins>0);
+  friends.forEach(c=>list.push({...c,friend:true}));
+  list.forEach(e=>{e.kinds=Object.keys(e.book).filter(id=>FISH_BY[id]).length;let big=null;
+    for(const id in e.book)if(FISH_BY[id]&&(!big||e.book[id].best>big.cm))big={id,cm:e.book[id].best};e.big=big;});
+  return list;}
+const RANK_TABS=[['ludins','💰 Ludins'],['kinds','📖 Fischarten'],['big','🐟 Größter Fisch']];
+let rankTab='ludins';
+function showRanking(){
+  openModal();card.className='card rank';card.innerHTML='';
+  card.appendChild(el('h2',null,'🏆 Bestenliste'));
+  const tabs=el('div','tabs');RANK_TABS.forEach(([id,lb])=>{const b=el('button',null,lb);b.setAttribute('aria-pressed',rankTab===id);b.onclick=()=>{rankTab=id;showRanking();};tabs.appendChild(b);});
+  card.appendChild(tabs);
+  const val=e=>rankTab==='ludins'?e.ludins:rankTab==='kinds'?e.kinds:(e.big?e.big.cm:0);
+  const list=rankEntries().sort((a,b)=>val(b)-val(a));
+  const l=el('div','list');
+  list.forEach((e,i)=>{const r=el('button','rankrow'+(e.me?' me':''));
+    r.appendChild(el('div','place',i<3?['🥇','🥈','🥉'][i]:String(i+1)));
+    const face=el('div','pface');face.style.background=e.skin||SKINS[1];face.style.borderColor=e.shirt||'#2f9e5b';r.appendChild(face);
+    r.appendChild(el('div',null,'<b>'+esc(e.name)+'</b><span>'+(e.friend?'Rekord-Karte von Freund':e.me?'spielt gerade':'auf diesem iPad')+'</span>'));
+    r.appendChild(el('div','val',rankTab==='ludins'?e.ludins+' L':rankTab==='kinds'?e.kinds+' / '+FISH.length:e.big?esc(FISH_BY[e.big.id].name)+'<br>'+e.big.cm+' cm':'–'));
+    r.onclick=()=>showCatches(e);l.appendChild(r);});
+  if(!list.length)l.appendChild(el('div','empty','Noch niemand da.'));
+  card.appendChild(l);
+  card.appendChild(el('p',null,'<b>Mit Freunden vergleichen:</b> Speichere deine Rekord-Karte und gib sie einem Erwachsenen. Der schickt sie den Eltern deiner Freunde. Deren Karten lädst du hier.'));
+  const err=el('p','err');err.hidden=true;
+  const file=el('input');file.type='file';file.accept='.json,application/json,text/plain';file.id='cardFile';file.hidden=true;
+  file.onchange=()=>{const f=file.files&&file.files[0];if(!f)return;f.text().then(t=>{const o=parseSave(t);
+    const fail=m=>{err.textContent=m;err.hidden=false;};
+    if(!o||o.app!=='amazonas-angler-karte'){fail(o&&o.app==='amazonas-angler'?'Das ist eine Sicherheitskopie, keine Rekord-Karte. Die lädst du unter „Spielstand sichern“.':'Diese Datei ist keine Rekord-Karte.');return;}
+    const c=cleanCard(o);if(!c){fail('Diese Rekord-Karte ist leider kaputt.');return;}
+    if(c.id===state.cardId){fail('Das ist deine eigene Rekord-Karte.');return;}
+    const i=friends.findIndex(x=>x.id===c.id);if(i>=0)friends[i]=c;else{if(friends.length>=50){fail('Es sind schon 50 Karten da. Entferne erst eine.');return;}friends.push(c);}
+    saveFriends();toast('Rekord-Karte von '+c.name+' ist da!');showRanking();},()=>{err.textContent='Die Datei konnte nicht gelesen werden.';err.hidden=false;});};
+  const bt=el('div','btns col');
+  const sv=el('button','b go','📤 Meine Rekord-Karte speichern');sv.id='btnCardSave';sv.onclick=()=>{
+    const c=myCard(),who=c.name.replace(/[^0-9A-Za-zÄÖÜäöüß-]+/g,'_');
+    const url=URL.createObjectURL(new Blob([JSON.stringify(c)],{type:'application/json'}));
+    const a=el('a');a.href=url;a.download='Rekordkarte-'+who+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
+    toast('Gespeichert! Die Karte liegt in der App „Dateien“ unter „Downloads“.');};
+  const ld=el('button','b','📥 Rekord-Karte von Freund laden');ld.id='btnCardLoad';ld.onclick=()=>{err.hidden=true;file.click();};
+  bt.append(sv,ld,file);card.appendChild(bt);card.appendChild(err);
+  const cl=el('button','b alt','Fertig');cl.onclick=closeModal;const b2=el('div','btns');b2.appendChild(cl);card.appendChild(b2);
+}
+// Wer hat was gefangen?
+function showCatches(e){
+  openModal();card.className='card';card.innerHTML='';
+  card.appendChild(el('h2',null,esc(e.name)));
+  card.appendChild(el('p',null,e.ludins+' Ludins · '+e.kinds+' von '+FISH.length+' Fischarten'));
+  const g=el('div','catches');
+  FISH.filter(f=>e.book[f.id]).sort((a,b)=>e.book[b.id].best-e.book[a.id].best).forEach(f=>{const b=e.book[f.id],d=el('div');
+    d.appendChild(fishImg(f,'cimg'));d.appendChild(el('b',null,esc(f.name)));d.appendChild(el('div',null,b.n+'× · größter '+b.best+' cm'));g.appendChild(d);});
+  if(!g.children.length)g.appendChild(el('div','empty','Noch keine Fische gefangen.'));
+  card.appendChild(g);
+  const bt=el('div','btns');
+  if(e.friend){const rm=el('button','b alt','Karte entfernen');rm.onclick=()=>{friends=friends.filter(x=>x.id!==e.id);saveFriends();showRanking();};bt.appendChild(rm);}
+  const z=el('button','b','Zurück');z.onclick=showRanking;bt.appendChild(z);card.appendChild(bt);
+}
+$('#btnRank').onclick=$('#btnRanking').onclick=()=>{audio();stopFishing();save();showRanking();};
+
 /* ---- Der Heimat-See: Wiese, Nadelbäume, Birken, Schilf, Steg ---- */
 (function(){
   const R=rng(4711),W=LAKE.w*2,L=LAKE.l*2;
@@ -1787,6 +1877,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:17,day:'20.10.2026',ico:'🏆',t:'Bestenliste',d:'Wer hat die meisten Ludins und den größten Fisch? Tipp oben auf 🏆. Mit Rekord-Karten kannst du dich auch mit Freunden vergleichen.'},
  {v:16,day:'20.10.2026',ico:'⏰',t:'Spielzeit',d:'Erwachsene können in der Avatar-Werkstatt (👕) einstellen, wie lange du pro Tag spielst. Oben siehst du, wie viele Minuten noch übrig sind.'},
  {v:15,day:'19.10.2026',ico:'💾',t:'Sichern ohne Code',d:'Dein Spiel speichert von selbst. Unter „Spielstand sichern“ machst du mit einem Tipp eine Sicherheitskopie auf dem iPad, ganz ohne Code.'},
  {v:14,day:'19.10.2026',ico:'🐟',t:'Nur noch echte Fotos',d:'Überall siehst du jetzt echte Fotos von den Fischen: beim Fangen, im Fischbuch, im Eimer, bei Rosa und in der Reuse. Fische, die du noch nicht gefangen hast, sind im Fischbuch ein Fragezeichen.'},
