@@ -202,6 +202,10 @@ button.bk:active{border-color:var(--ink)}
 @keyframes flyin{from{opacity:0}}
 @keyframes flyby{from{transform:translateX(-40vw)}to{transform:translateX(40vw)}}
 @media (prefers-reduced-motion:reduce){#flight span{animation:none}}
+#timeup{position:fixed;inset:0;z-index:50;background:rgba(10,30,20,.85);display:grid;place-items:center;padding:16px}
+.timechip{pointer-events:none}
+.timechip.low{background:#ffd9c9}
+.gate input{font:800 26px var(--display);width:120px;padding:8px;border:3px solid var(--ink);border-radius:12px;text-align:center}
 #loading{position:fixed;inset:0;display:grid;place-items:center;background:var(--leaf);color:var(--gold);font:800 30px var(--display)}
 @media (prefers-reduced-motion:reduce){.fish.bite{animation:none}.pill.bump{animation:none}}
 </style>
@@ -214,6 +218,7 @@ button.bk:active{border-color:var(--ink)}
     <div class="pill" id="pillLudins"><span class="coin">L</span><span class="sum" id="hudLudins">0</span><small>Ludins</small></div>
     <button class="chip" id="btnBucket" aria-label="Eimer anschauen">🪣 <span class="sum" id="hudBucket">0/15</span></button>
     <button class="chip" id="btnBook">📖 Fischbuch</button>
+    <span class="chip timechip" id="timeChip" hidden></span>
     <button class="chip" id="btnNews">✨ Neu<span class="newsdot" id="newsDot" hidden></span></button>
     <span class="spacer"></span>
     <span class="name" id="hudName"></span>
@@ -242,6 +247,7 @@ button.bk:active{border-color:var(--ink)}
   <div class="row" id="rowVest" hidden><span class="lbl">Schwimmweste</span><div class="opts" id="opVest"></div></div>
   <button class="big" id="btnGo">Los geht's!</button>
   <button class="b alt" id="btnPlayers">👥 Spieler wechseln</button>
+  <button class="b alt" id="btnTime">⏰ Spielzeit</button>
   <button class="b alt" id="btnSaveCode">💾 Spielstand sichern</button>
   <div class="small-note">Laufen: links auf dem Bildschirm wischen · Umschauen: rechts wischen · Am Computer: Pfeiltasten oder WASD, Leertaste zum Angeln</div>
 </div>
@@ -255,6 +261,7 @@ button.bk:active{border-color:var(--ink)}
 
 <div id="modal" hidden><div class="card" id="card"></div></div>
 <div id="toast"></div>
+<div id="timeup" hidden><div class="card catch" id="timeCard"></div></div>
 <div id="flight" hidden><div><span aria-hidden="true">✈️</span><b>Flug</b></div></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -383,7 +390,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -1499,6 +1506,65 @@ function showPlayers(){
 }
 $('#btnPlayers').onclick=()=>{audio();showPlayers();};
 
+/* ---- Spielzeit: Erwachsene stellen ein, wie lange man pro Tag spielt ----
+   Einstellung fürs ganze Gerät in TIME_KEY, die gespielte Zeit pro Spieler in state.playTime (wird jeden Tag neu). */
+const TIME_KEY=KEY+'-spielzeit',TIME_OPTS=[0,15,30,45,60,90];
+const timeSet=parseSave(lsGet(TIME_KEY))||{min:0};if(!TIME_OPTS.includes(timeSet.min))timeSet.min=0;
+const today=()=>{const d=new Date();return d.getFullYear()+'-'+(d.getMonth()+1)+'-'+d.getDate();};
+function playTimeToday(){const p=state.playTime;
+  if(!isObj(p)||p.day!==today())state.playTime={day:today(),sec:0,extra:0};
+  else{p.sec=Math.max(0,Number(p.sec)||0);p.extra=Math.max(0,Number(p.extra)||0);}
+  return state.playTime;}
+const timeLeft=()=>{if(!timeSet.min)return Infinity;const p=playTimeToday();return timeSet.min*60+p.extra-p.sec;};
+const minText=m=>m===1?'1 Minute':m+' Minuten';
+let timeWarned=false,timeLocked=false,timeBack='play',chipMin=-1;
+function updateTimeChip(){const c=$('#timeChip'),left=timeLeft();c.hidden=!isFinite(left);if(c.hidden)return;
+  const m=Math.max(0,Math.ceil(left/60));if(m===chipMin)return;chipMin=m;c.textContent='⏰ '+m+' Min';c.classList.toggle('low',m<=5);}
+// Gezählt wird mit der echten Uhr (auch wenn das iPad ruckelt). Ist das Spiel im Hintergrund, zählt die Zeit nicht.
+let lastTick=0;
+function tickPlayTime(){
+  const now=Date.now(),dt=lastTick?Math.min(1,(now-lastTick)/1000):0;lastTick=now;
+  if(!timeSet.min||timeLocked||document.hidden||dt<=0)return;
+  playTimeToday().sec+=dt;const left=timeLeft();
+  if(left<=300&&left>0&&!timeWarned){timeWarned=true;toast('Noch 5 Minuten Spielzeit für heute.');}
+  if(left<=0)lockTime();
+  updateTimeChip();}
+// Rechenaufgabe für Erwachsene (für Kinder mit 7–9 Jahren noch zu schwer)
+function adultGate(box,onOk){
+  const a=12+Math.floor(Math.random()*8),b=3+Math.floor(Math.random()*7);
+  const g=el('div','gate');g.appendChild(el('p',null,'<b>Nur für Erwachsene:</b> Wie viel ist '+a+' × '+b+'?'));
+  const inp=el('input');inp.type='number';inp.inputMode='numeric';inp.id='gateIn';g.appendChild(inp);
+  const ok=el('button','b go','OK');ok.id='gateOk';
+  ok.onclick=()=>{g.remove();if(Number(inp.value)===a*b)onOk();else{toast('Das stimmt leider nicht. Hier ist eine neue Aufgabe.');adultGate(box,onOk);}};
+  const bt=el('div','btns');bt.appendChild(ok);g.appendChild(bt);box.appendChild(g);inp.focus();return g;}
+function lockTime(){
+  if(timeLocked)return;timeLocked=true;stopFishing();save();
+  timeBack=mode==='modal'?modalBack:mode;$('#modal').hidden=true;mode='pause';
+  const c=$('#timeCard');c.innerHTML='';
+  c.appendChild(el('h2',null,'⏰ Deine Spielzeit ist um!'));
+  c.appendChild(el('p',null,'Toll gespielt'+(state.avatar.name?', '+esc(state.avatar.name):'')+'! Mach jetzt eine Pause. Dein Spiel ist gespeichert. Morgen geht es weiter.'));
+  const bt=el('div','btns');const more=el('button','b alt','Erwachsene: mehr Zeit');more.id='btnMoreTime';
+  more.onclick=()=>{bt.remove();adultGate(c,()=>{const b2=el('div','btns');
+    [15,30].forEach(m=>{const x=el('button','b go','+ '+m+' Minuten');x.onclick=()=>{playTimeToday().extra+=m*60;save();unlockTime();};b2.appendChild(x);});
+    c.appendChild(b2);});};
+  bt.appendChild(more);c.appendChild(bt);$('#timeup').hidden=false;}
+function unlockTime(){timeLocked=false;timeWarned=timeLeft()<=300;chipMin=-1;$('#timeup').hidden=true;mode=timeBack;updateTimeChip();}
+function showTimeSettings(){
+  openModal();card.className='card';card.innerHTML='';
+  card.appendChild(el('h2',null,'⏰ Spielzeit'));
+  const used=Math.floor(playTimeToday().sec/60);
+  card.appendChild(el('p',null,timeSet.min?'Pro Tag darf man <b>'+minText(timeSet.min)+'</b> spielen. Heute schon gespielt: '+minText(used)+'.':'Die Spielzeit ist nicht begrenzt.'));
+  card.appendChild(el('p',null,'Ist die Zeit um, macht das Spiel Pause. Dein Spiel bleibt gespeichert.'));
+  const box=el('div');card.appendChild(box);
+  const bt=el('div','btns');const ch=el('button','b','Ändern');ch.id='btnTimeChange';
+  ch.onclick=()=>{ch.remove();adultGate(box,()=>{const opts=el('div','btns');
+    TIME_OPTS.forEach(m=>{const x=el('button','b'+(m===timeSet.min?' go':' alt'),m?m+' Min':'Aus');
+      x.onclick=()=>{timeSet.min=m;lsSet(TIME_KEY,JSON.stringify(timeSet));timeWarned=timeLeft()<=300;chipMin=-1;updateTimeChip();
+        toast(m?'Spielzeit: '+minText(m)+' pro Tag':'Die Spielzeit ist nicht mehr begrenzt.');showTimeSettings();};opts.appendChild(x);});
+    box.appendChild(opts);});};
+  const cl=el('button','b alt','Fertig');cl.onclick=closeModal;bt.append(ch,cl);card.appendChild(bt);}
+$('#btnTime').onclick=()=>{audio();showTimeSettings();};
+
 /* ---- Der Heimat-See: Wiese, Nadelbäume, Birken, Schilf, Steg ---- */
 (function(){
   const R=rng(4711),W=LAKE.w*2,L=LAKE.l*2;
@@ -1721,6 +1787,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:16,day:'20.10.2026',ico:'⏰',t:'Spielzeit',d:'Erwachsene können in der Avatar-Werkstatt (👕) einstellen, wie lange du pro Tag spielst. Oben siehst du, wie viele Minuten noch übrig sind.'},
  {v:15,day:'19.10.2026',ico:'💾',t:'Sichern ohne Code',d:'Dein Spiel speichert von selbst. Unter „Spielstand sichern“ machst du mit einem Tipp eine Sicherheitskopie auf dem iPad, ganz ohne Code.'},
  {v:14,day:'19.10.2026',ico:'🐟',t:'Nur noch echte Fotos',d:'Überall siehst du jetzt echte Fotos von den Fischen: beim Fangen, im Fischbuch, im Eimer, bei Rosa und in der Reuse. Fische, die du noch nicht gefangen hast, sind im Fischbuch ein Fragezeichen.'},
  {v:13,day:'19.10.2026',ico:'👥',t:'Mehrere Spieler',d:'Jetzt kann jeder seinen eigenen Spielstand haben! In der Avatar-Werkstatt (👕) tippst du auf „Spieler wechseln“ und dann auf „+ Neuer Spieler“.'},
@@ -1849,6 +1916,7 @@ const clock=new THREE.Clock();let slowT=0,whereT=0,elapsed=0;
 function loop(){
   requestAnimationFrame(loop);
   const dt=Math.min(0.05,clock.getDelta());elapsed+=dt;const t=elapsed;
+  tickPlayTime();
   updateSonar(dt);
   const focusZ=mode==='build'?PLOT.z0:player.pos.z;updateChunks(focusZ,false);
   water.position.z=Math.round(focusZ/8)*8;updateFoam(dt,t);updateTraps(t);rapidSound(player.pos.x,player.pos.z);
@@ -1901,6 +1969,7 @@ $('#loading').remove();
 updateChunks(player.pos.z,true);
 $('#creator').hidden=false;buildCreator();refreshHud();faceFreeSide();
 if(askWhoPlays)showPlayers();
+updateTimeChip();if(timeLeft()<=0)lockTime();
 player.root.position.set(player.pos.x,player.y,player.pos.z);
 loop();
 })();

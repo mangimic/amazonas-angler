@@ -330,3 +330,59 @@ test('Fischbuch: nur echte Fotos, keine gemalten Fische', async () => {
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+// So schreibt das Spiel das heutige Datum in den Spielstand
+const heute = () => { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); };
+async function rechenaufgabe(page) {
+  const t = await page.locator('.gate p').textContent();
+  const [, a, b] = t.match(/(\d+) × (\d+)/);
+  await page.fill('#gateIn', String(a * b));
+  await page.click('#gateOk');
+}
+
+test('Spielzeit: Erwachsene stellen sie ein, danach macht das Spiel Pause', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+  await startGame(page);
+  await page.click('#btnTime');
+  await page.click('#btnTimeChange');
+  await page.fill('#gateIn', '1');
+  await page.click('#gateOk');
+  assert.equal(await page.locator('#card button:has-text("15 Min")').count(), 0, 'falsche Antwort: keine Einstellung');
+  await rechenaufgabe(page);
+  await page.click('#card button:has-text("15 Min")');
+  assert.equal(JSON.parse(await read(page, KEY + '-spielzeit')).min, 15);
+  await ctx.close();
+
+  // Fast die ganze Zeit ist schon verbraucht: nach einer Sekunde kommt die Pause
+  const b = await newPage();
+  await seed(b.page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playTime: { day: heute(), sec: 15 * 60 - 1, extra: 0 } }),
+    [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) });
+  await startGame(b.page);
+  await b.page.click('#btnGo');
+  await b.page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 10000 });
+  await b.page.click('#btnMoreTime');
+  await rechenaufgabe(b.page);
+  await b.page.click('#timeup button:has-text("+ 15 Minuten")');
+  assert.equal(await b.page.isVisible('#timeup'), false, 'es geht weiter');
+  const s = JSON.parse(await read(b.page));
+  assert.equal(s.playTime.extra, 15 * 60);
+  assert.equal(s.ludins, 345, 'der Spielstand bleibt dabei unverändert');
+  assert.match(await b.page.textContent('#timeChip'), /⏰ 1[56] Min/);
+  assert.deepEqual(errors, []);
+  assert.deepEqual(b.errors, []);
+  await b.ctx.close();
+});
+
+test('Spielzeit: ein neuer Tag fängt wieder bei null an', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playTime: { day: '2000-1-1', sec: 99999, extra: 0 } }),
+    [KEY + '-spielzeit']: JSON.stringify({ min: 30 }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  assert.equal(await page.isVisible('#timeup'), false, 'keine Pause');
+  assert.match(await page.textContent('#timeChip'), /⏰ (29|30) Min/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
