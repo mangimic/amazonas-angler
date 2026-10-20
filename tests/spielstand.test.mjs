@@ -505,3 +505,53 @@ test('Mindestmaß: zu kleine Fische aus der Reuse kommen zurück ins Wasser', as
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Spinnrute und Grundrute: kaufen, Angelart wechseln, bleibt gespeichert', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], ludins: 400, metTiago: true,
+    where: { x: 33.8, z: 2.6, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  assert.equal(await page.isVisible('#btnMethod'), false, 'am Anfang gibt es nur die Pose');
+  await page.locator('#btnCtx:has-text("Opa Tiago")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.click('#card .item:has-text("Spinnrute") button');
+  await page.click('#card .item:has-text("Grundrute") button');
+  let s = JSON.parse(await read(page));
+  assert.deepEqual(s.methods, { spin: true, grund: true });
+  assert.equal(s.ludins, 400 - 150 - 120);
+  await page.click('#card button:has-text("Tschüss")');
+  assert.match(await page.textContent('#btnMethod'), /Grundangeln/);
+  await page.click('#btnMethod');
+  assert.match(await page.textContent('#btnMethod'), /Posenangeln/);
+  await page.click('#btnMethod');
+  assert.match(await page.textContent('#btnMethod'), /Spinnfischen/);
+  assert.equal(await page.isVisible('#btnBait'), false, 'beim Spinnfischen braucht man keinen Köder');
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  s = JSON.parse(await read(page));
+  assert.equal(s.method, 'spin', 'die Angelart bleibt gespeichert');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Spinnfischen: Kunstköder auswerfen, Biss, Fisch fangen', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], methods: { spin: true, grund: false }, method: 'spin',
+    where: { x: 14, z: 0, f: -Math.PI / 2, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  let gefangen = false;
+  for (let wurf = 0; wurf < 6 && !gefangen; wurf++) {
+    await page.click('#btnFish');
+    // warten, bis ein Fisch beißt oder der Köder wieder da ist
+    const was = await page.waitForFunction(() => {
+      const l = document.querySelector('#fishLbl').textContent;
+      return l === 'ZIEHEN!' ? 'biss' : l === 'Angeln' ? 'leer' : false;
+    }, null, { timeout: 60000, polling: 200 }).then(h => h.jsonValue()); // der Test-Browser ist langsam
+    if (was === 'biss') { await page.keyboard.press('Space'); gefangen = true; } // Leertaste = ziehen (der Knopf pulsiert)
+  }
+  assert.ok(gefangen, 'in 6 Würfen hat ein Fisch gebissen');
+  await page.locator('#card h2:has-text("gefangen")').waitFor();
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

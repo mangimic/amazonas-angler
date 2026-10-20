@@ -37,6 +37,10 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Stand 2026, geprüft über Angel-Seiten und den Landesfischereiverband): Hecht 50 cm, 15.2.–15.5.; Zander 45 cm, 1.4.–15.5.;
   Bachforelle 25 cm, 1.10.–28.2.; Schleie 25 cm, 15.5.–30.6.; Karpfen 35 cm. Solche Fische dürfen nicht in den Eimer;
   Zurücksetzen bringt +5 Ludins (auch bei der Reuse). Das Angel-Wissen ist auf Baden-Württemberg ausgerichtet.
+- **Angelarten** (`METHODS`, Knopf unten rechts zum Wechseln): 🎣 Posenangeln (hat jeder), 🌀 **Spinnfischen** mit der Spinnrute
+  (150 Ludins: Kunstköder wird von selbst eingeholt, manchmal beißt keiner; Raubfische beißen 3× öfter) und ⚓ **Grundangeln**
+  mit der Grundrute (120 Ludins: Blei am Grund, Bissanzeiger piept, längere Wartezeit, Grundfische und große Fische öfter).
+  `state.methods`, `state.method`. Die Angel-Stufe (Bambus/Profi/Gold) gilt für alle Angelarten.
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,

@@ -251,6 +251,7 @@ button.bk:active{border-color:var(--ink)}
   <div class="hint-joy" id="hintJoy">Hier wischen<br>zum Laufen</div>
   <div class="actions">
     <button class="act ctx" id="btnCtx" hidden></button>
+    <button class="act baitbtn" id="btnMethod" hidden aria-label="Angelart wechseln"></button>
     <button class="act baitbtn" id="btnBait" hidden aria-label="Köder wechseln"></button>
     <button class="act fish" id="btnFish"><span class="ico">🎣</span><span id="fishLbl">Angeln</span></button>
   </div>
@@ -364,6 +365,16 @@ const BAITS={
  wurm:{name:'Wurm',ico:'🪱',like:[],x:1},
  frucht:{name:'Früchte',ico:'🍒',like:['tambaqui','pacu','doebel'],x:4},
  blinker:{name:'Blinker',ico:'✨',like:['pfauen','dorado','arowana','hecht','zander','barsch','forelle'],x:3}};
+// Angelarten: Posenangeln hat jeder, Spinnrute und Grundrute gibt es bei Opa Tiago.
+// like = beißen viel öfter (×3), no = beißen kaum (×0,15)
+const METHODS={
+ pose:{name:'Posenangeln',ico:'🎣',like:[],no:[],hint:'Posenangeln: Die Pose schwimmt oben. Taucht sie unter, beißt ein Fisch!'},
+ spin:{name:'Spinnfischen',ico:'🌀',like:['hecht','zander','barsch','forelle','doebel','pfauen','dorado','arowana','piranha'],
+   no:['neon','beil','skalar','diskus','karausche','schleie','karpfen','rotfeder','tambaqui','pacu'],
+   hint:'Spinnfischen: Der Kunstköder kommt von selbst zu dir zurück. Raubfische jagen ihm nach!'},
+ grund:{name:'Grundangeln',ico:'⚓',like:['karpfen','schleie','karausche','antennen','piraiba','rochen','tambaqui','pacu'],
+   no:['neon','beil','skalar','diskus','arowana'],hint:'Grundangeln: Das Blei liegt am Grund. Warte, bis der Bissanzeiger piept!'}};
+const methodNow=()=>state.method!=='pose'&&state.methods[state.method]?state.method:'pose';
 // Opa Tiagos Angelladen
 const TIAGO_TABS=[['angeln','Angeln'],['koeder','Köder'],['boot','Boot'],['kleidung','Kleidung']];
 // Reusen: Fischfallen, die man ins Wasser legt. Alle REUSE.every Millisekunden schwimmt ein Fisch hinein (höchstens REUSE.full).
@@ -378,6 +389,10 @@ const TIAGO=[
   buy:()=>{state.rod=1;state.hasRod=true;rebuildPlayer();},msg:'Super! Mit der Profi-Angel beißen die Fische schneller.'},
  {tab:'angeln',name:'Gold-Angel',price:500,ico:'🏆',desc:'Die beste Angel! Die Fische beißen blitzschnell, und seltene Fische kommen noch öfter.',owned:()=>state.rod>=2,
   lock:()=>state.rod<1&&'Erst die Profi-Angel',buy:()=>{state.rod=2;rebuildPlayer();},msg:'Wow, eine goldene Angel!'},
+ {tab:'angeln',name:'Spinnrute',price:150,ico:'🌀',desc:'Zum Spinnfischen: Du wirfst einen glänzenden Kunstköder aus und holst ihn wieder ein. Raubfische wie Hecht, Zander, Barsch und Pfauenbarsch jagen ihm hinterher!',
+  owned:()=>state.methods.spin,buy:()=>{state.methods.spin=true;state.method='spin';},msg:'Deine Spinnrute ist da! Mit dem Knopf unten rechts wechselst du die Angelart.'},
+ {tab:'angeln',name:'Grundrute',price:120,ico:'⚓',desc:'Zum Grundangeln: Ein Blei zieht den Köder auf den Grund. Dort fressen Karpfen, Schleie, Welse und Rochen. Der Bissanzeiger piept, wenn einer beißt.',
+  owned:()=>state.methods.grund,buy:()=>{state.methods.grund=true;state.method='grund';},msg:'Deine Grundrute ist da! Mit dem Knopf unten rechts wechselst du die Angelart.'},
  {tab:'angeln',name:'Großer Eimer',price:80,ico:'🪣',desc:'Jetzt passen 30 statt 15 Fische hinein.',owned:()=>state.hasBucket,
   buy:()=>{state.hasBucket=true;},msg:'Jetzt passen 30 Fische in deinen Eimer!'},
  {tab:'angeln',name:'Reuse',price:REUSE.price,ico:'🧺',desc:'Ein Korb aus Netz. Leg ihn ins Wasser! Die Fische schwimmen durch eine Trichter-Öffnung hinein und finden nicht mehr heraus. Später holst du sie ab. Du kannst bis zu '+REUSE.max+' Reusen haben.',
@@ -412,7 +427,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
@@ -450,6 +465,8 @@ state.reusen=Math.max(0,Math.round(Number(state.reusen)||0));
 if(!Array.isArray(state.traps))state.traps=[];
 if(!isObj(state.quiz)||!Array.isArray(state.quiz.ok))state.quiz={ok:[]};
 state.angelschein=state.angelschein===true;
+state.methods=Object.assign({spin:false,grund:false},isObj(state.methods)?state.methods:{});
+if(!['pose','spin','grund'].includes(state.method))state.method='pose';
 state.traps=state.traps.filter(t=>isObj(t)&&Number.isFinite(t.x)&&Number.isFinite(t.z));
 state.traps.forEach(t=>{if(!Number.isFinite(t.t))t.t=Date.now();});
 // Fische, die es im Spiel nicht mehr gibt: Rosa kauft sie ab, damit nichts verloren geht
@@ -990,6 +1007,12 @@ const jump={t:-1,next:4,x:0,z:0,dx:0,dz:0};
 const bobber=new THREE.Group();{const a=new THREE.Mesh(new THREE.SphereGeometry(0.13,10,6,0,Math.PI*2,0,Math.PI/2),mat('#e2412b'));bobber.add(a);
   const b=new THREE.Mesh(new THREE.SphereGeometry(0.13,10,6,0,Math.PI*2,Math.PI/2,Math.PI/2),mat('#ffffff'));bobber.add(b);}
 bobber.visible=false;scene.add(bobber);
+// Kunstköder (Spinnfischen) und Blei (Grundangeln)
+const lure=new THREE.Group();{const m=new THREE.Mesh(new THREE.SphereGeometry(0.09,8,6),new THREE.MeshPhongMaterial({color:'#e8e8e8',shininess:90,specular:'#ffffff'}));m.scale.set(0.6,0.4,1.6);lure.add(m);
+  const r=new THREE.Mesh(new THREE.SphereGeometry(0.035,6,4),mat('#e2412b'));r.position.z=-0.15;lure.add(r);}
+lure.visible=false;scene.add(lure);
+const sinker=new THREE.Mesh(new THREE.SphereGeometry(0.08,8,6),mat('#6b6f73'));sinker.visible=false;scene.add(sinker);
+const tackle=()=>fishing.method==='spin'?lure:fishing.method==='grund'?sinker:bobber;
 const LINE_N=16;const lineGeo=new THREE.BufferGeometry();lineGeo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(LINE_N*3),3));
 const line=new THREE.Line(lineGeo,new THREE.LineBasicMaterial({color:'#f4f4f4'}));line.frustumCulled=false;line.visible=false;scene.add(line);
 
@@ -1130,7 +1153,11 @@ function useBait(){const b=state.bait;
   if(b==='blinker'&&state.baits.blinker>0)return 'blinker';
   return 'wurm';}
 function baitList(){const l=['wurm'];if(state.baits.frucht>0)l.push('frucht');if(state.baits.blinker>0)l.push('blinker');return l;}
-function updateBaitBtn(){const l=baitList(),b=$('#btnBait');b.hidden=l.length<2;if(!l.includes(state.bait))state.bait='wurm';
+function methodList(){return ['pose'].concat(['spin','grund'].filter(m=>state.methods[m]));}
+function updateMethodBtn(){const l=methodList(),b=$('#btnMethod');b.hidden=l.length<2;const m=METHODS[methodNow()];b.textContent=m.ico+' '+m.name;}
+$('#btnMethod').onclick=()=>{const l=methodList();state.method=l[(l.indexOf(methodNow())+1)%l.length];if(fishing.state!=='idle')stopFishing();
+  save();updateMethodBtn();updateBaitBtn();toast(METHODS[state.method].hint);};
+function updateBaitBtn(){const l=baitList(),b=$('#btnBait');b.hidden=l.length<2||methodNow()==='spin';updateMethodBtn();if(!l.includes(state.bait))state.bait='wurm';
   const bt=BAITS[state.bait];b.textContent=bt.ico+' '+bt.name+(state.bait==='frucht'?' ×'+state.baits.frucht:'');}
 $('#btnBait').onclick=()=>{const l=baitList();state.bait=l[(l.indexOf(state.bait)+1)%l.length];save();updateBaitBtn();
   toast('Köder: '+BAITS[state.bait].name);};
@@ -1139,13 +1166,13 @@ function fishPress(){
   if(fishing.state==='idle'){
     if(state.bucket.length>=bucketMax()){toast('Dein Eimer ist voll! Bring die Fische zu Rosa.');return;}
     const w=findWater();if(!w){toast(player.inBoat?'Hier ist es zu flach. Fahr weiter in den Fluss!':'Hier ist kein Wasser. Stell dich ans Ufer oder auf den Steg!');return;}
-    fishing.state='cast';fishing.t=0;fishing.target.copy(w);fishing.bait=useBait();player.av.rod.visible=true;
+    fishing.method=methodNow();fishing.state='cast';fishing.t=0;fishing.target.copy(w);fishing.bait=fishing.method==='spin'?'wurm':useBait();player.av.rod.visible=true;
     player.av.tip.getWorldPosition(fishing.from);tone(300,0.25,'sine',0.08);
   }else if(fishing.state==='bite'){catchFish();}
   else{stopFishing();}
   updateFishBtn();
 }
-function stopFishing(){fishing.state='idle';bobber.visible=false;line.visible=false;if(player.av)player.av.rod.visible=false;updateFishBtn();}
+function stopFishing(){fishing.state='idle';bobber.visible=false;lure.visible=false;sinker.visible=false;line.visible=false;if(player.av)player.av.rod.visible=false;updateFishBtn();}
 function updateFishBtn(){
   const b=$('#btnFish'),l=$('#fishLbl');b.classList.remove('wait','bite');
   if(fishing.state==='idle')l.textContent='Angeln';
@@ -1158,28 +1185,43 @@ function updateFishing(dt,t){
   if(fishing.state==='idle')return;
   fishing.t+=dt;
   const ra=av.arms[0];ra.rotation.x+=(-1.05-ra.rotation.x)*0.3;
+  const bb=tackle(),m=fishing.method;
   if(fishing.state==='cast'){
     const k=Math.min(1,fishing.t/0.75);
     av.rod.rotation.x=k<0.3?0.93-k*3:0.03+Math.min(1,(k-0.3)*3)*0.9;
-    bobber.visible=k>0.3;
+    bb.visible=k>0.3;
     const kk=Math.max(0,(k-0.3)/0.7);
-    bobber.position.lerpVectors(fishing.from,fishing.target,kk);bobber.position.y=fishing.from.y*(1-kk)+0.05+Math.sin(kk*Math.PI)*2.5;
-    if(k>=1){fishing.state='wait';fishing.t=0;fishing.biteAt=(rodNow().bite[0]+Math.random()*rodNow().bite[1])*(schoolAt(fishing.target.x,fishing.target.z)?0.5:1);splash(fishing.target.x,fishing.target.z);sfxSplash();updateFishBtn();}
+    bb.position.lerpVectors(fishing.from,fishing.target,kk);bb.position.y=fishing.from.y*(1-kk)+0.05+Math.sin(kk*Math.PI)*2.5;
+    if(k>=1){fishing.state='wait';fishing.t=0;
+      let bite=(rodNow().bite[0]+Math.random()*rodNow().bite[1])*(schoolAt(fishing.target.x,fishing.target.z)?0.5:1);
+      if(m==='spin'){bite*=0.7;if(Math.random()<0.25)bite=Infinity;} // manchmal beißt beim Einholen keiner
+      if(m==='grund')bite*=1.3;
+      fishing.biteAt=bite;fishing.retr=4.5;splash(fishing.target.x,fishing.target.z);sfxSplash();updateFishBtn();}
   }else if(fishing.state==='wait'){
     av.rod.rotation.x=0.93;
-    bobber.position.copy(fishing.target);bobber.position.y=0.05+Math.sin(t*3)*0.03;
-    if(fishing.t>fishing.biteAt){fishing.state='bite';fishing.t=0;fishing.win=rodNow().win;sfxBite();splash(fishing.target.x,fishing.target.z);updateFishBtn();
+    if(m==='spin'){ // der Kunstköder kommt langsam zum Ufer zurück
+      const k=Math.min(1,fishing.t/fishing.retr)*0.8;
+      bb.position.set(fishing.target.x+(fishing.from.x-fishing.target.x)*k,0.02,fishing.target.z+(fishing.from.z-fishing.target.z)*k);
+      bb.rotation.y=Math.atan2(fishing.from.x-fishing.target.x,fishing.from.z-fishing.target.z);bb.rotation.z=t*12;
+      av.rod.rotation.x=0.93+Math.sin(t*10)*0.03;
+      if(fishing.t>=fishing.retr&&fishing.t<fishing.biteAt){stopFishing();toast('Nichts gebissen. Wirf den Kunstköder noch einmal aus!');return;}}
+    else if(m==='grund'){bb.position.set(fishing.target.x,-0.45,fishing.target.z);}
+    else{bb.position.copy(fishing.target);bb.position.y=0.05+Math.sin(t*3)*0.03;}
+    if(fishing.t>fishing.biteAt){fishing.state='bite';fishing.t=0;fishing.win=rodNow().win*(m==='grund'?1.4:1);updateFishBtn();
+      if(m==='grund'){tone(1320,0.08,'square',0.08);tone(1320,0.08,'square',0.08,0.15);tone(1320,0.08,'square',0.08,0.3);} // der Bissanzeiger piept
+      else{sfxBite();splash(bb.position.x,bb.position.z);}
       if(navigator.vibrate)try{navigator.vibrate(120)}catch(e){}}
   }else if(fishing.state==='bite'){
-    av.rod.rotation.x=0.93+Math.sin(t*30)*0.05;
-    bobber.position.copy(fishing.target);bobber.position.y=-0.12*Math.abs(Math.sin(fishing.t*16));
+    av.rod.rotation.x=0.93+Math.sin(t*30)*(m==='grund'?0.09:0.05);
+    if(m==='pose'){bb.position.copy(fishing.target);bb.position.y=-0.12*Math.abs(Math.sin(fishing.t*16));}
+    else if(m==='spin')bb.position.y=-0.05*Math.abs(Math.sin(fishing.t*20));
     if(fishing.t>fishing.win){stopFishing();toast('Oh nein, der Fisch ist weggeschwommen! Probier es nochmal.');}
   }
   // Schnur
-  av.tip.getWorldPosition(tipW);line.visible=bobber.visible;
-  if(line.visible){const a=lineGeo.attributes.position.array,b=bobber.position;
+  av.tip.getWorldPosition(tipW);line.visible=bb.visible;
+  if(line.visible){const a=lineGeo.attributes.position.array,b=bb.position;
     for(let i=0;i<LINE_N;i++){const s=i/(LINE_N-1);a[i*3]=tipW.x+(b.x-tipW.x)*s;a[i*3+2]=tipW.z+(b.z-tipW.z)*s;
-      a[i*3+1]=tipW.y+(b.y+0.1-tipW.y)*s-Math.sin(s*Math.PI)*(fishing.state==='bite'?0.1:0.5);}
+      a[i*3+1]=tipW.y+(b.y+0.1-tipW.y)*s-Math.sin(s*Math.PI)*(fishing.state==='bite'||m!=='pose'?0.1:0.5);}
     lineGeo.attributes.position.needsUpdate=true;}
 }
 function chooseFish(){
@@ -1187,7 +1229,9 @@ function chooseFish(){
   const pool=FISH.filter(f=>fishHome(f)===here&&(!f.boat||player.inBoat));
   const sc=schoolAt(fishing.target.x,fishing.target.z);
   const bt=BAITS[fishing.bait]||BAITS.wurm;
-  const wt=f=>{let w=f.w;if(f.price>=40)w*=rodNow().rare;if(bt.like.includes(f.id))w*=bt.x;if(player.inBoat&&f.price>=40)w*=1.5;
+  const me=METHODS[fishing.method]||METHODS.pose;
+  const wt=f=>{let w=f.w;if(f.price>=40)w*=rodNow().rare;if(bt.like.includes(f.id))w*=bt.x;
+    if(me.like.includes(f.id))w*=3;if(me.no.includes(f.id))w*=0.15;if(fishing.method==='grund'&&f.price>=40)w*=1.5;if(player.inBoat&&f.price>=40)w*=1.5;
     if(sc&&f.price>=40)w*=2;if(f.id==='dorado'&&rapidAt(fishing.target.x,fishing.target.z)>0.2)w*=5;if(sc&&sc.big&&f.boat)w*=3;return w;};
   let sum=0;pool.forEach(f=>sum+=wt(f));let r=Math.random()*sum;
   for(const f of pool){r-=wt(f);if(r<=0)return f;}return pool[0];
@@ -1290,7 +1334,9 @@ const TIPS=[
  'Mit der Seitenlinie spürt ein Fisch Bewegungen im Wasser, fast wie ein sechster Sinn.',
  'An den Schuppen kann man das Alter eines Fisches ablesen. Sie haben Ringe wie ein Baumstamm.',
  'Kaltes Wasser enthält mehr Sauerstoff als warmes. Darum mögen Forellen kühle Bäche.',
- 'Auf dem Boot gilt: Schwimmweste an! Das machen echte Angler auch.'];
+ 'Auf dem Boot gilt: Schwimmweste an! Das machen echte Angler auch.',
+ 'Beim Spinnfischen holst du den Köder gleichmäßig ein. Dann sieht er aus wie ein kleiner Fisch.',
+ 'Beim Grundangeln brauchst du Geduld. Karpfen sind vorsichtig und beißen oft erst nach einer Weile.'];
 // Quiz bei Opa Tiago. a = richtige Antwort, w = falsche Antworten, e = Erklärung. Die ids nie ändern (stehen im Spielstand).
 const QUIZ=[
  {id:'kiemen',k:'🐟 Fische',q:'Womit atmen Fische unter Wasser?',a:'Mit den Kiemen',w:['Mit der Lunge','Mit den Flossen'],e:'Die Kiemen holen den Sauerstoff aus dem Wasser.'},
@@ -1311,6 +1357,9 @@ const QUIZ=[
  {id:'kescher',k:'🎣 Angeln',q:'Wozu brauchst du einen Kescher?',a:'Um den Fisch sicher aus dem Wasser zu holen',w:['Um den Köder zu werfen','Um den See zu messen'],e:'Mit dem Kescher reißt die Schnur nicht, und der Fisch wird geschont.'},
  {id:'pose',k:'🎣 Angeln',q:'Was zeigt dir die Pose, also der Schwimmer?',a:'Dass ein Fisch am Köder zieht',w:['Wie spät es ist','Wo Norden ist'],e:'Zieht ein Fisch am Köder, wackelt die Pose oder taucht unter.'},
  {id:'schnur',k:'🎣 Angeln',q:'Was machst du mit alter Angelschnur?',a:'Mitnehmen und in den Müll werfen',w:['Am Ufer liegen lassen','Ins Wasser werfen'],e:'Vögel und andere Tiere können sich in Schnur verfangen.'},
+ {id:'spinnen',k:'🎣 Angeln',q:'Womit angelt man beim Spinnfischen?',a:'Mit einem Kunstköder, den man durchs Wasser zieht',w:['Mit Brot an einer Pose','Mit einem großen Netz'],e:'Blinker, Spinner und Gummifische sehen aus wie kleine Fische. Raubfische wie Hecht und Barsch jagen ihnen nach.'},
+ {id:'blei',k:'🎣 Angeln',q:'Was macht beim Grundangeln das Blei?',a:'Es zieht den Köder auf den Grund',w:['Es macht den Köder bunt','Es leuchtet im Dunkeln'],e:'Am Grund suchen Karpfen, Schleien und Welse ihr Futter.'},
+ {id:'bissanzeiger',k:'🎣 Angeln',q:'Wie merkst du beim Grundangeln, dass ein Fisch beißt?',a:'Der Bissanzeiger piept oder die Rutenspitze zuckt',w:['Die Pose wird größer','Der Fisch ruft laut'],e:'Beim Grundangeln gibt es keine Pose. Ein Bissanzeiger oder ein Glöckchen an der Rute zeigt den Biss.'},
  {id:'nass',k:'🎣 Angeln',q:'Warum fasst man Fische nur mit nassen Händen an?',a:'Damit ihre Schleimhaut nicht kaputtgeht',w:['Damit sie nicht frieren','Damit sie bunter werden'],e:'Die Schleimhaut schützt den Fisch vor Krankheiten.'},
  {id:'schein',k:'📜 Regeln',q:'Was brauchen Erwachsene in Deutschland zum Angeln?',a:'Einen Fischereischein und eine Erlaubnis für das Gewässer',w:['Gar nichts','Einen Führerschein'],e:'In Baden-Württemberg macht man dafür die Fischerprüfung. Jedes Bundesland hat eigene Regeln.'},
  {id:'jugendschein',k:'📜 Regeln',q:'Ab wie vielen Jahren gibt es in Baden-Württemberg den Jugendfischereischein?',a:'Ab 7 Jahren',w:['Ab 18 Jahren','Erst ab 30 Jahren'],e:'Mit dem Jugendfischereischein angeln Kinder zusammen mit einem Erwachsenen, der einen Fischereischein hat.'},
@@ -2002,6 +2051,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:19,day:'20.10.2026',ico:'🌀',t:'Spinnrute und Grundrute',d:'Bei Opa Tiago gibt es eine Spinnrute für Raubfische wie Hecht und Zander und eine Grundrute für Karpfen, Schleie und Welse. Unten rechts wechselst du die Angelart.'},
  {v:18,day:'20.10.2026',ico:'🎓',t:'Angel-Wissen',d:'Bei Opa Tiago gibt es ein Angel-Quiz. Mit 20 richtigen Antworten bekommst du den Junior-Angelschein! Am Heimat-See gelten jetzt Schonzeiten und Mindestmaße wie in Baden-Württemberg.'},
  {v:17,day:'20.10.2026',ico:'🏆',t:'Bestenliste',d:'Wer hat die meisten Ludins und den größten Fisch? Tipp oben auf 🏆. Mit Rekord-Karten kannst du dich auch mit Freunden vergleichen.'},
  {v:16,day:'20.10.2026',ico:'⏰',t:'Spielzeit',d:'Erwachsene können in der Avatar-Werkstatt (👕) einstellen, wie lange du pro Tag spielst. Oben siehst du, wie viele Minuten noch übrig sind.'},
