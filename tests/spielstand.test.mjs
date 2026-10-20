@@ -345,13 +345,14 @@ test('Spielzeit: Erwachsene stellen sie ein, danach macht das Spiel Pause', asyn
   await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
   await startGame(page);
   await page.click('#btnTime');
+  await page.locator('#card:has-text("15 Minuten")').waitFor(); // ohne Einstellung gelten 15 Minuten
   await page.click('#btnTimeChange');
   await page.fill('#gateIn', '1');
   await page.click('#gateOk');
-  assert.equal(await page.locator('#card button:has-text("15 Min")').count(), 0, 'falsche Antwort: keine Einstellung');
+  assert.equal(await page.locator('#card button:has-text("30 Min")').count(), 0, 'falsche Antwort: keine Einstellung');
   await rechenaufgabe(page);
-  await page.click('#card button:has-text("15 Min")');
-  assert.equal(JSON.parse(await read(page, KEY + '-spielzeit')).min, 15);
+  await page.click('#card button:has-text("30 Min")');
+  assert.equal(JSON.parse(await read(page, KEY + '-spielzeit')).min, 30);
   await ctx.close();
 
   // Fast die ganze Zeit ist schon verbraucht: nach einer Sekunde kommt die Pause
@@ -409,21 +410,23 @@ test('Bestenliste: Spieler auf diesem iPad, sortiert nach Ludins', async () => {
   await ctx.close();
 });
 
-test('Bestenliste: Rekord-Karten von Freunden tauschen (ohne Internet)', async () => {
-  // Kind A speichert seine Rekord-Karte
+test('Bestenliste: Rekord-Karte als bunte Sammelkarte (Bild) tauschen, ohne Internet', async () => {
+  // Kind A speichert seine Rekord-Karte als Bild
   const a = await newPage();
   await seed(a.page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], book: { arapaima: { n: 1, best: 250 } } }) });
   await startGame(a.page);
   await a.page.click('#btnRanking');
-  const [download] = await Promise.all([a.page.waitForEvent('download'), a.page.click('#btnCardSave')]);
-  assert.equal(download.suggestedFilename(), 'Rekordkarte-Testkind.json');
-  const datei = path.join(here, 'test-rekordkarte.json');
+  await a.page.click('#btnCardSave');
+  await a.page.locator('#card img.mycard').waitFor({ timeout: 15000 });
+  const [download] = await Promise.all([a.page.waitForEvent('download'), a.page.click('#btnCardDownload')]);
+  assert.equal(download.suggestedFilename(), 'Rekordkarte-Testkind.png');
+  const datei = path.join(here, 'test-rekordkarte.png');
   await download.saveAs(datei);
-  const karte = JSON.parse(fs.readFileSync(datei, 'utf8'));
-  assert.equal(karte.app, 'amazonas-angler-karte');
-  assert.equal(karte.ludins, 345);
-  assert.equal(karte.bucket, undefined, 'nur Rekorde, kein ganzer Spielstand');
+  const bild = fs.readFileSync(datei);
+  assert.deepEqual([...bild.subarray(0, 4)], [0x89, 0x50, 0x4E, 0x47], 'ein echtes PNG-Bild');
+  assert.ok(bild.includes('amazonas-angler-karte'), 'die Kartendaten stecken im Bild');
   // Die eigene Karte kann man nicht als Freund laden
+  await a.page.click('#card button:has-text("Zurück")');
   await a.page.setInputFiles('#cardFile', datei);
   await a.page.locator('text=deine eigene Rekord-Karte').waitFor();
   await a.ctx.close();
@@ -435,6 +438,9 @@ test('Bestenliste: Rekord-Karten von Freunden tauschen (ohne Internet)', async (
   await page.click('#btnRanking');
   await page.setInputFiles('#cardFile', { name: 'kopie.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ app: 'amazonas-angler', state: {} })) });
   await page.locator('text=Das ist eine Sicherheitskopie').waitFor();
+  // Ein Foto ohne Kartendaten (zum Beispiel beim Verschicken umgewandelt)
+  await page.setInputFiles('#cardFile', path.join(root, 'fotos', 'hecht.jpg'));
+  await page.locator('text=keine Kartendaten').waitFor();
   await page.setInputFiles('#cardFile', datei);
   await page.locator('#card .rankrow:has-text("Testkind")').waitFor();
   fs.unlinkSync(datei); // erst löschen, wenn das Spiel die Datei gelesen hat
@@ -442,7 +448,11 @@ test('Bestenliste: Rekord-Karten von Freunden tauschen (ohne Internet)', async (
   assert.match(await page.locator('#card .rankrow').nth(1).textContent(), /Testkind.*Rekord-Karte von Freund.*345 L/);
   await page.click('#card .tabs button:has-text("Größter Fisch")');
   assert.match(await page.locator('#card .rankrow').nth(0).textContent(), /Testkind.*Arapaima.*250 cm/);
-  assert.equal(JSON.parse(await read(page, KEY + '-freunde')).cards.length, 1);
+  // Ältere Rekord-Karten (.json) gehen weiter
+  await page.setInputFiles('#cardFile', { name: 'alt.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ app: 'amazonas-angler-karte', v: 1, id: 'kalt', name: 'Oma', ludins: 50, book: {} })) });
+  await page.locator('#card .rankrow:has-text("Oma")').waitFor();
+  assert.equal(JSON.parse(await read(page, KEY + '-freunde')).cards.length, 2);
   assert.equal(JSON.parse(await read(page)).ludins, 777, 'der eigene Spielstand bleibt unverändert');
   assert.deepEqual(errors, []);
   await ctx.close();
@@ -552,6 +562,46 @@ test('Spinnfischen: Kunstköder auswerfen, Biss, Fisch fangen', async () => {
   }
   assert.ok(gefangen, 'in 6 Würfen hat ein Fisch gebissen');
   await page.locator('#card h2:has-text("gefangen")').waitFor();
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Spielzeit: ohne Einstellung gelten 15 Minuten pro Tag', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  assert.match(await page.textContent('#timeChip'), /⏰ 1[45] Min/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Infotafeln: am Heimat-See lesen, +5 Ludins nur beim ersten Mal, bleibt gespeichert', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], visitedLake: true,
+    where: { x: 4, z: -951, f: 0, boat: false } }) }); // da landet das Flugzeug, gleich neben der Regel-Tafel
+  await startGame(page);
+  await page.click('#btnGo');
+  const knopf = page.locator('#btnCtx:has-text("Infotafel")');
+  await knopf.waitFor({ timeout: 20000 });
+  await knopf.click();
+  const tabelle = page.locator('#card table.rules');
+  await tabelle.waitFor();
+  const text = await tabelle.textContent();
+  assert.match(text, /Hecht/);
+  assert.match(text, /50 cm/);
+  assert.match(await page.textContent('#card'), /Neues Wissen! \+5 Ludins/);
+  let s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 350);
+  assert.deepEqual(s.infoRead, ['regeln']);
+  await page.click('#card button:has-text("Fertig")');
+  await knopf.click(); // zweites Mal lesen: kein Geld mehr
+  await tabelle.waitFor();
+  assert.doesNotMatch(await page.textContent('#card'), /Neues Wissen/);
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 350);
+  assert.deepEqual(s.infoRead, ['regeln']);
   assert.deepEqual(errors, []);
   await ctx.close();
 });

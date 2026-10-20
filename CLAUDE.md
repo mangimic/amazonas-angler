@@ -25,10 +25,12 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - **Karte**: kleine Karte oben rechts (60 m um dich herum), Antippen oder Taste M öffnet die große Karte
   (ganzer Fluss + Heimat-See). Auf der Karte zeigt **rechts nach Norden** (flussaufwärts).
 - **Spielzeit** (für Eltern): In der Avatar-Werkstatt „⏰ Spielzeit“. Ändern geht nur nach einer Rechenaufgabe für Erwachsene.
-  Aus/15/30/45/60/90 Minuten pro Tag, gilt fürs ganze Gerät (`amazonas-angler-1-spielzeit`), gezählt wird pro Spieler (`state.playTime`).
+  Aus/15/30/45/60/90 Minuten pro Tag (**Standard: 15 Minuten**, `TIME_DEFAULT`), gilt fürs ganze Gerät (`amazonas-angler-1-spielzeit`), gezählt wird pro Spieler (`state.playTime`).
   Oben steht, wie viele Minuten übrig sind. Ist die Zeit um, macht das Spiel Pause; Erwachsene können +15/+30 Minuten geben.
 - **Bestenliste** (🏆 oben und in der Avatar-Werkstatt): Ludins, Fischarten, größter Fisch; antippen zeigt, wer was gefangen hat.
-  Ohne Internet: Spieler dieses iPads + **Rekord-Karten** von Freunden (Datei `Rekordkarte-<Name>.json` mit Spitzname, Ludins, Fängen).
+  Ohne Internet: Spieler dieses iPads + **Rekord-Karten** von Freunden. Die Karte ist eine bunte **Sammelkarte als Bild** (`Rekordkarte-<Name>.png`,
+  Avatar, Ludins, Fischarten, größte Fische mit Foto). Die Daten stecken unsichtbar im PNG (tEXt-Feld `amazonas-angler-karte`);
+  als Datei verschicken, nicht als Foto (sonst werden sie entfernt). Alte `.json`-Karten lassen sich weiter laden.
   Erwachsene schicken sie selbst weiter. Freunde-Karten liegen in `amazonas-angler-1-freunde` (dürfen entfernt werden). Kein Server!
 - **Angel-Wissen** (Themen der Fischerprüfung, kindgerecht): Bei Opa Tiago „🎓 Angel-Quiz“ (Liste `QUIZ`, je 5 Fragen,
   +10 Ludins für jede neue richtige Frage, ab 20 richtigen den **Junior-Angelschein** + 100 Ludins; `state.quiz`, `state.angelschein`).
@@ -41,6 +43,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   (150 Ludins: Kunstköder wird von selbst eingeholt, manchmal beißt keiner; Raubfische beißen 3× öfter) und ⚓ **Grundangeln**
   mit der Grundrute (120 Ludins: Blei am Grund, Bissanzeiger piept, längere Wartezeit, Grundfische und große Fische öfter).
   `state.methods`, `state.method`. Die Angel-Stufe (Bambus/Profi/Gold) gilt für alle Angelarten.
+- **Infotafeln** (`INFOBOARDS`, Texte in `INFO_TEXT`): 7 Tafeln am Fluss und am Heimat-See. Hingehen, „📋 Infotafel lesen“ tippen.
+  Jede neue Tafel bringt +5 Ludins (`state.infoRead`). Die Tafel „Regeln am See“ zeigt die Tabelle aus `RULES`. Tafel-`id`s nie ändern.
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
