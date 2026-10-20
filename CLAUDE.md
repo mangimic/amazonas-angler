@@ -28,7 +28,9 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Aus/15/30/45/60/90 Minuten pro Tag, gilt fürs ganze Gerät (`amazonas-angler-1-spielzeit`), gezählt wird pro Spieler (`state.playTime`).
   Oben steht, wie viele Minuten übrig sind. Ist die Zeit um, macht das Spiel Pause; Erwachsene können +15/+30 Minuten geben.
 - **Bestenliste** (🏆 oben und in der Avatar-Werkstatt): Ludins, Fischarten, größter Fisch; antippen zeigt, wer was gefangen hat.
-  Ohne Internet: Spieler dieses iPads + **Rekord-Karten** von Freunden (Datei `Rekordkarte-<Name>.json` mit Spitzname, Ludins, Fängen).
+  Ohne Internet: Spieler dieses iPads + **Rekord-Karten** von Freunden. Die Karte ist eine bunte **Sammelkarte als Bild** (`Rekordkarte-<Name>.png`,
+  Avatar, Ludins, Fischarten, größte Fische mit Foto). Die Daten stecken unsichtbar im PNG (tEXt-Feld `amazonas-angler-karte`);
+  als Datei verschicken, nicht als Foto (sonst werden sie entfernt). Alte `.json`-Karten lassen sich weiter laden.
   Erwachsene schicken sie selbst weiter. Freunde-Karten liegen in `amazonas-angler-1-freunde` (dürfen entfernt werden). Kein Server!
 - **Angel-Wissen** (Themen der Fischerprüfung, kindgerecht): Bei Opa Tiago „🎓 Angel-Quiz“ (Liste `QUIZ`, je 5 Fragen,
   +10 Ludins für jede neue richtige Frage, ab 20 richtigen den **Junior-Angelschein** + 100 Ludins; `state.quiz`, `state.angelschein`).

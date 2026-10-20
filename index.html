@@ -226,6 +226,7 @@ button.bk:active{border-color:var(--ink)}
 .quiz .qe{background:#e3f1ea;border-radius:12px;padding:8px 12px}
 .schein{border:4px double var(--ink);border-radius:18px;background:#fff6dc;padding:14px;text-align:center;display:flex;flex-direction:column;gap:4px}
 .schein .sico{font-size:54px}.schein b{font:800 26px var(--display)}.schein span{font:800 18px var(--display);color:var(--muted)}
+.mycard{width:min(320px,100%);border-radius:18px;box-shadow:0 6px 0 var(--ink)}
 #loading{position:fixed;inset:0;display:grid;place-items:center;background:var(--leaf);color:var(--gold);font:800 30px var(--display)}
 @media (prefers-reduced-motion:reduce){.fish.bite{animation:none}.pill.bump{animation:none}}
 </style>
@@ -1792,24 +1793,97 @@ function showRanking(){
   card.appendChild(l);
   card.appendChild(el('p',null,'<b>Mit Freunden vergleichen:</b> Speichere deine Rekord-Karte und gib sie einem Erwachsenen. Der schickt sie den Eltern deiner Freunde. Deren Karten lädst du hier.'));
   const err=el('p','err');err.hidden=true;
-  const file=el('input');file.type='file';file.accept='.json,application/json,text/plain';file.id='cardFile';file.hidden=true;
-  file.onchange=()=>{const f=file.files&&file.files[0];if(!f)return;f.text().then(t=>{const o=parseSave(t);
+  const file=el('input');file.type='file';file.accept='.png,image/png,.json,application/json';file.id='cardFile';file.hidden=true;
+  file.onchange=()=>{const f=file.files&&file.files[0];if(!f)return;f.arrayBuffer().then(buf=>{
     const fail=m=>{err.textContent=m;err.hidden=false;};
+    const b=new Uint8Array(buf),png=b[0]===0x89&&b[1]===0x50&&b[2]===0x4E&&b[3]===0x47,jpg=b[0]===0xFF&&b[1]===0xD8;
+    let o=null;
+    if(png){const t=pngReadText(b,CARD_KEYWORD);if(t)try{o=parseSave(new TextDecoder().decode(Uint8Array.from(atob(t),ch=>ch.charCodeAt(0))));}catch(e){}}
+    else if(!jpg)o=parseSave(new TextDecoder().decode(b)); // ältere Rekord-Karten waren .json-Dateien
+    if(!o&&(png||jpg)){fail('In diesem Bild stecken keine Kartendaten. Vielleicht wurde es beim Verschicken verändert. Schickt die Karte bitte als Datei, nicht als Foto.');return;}
     if(!o||o.app!=='amazonas-angler-karte'){fail(o&&o.app==='amazonas-angler'?'Das ist eine Sicherheitskopie, keine Rekord-Karte. Die lädst du unter „Spielstand sichern“.':'Diese Datei ist keine Rekord-Karte.');return;}
     const c=cleanCard(o);if(!c){fail('Diese Rekord-Karte ist leider kaputt.');return;}
     if(c.id===state.cardId){fail('Das ist deine eigene Rekord-Karte.');return;}
     const i=friends.findIndex(x=>x.id===c.id);if(i>=0)friends[i]=c;else{if(friends.length>=50){fail('Es sind schon 50 Karten da. Entferne erst eine.');return;}friends.push(c);}
     saveFriends();toast('Rekord-Karte von '+c.name+' ist da!');showRanking();},()=>{err.textContent='Die Datei konnte nicht gelesen werden.';err.hidden=false;});};
   const bt=el('div','btns col');
-  const sv=el('button','b go','📤 Meine Rekord-Karte speichern');sv.id='btnCardSave';sv.onclick=()=>{
-    const c=myCard(),who=c.name.replace(/[^0-9A-Za-zÄÖÜäöüß-]+/g,'_');
-    const url=URL.createObjectURL(new Blob([JSON.stringify(c)],{type:'application/json'}));
-    const a=el('a');a.href=url;a.download='Rekordkarte-'+who+'.json';document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),30000);
-    toast('Gespeichert! Die Karte liegt in der App „Dateien“ unter „Downloads“.');};
+  const sv=el('button','b go','📤 Meine Rekord-Karte');sv.id='btnCardSave';sv.onclick=showMyCard;
   const ld=el('button','b','📥 Rekord-Karte von Freund laden');ld.id='btnCardLoad';ld.onclick=()=>{err.hidden=true;file.click();};
   bt.append(sv,ld,file);card.appendChild(bt);card.appendChild(err);
   const cl=el('button','b alt','Fertig');cl.onclick=closeModal;const b2=el('div','btns');b2.appendChild(cl);card.appendChild(b2);
 }
+/* ---- Die Rekord-Karte als bunte Sammelkarte (PNG-Bild) ----
+   Die Daten stecken unsichtbar im Bild (PNG-Textfeld), so kann man die Karte in der Bestenliste laden.
+   Wird das Bild beim Verschicken umgewandelt (z. B. in JPG), sind die Daten weg – dann als Datei schicken. */
+const CARD_KEYWORD='amazonas-angler-karte';
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0;}return t;})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC_TABLE[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0;}
+function pngAddText(b,key,text){ // fügt nach dem IHDR-Block einen tEXt-Block ein
+  const data=new TextEncoder().encode(key+'\0'+text),chunk=new Uint8Array(12+data.length),dv=new DataView(chunk.buffer);
+  dv.setUint32(0,data.length);chunk.set([116,69,88,116],4);chunk.set(data,8);dv.setUint32(8+data.length,crc32(chunk.subarray(4,8+data.length)));
+  const at=8+12+new DataView(b.buffer,b.byteOffset).getUint32(8),out=new Uint8Array(b.length+chunk.length);
+  out.set(b.subarray(0,at));out.set(chunk,at);out.set(b.subarray(at),at+chunk.length);return out;}
+function pngReadText(b,key){const dv=new DataView(b.buffer,b.byteOffset,b.byteLength);let p=8;
+  while(p+12<=b.length){const len=dv.getUint32(p),type=String.fromCharCode(b[p+4],b[p+5],b[p+6],b[p+7]);
+    if(type==='tEXt'){const d=b.subarray(p+8,p+8+len),z=d.indexOf(0);if(z>0&&new TextDecoder().decode(d.subarray(0,z))===key)return new TextDecoder().decode(d.subarray(z+1));}
+    if(type==='IEND')break;p+=12+len;}
+  return null;}
+const loadImg=src=>new Promise(r=>{const i=new Image();i.onload=()=>r(i);i.onerror=()=>r(null);i.src=src;});
+function roundRect(x,X,Y,W,H,R){x.beginPath();x.moveTo(X+R,Y);x.arcTo(X+W,Y,X+W,Y+H,R);x.arcTo(X+W,Y+H,X,Y+H,R);x.arcTo(X,Y+H,X,Y,R);x.arcTo(X,Y,X+W,Y,R);x.closePath();}
+async function recordCardBlob(c){
+  const W=800,H=1120,cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d');
+  const F=(w,s)=>w+' '+s+'px ui-rounded,"Arial Rounded MT Bold","Trebuchet MS",system-ui,sans-serif';
+  // Rahmen und Hintergrund
+  roundRect(x,0,0,W,H,48);x.fillStyle='#f6c13b';x.fill();
+  const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,'#3c8f86');g.addColorStop(0.55,'#1f4d32');g.addColorStop(1,'#123323');
+  roundRect(x,18,18,W-36,H-36,36);x.fillStyle=g;x.fill();
+  x.globalAlpha=0.12;x.fillStyle='#fff';for(let i=0;i<9;i++){x.beginPath();x.arc(80+i*85,250+Math.sin(i)*30,26+(i%3)*8,0,7);x.fill();}x.globalAlpha=1;
+  x.textAlign='center';x.fillStyle='#f6c13b';x.font=F(800,50);x.fillText('AMAZONAS ANGLER',W/2,92);
+  x.fillStyle='#fff';x.font=F(800,30);x.fillText('⭐ REKORD-KARTE ⭐',W/2,136);
+  // Avatar
+  x.beginPath();x.arc(W/2,262,92,0,7);x.fillStyle=c.shirt||'#2f9e5b';x.fill();
+  x.beginPath();x.arc(W/2,262,74,0,7);x.fillStyle=c.skin||SKINS[1];x.fill();
+  x.fillStyle='#1a1a1a';[-26,26].forEach(d=>{x.beginPath();x.arc(W/2+d,250,9,0,7);x.fill();});
+  x.fillStyle='#f08f8f';[-46,46].forEach(d=>{x.beginPath();x.arc(W/2+d,276,11,0,7);x.fill();});
+  x.strokeStyle='#7a2a20';x.lineWidth=6;x.lineCap='round';x.beginPath();x.arc(W/2,272,26,0.2*Math.PI,0.8*Math.PI);x.stroke();
+  // Name
+  x.fillStyle='#fff';x.font=F(800,66);x.shadowColor='rgba(0,0,0,.4)';x.shadowBlur=8;x.fillText(c.name,W/2,428);x.shadowBlur=0;
+  if(c.schein){roundRect(x,W/2-200,450,400,52,26);x.fillStyle='#f6c13b';x.fill();x.fillStyle='#1b2a20';x.font=F(800,28);x.fillText('🎓 Junior-Angelschein',W/2,486);}
+  // Zahlen
+  const kinds=Object.keys(c.book).filter(id=>FISH_BY[id]),total=kinds.reduce((s,id)=>s+(c.book[id].n|0),0);
+  [['💰',c.ludins,'Ludins'],['📖',kinds.length+'/'+FISH.length,'Fischarten'],['🎣',total,'Fänge']].forEach(([ico,v,l],i)=>{
+    const X=48+i*240;roundRect(x,X,528,224,150,24);x.fillStyle='#fbf3df';x.fill();
+    x.fillStyle='#1b2a20';x.font=F(800,40);x.fillText(ico,X+112,578);x.font=F(800,44);x.fillText(String(v),X+112,630);
+    x.fillStyle='#5d6b5f';x.font=F(700,24);x.fillText(l,X+112,664);});
+  // Die größten Fische mit Foto
+  x.fillStyle='#fff';x.font=F(800,34);x.fillText('Meine größten Fische',W/2,736);
+  const top=kinds.sort((a,b)=>c.book[b].best-c.book[a].best).slice(0,3);
+  const imgs=await Promise.all(top.map(id=>FOTOS[id]?loadImg(FOTOS[id].src):null));
+  top.forEach((id,i)=>{const X=48+i*240,Y=760;roundRect(x,X,Y,224,250,20);x.fillStyle='#fbf3df';x.fill();
+    const im=imgs[i];x.save();roundRect(x,X+10,Y+10,204,153,14);x.clip();
+    if(im){const s=Math.max(204/im.width,153/im.height),w=im.width*s,h=im.height*s;x.drawImage(im,X+112-w/2,Y+86.5-h/2,w,h);}
+    else{x.fillStyle='#cfe6d6';x.fillRect(X+10,Y+10,204,153);x.font=F(800,60);x.fillStyle='#1b2a20';x.fillText('🐟',X+112,Y+110);}
+    x.restore();x.fillStyle='#1b2a20';x.font=F(800,26);x.fillText(FISH_BY[id].name.length>13?FISH_BY[id].name.slice(0,12)+'…':FISH_BY[id].name,X+112,Y+200);
+    x.fillStyle='#c2401f';x.font=F(800,30);x.fillText(c.book[id].best+' cm',X+112,Y+236);});
+  if(!top.length){x.fillStyle='#cfe6d6';x.font=F(700,28);x.fillText('Noch keine Fische – ab ans Wasser!',W/2,880);}
+  x.fillStyle='#cfe6d6';x.font=F(700,22);const d=new Date(c.t||Date.now());
+  x.fillText('Stand: '+d.getDate()+'.'+(d.getMonth()+1)+'.'+d.getFullYear()+'  ·  Laden: 🏆 Bestenliste → Rekord-Karte laden',W/2,1072);
+  // Daten ins Bild legen
+  const blob=await new Promise(r=>cv.toBlob(r,'image/png'));
+  const bytes=new Uint8Array(await blob.arrayBuffer()),json=new TextEncoder().encode(JSON.stringify(c));
+  let bin='';json.forEach(ch=>bin+=String.fromCharCode(ch));
+  return new Blob([pngAddText(bytes,CARD_KEYWORD,btoa(bin))],{type:'image/png'});}
+async function showMyCard(){
+  const c=myCard();openModal();card.className='card catch';card.innerHTML='';
+  card.appendChild(el('h2',null,'Meine Rekord-Karte'));
+  const wait=el('p',null,'Die Karte wird gemalt …');card.appendChild(wait);
+  const blob=await recordCardBlob(c),url=URL.createObjectURL(blob);wait.remove();
+  const img=el('img','mycard');img.src=url;img.alt='Rekord-Karte von '+c.name;card.appendChild(img);
+  card.appendChild(el('p',null,'Speichere deine Karte und gib sie einem Erwachsenen. Der schickt sie den Eltern deiner Freunde – am besten als <b>Datei</b>, nicht als Foto.'));
+  const bt=el('div','btns');const dl=el('button','b go','💾 Karte speichern');dl.id='btnCardDownload';dl.onclick=()=>{
+    const a=el('a');a.href=url;a.download='Rekordkarte-'+c.name.replace(/[^0-9A-Za-zÄÖÜäöüß-]+/g,'_')+'.png';document.body.appendChild(a);a.click();a.remove();
+    toast('Gespeichert! Die Karte liegt in der App „Dateien“ unter „Downloads“.');};
+  const z=el('button','b alt','Zurück');z.onclick=()=>{URL.revokeObjectURL(url);showRanking();};bt.append(dl,z);card.appendChild(bt);}
 // Wer hat was gefangen?
 function showCatches(e){
   openModal();card.className='card';card.innerHTML='';
@@ -2051,6 +2125,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:20,day:'20.10.2026',ico:'🃏',t:'Rekord-Karte als Bild',d:'Deine Rekord-Karte ist jetzt eine bunte Sammelkarte mit deinem Avatar und Fotos von deinen größten Fischen. Du findest sie unter 🏆.'},
  {v:19,day:'20.10.2026',ico:'🌀',t:'Spinnrute und Grundrute',d:'Bei Opa Tiago gibt es eine Spinnrute für Raubfische wie Hecht und Zander und eine Grundrute für Karpfen, Schleie und Welse. Unten rechts wechselst du die Angelart.'},
  {v:18,day:'20.10.2026',ico:'🎓',t:'Angel-Wissen',d:'Bei Opa Tiago gibt es ein Angel-Quiz. Mit 20 richtigen Antworten bekommst du den Junior-Angelschein! Am Heimat-See gelten jetzt Schonzeiten und Mindestmaße wie in Baden-Württemberg.'},
  {v:17,day:'20.10.2026',ico:'🏆',t:'Bestenliste',d:'Wer hat die meisten Ludins und den größten Fisch? Tipp oben auf 🏆. Mit Rekord-Karten kannst du dich auch mit Freunden vergleichen.'},

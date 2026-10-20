@@ -409,21 +409,23 @@ test('Bestenliste: Spieler auf diesem iPad, sortiert nach Ludins', async () => {
   await ctx.close();
 });
 
-test('Bestenliste: Rekord-Karten von Freunden tauschen (ohne Internet)', async () => {
-  // Kind A speichert seine Rekord-Karte
+test('Bestenliste: Rekord-Karte als bunte Sammelkarte (Bild) tauschen, ohne Internet', async () => {
+  // Kind A speichert seine Rekord-Karte als Bild
   const a = await newPage();
   await seed(a.page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], book: { arapaima: { n: 1, best: 250 } } }) });
   await startGame(a.page);
   await a.page.click('#btnRanking');
-  const [download] = await Promise.all([a.page.waitForEvent('download'), a.page.click('#btnCardSave')]);
-  assert.equal(download.suggestedFilename(), 'Rekordkarte-Testkind.json');
-  const datei = path.join(here, 'test-rekordkarte.json');
+  await a.page.click('#btnCardSave');
+  await a.page.locator('#card img.mycard').waitFor({ timeout: 15000 });
+  const [download] = await Promise.all([a.page.waitForEvent('download'), a.page.click('#btnCardDownload')]);
+  assert.equal(download.suggestedFilename(), 'Rekordkarte-Testkind.png');
+  const datei = path.join(here, 'test-rekordkarte.png');
   await download.saveAs(datei);
-  const karte = JSON.parse(fs.readFileSync(datei, 'utf8'));
-  assert.equal(karte.app, 'amazonas-angler-karte');
-  assert.equal(karte.ludins, 345);
-  assert.equal(karte.bucket, undefined, 'nur Rekorde, kein ganzer Spielstand');
+  const bild = fs.readFileSync(datei);
+  assert.deepEqual([...bild.subarray(0, 4)], [0x89, 0x50, 0x4E, 0x47], 'ein echtes PNG-Bild');
+  assert.ok(bild.includes('amazonas-angler-karte'), 'die Kartendaten stecken im Bild');
   // Die eigene Karte kann man nicht als Freund laden
+  await a.page.click('#card button:has-text("Zurück")');
   await a.page.setInputFiles('#cardFile', datei);
   await a.page.locator('text=deine eigene Rekord-Karte').waitFor();
   await a.ctx.close();
@@ -435,6 +437,9 @@ test('Bestenliste: Rekord-Karten von Freunden tauschen (ohne Internet)', async (
   await page.click('#btnRanking');
   await page.setInputFiles('#cardFile', { name: 'kopie.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ app: 'amazonas-angler', state: {} })) });
   await page.locator('text=Das ist eine Sicherheitskopie').waitFor();
+  // Ein Foto ohne Kartendaten (zum Beispiel beim Verschicken umgewandelt)
+  await page.setInputFiles('#cardFile', path.join(root, 'fotos', 'hecht.jpg'));
+  await page.locator('text=keine Kartendaten').waitFor();
   await page.setInputFiles('#cardFile', datei);
   await page.locator('#card .rankrow:has-text("Testkind")').waitFor();
   fs.unlinkSync(datei); // erst löschen, wenn das Spiel die Datei gelesen hat
@@ -442,7 +447,11 @@ test('Bestenliste: Rekord-Karten von Freunden tauschen (ohne Internet)', async (
   assert.match(await page.locator('#card .rankrow').nth(1).textContent(), /Testkind.*Rekord-Karte von Freund.*345 L/);
   await page.click('#card .tabs button:has-text("Größter Fisch")');
   assert.match(await page.locator('#card .rankrow').nth(0).textContent(), /Testkind.*Arapaima.*250 cm/);
-  assert.equal(JSON.parse(await read(page, KEY + '-freunde')).cards.length, 1);
+  // Ältere Rekord-Karten (.json) gehen weiter
+  await page.setInputFiles('#cardFile', { name: 'alt.json', mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ app: 'amazonas-angler-karte', v: 1, id: 'kalt', name: 'Oma', ludins: 50, book: {} })) });
+  await page.locator('#card .rankrow:has-text("Oma")').waitFor();
+  assert.equal(JSON.parse(await read(page, KEY + '-freunde')).cards.length, 2);
   assert.equal(JSON.parse(await read(page)).ludins, 777, 'der eigene Spielstand bleibt unverändert');
   assert.deepEqual(errors, []);
   await ctx.close();
