@@ -25,7 +25,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - **Karte**: kleine Karte oben rechts (60 m um dich herum), Antippen oder Taste M öffnet die große Karte
   (ganzer Fluss + Heimat-See). Auf der Karte zeigt **rechts nach Norden** (flussaufwärts).
 - **Spielzeit** (für Eltern): In der Avatar-Werkstatt „⏰ Spielzeit“. Ändern geht nur nach einer Rechenaufgabe für Erwachsene.
-  Aus/15/30/45/60/90 Minuten pro Tag, gilt fürs ganze Gerät (`amazonas-angler-1-spielzeit`), gezählt wird pro Spieler (`state.playTime`).
+  Aus/15/30/45/60/90 Minuten pro Tag (**Standard: 15 Minuten**, `TIME_DEFAULT`), gilt fürs ganze Gerät (`amazonas-angler-1-spielzeit`), gezählt wird pro Spieler (`state.playTime`).
   Oben steht, wie viele Minuten übrig sind. Ist die Zeit um, macht das Spiel Pause; Erwachsene können +15/+30 Minuten geben.
 - **Bestenliste** (🏆 oben und in der Avatar-Werkstatt): Ludins, Fischarten, größter Fisch; antippen zeigt, wer was gefangen hat.
   Ohne Internet: Spieler dieses iPads + **Rekord-Karten** von Freunden. Die Karte ist eine bunte **Sammelkarte als Bild** (`Rekordkarte-<Name>.png`,

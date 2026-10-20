@@ -345,13 +345,14 @@ test('Spielzeit: Erwachsene stellen sie ein, danach macht das Spiel Pause', asyn
   await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
   await startGame(page);
   await page.click('#btnTime');
+  await page.locator('#card:has-text("15 Minuten")').waitFor(); // ohne Einstellung gelten 15 Minuten
   await page.click('#btnTimeChange');
   await page.fill('#gateIn', '1');
   await page.click('#gateOk');
-  assert.equal(await page.locator('#card button:has-text("15 Min")').count(), 0, 'falsche Antwort: keine Einstellung');
+  assert.equal(await page.locator('#card button:has-text("30 Min")').count(), 0, 'falsche Antwort: keine Einstellung');
   await rechenaufgabe(page);
-  await page.click('#card button:has-text("15 Min")');
-  assert.equal(JSON.parse(await read(page, KEY + '-spielzeit')).min, 15);
+  await page.click('#card button:has-text("30 Min")');
+  assert.equal(JSON.parse(await read(page, KEY + '-spielzeit')).min, 30);
   await ctx.close();
 
   // Fast die ganze Zeit ist schon verbraucht: nach einer Sekunde kommt die Pause
@@ -561,6 +562,16 @@ test('Spinnfischen: Kunstköder auswerfen, Biss, Fisch fangen', async () => {
   }
   assert.ok(gefangen, 'in 6 Würfen hat ein Fisch gebissen');
   await page.locator('#card h2:has-text("gefangen")').waitFor();
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Spielzeit: ohne Einstellung gelten 15 Minuten pro Tag', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  assert.match(await page.textContent('#timeChip'), /⏰ 1[45] Min/);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
