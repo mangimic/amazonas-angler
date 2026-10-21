@@ -715,8 +715,8 @@ test('Fischer Hannes am Fluss: Fische verkaufen und Angelsachen kaufen', async (
   let s = JSON.parse(await read(page));
   assert.equal(s.ludins, 179);
   assert.deepEqual(s.bucket, []);
-  await page.click('#card .tabs button:text-is("🎣 Kaufen")');
-  assert.equal(await page.locator('#card .item b:text-is("Yacht")').count(), 0, 'Boote gibt es nur bei Opa Tiago');
+  assert.equal(await page.locator('#card .tabs button:text-is("Boot")').count(), 0, 'Boote gibt es nur bei Opa Tiago');
+  await page.click('#card .tabs button:text-is("Köder")');
   await page.click('#card .item:has(b:text-is("Blinker")) button');
   s = JSON.parse(await read(page));
   assert.equal(s.ludins, 119);
