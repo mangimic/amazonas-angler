@@ -230,7 +230,7 @@ test('Fotos: jeder Fisch hat ein echtes Foto, und der Eimer zeigt Fotos', async 
   const fishList = html.slice(html.indexOf('const FISH=['), html.indexOf('];', html.indexOf('const FISH=[')));
   const ids = [...fishList.matchAll(/\{id:'(\w+)'/g)].map(m => m[1]);
   const fotos = html.slice(html.indexOf('const FOTOS={'), html.indexOf('};', html.indexOf('const FOTOS={')));
-  assert.equal(ids.length, 25, '15 Amazonas-Fische und 10 See-Fische');
+  assert.equal(ids.length, 37, '15 Amazonas-Fische, 10 See-Fische und 12 Flussfische');
   for (const id of ids) {
     assert.ok(fotos.includes(` ${id}:{src:'fotos/${id}.jpg'`), `FOTOS-Eintrag für ${id}`);
     assert.ok(fs.existsSync(path.join(root, 'fotos', id + '.jpg')), `fotos/${id}.jpg`);
@@ -320,7 +320,7 @@ test('Fischbuch: nur echte Fotos, keine gemalten Fische', async () => {
   await page.click('#btnBook');
   await page.locator('#card .bk img.bkimg').first().waitFor({ timeout: 5000 });
   assert.equal(await page.locator('#card .bk img.bkimg').count(), 2, 'Piranha und Diskus als Foto');
-  assert.equal(await page.locator('#card .bk .unknown').count(), 23, 'die anderen sind ein Fragezeichen');
+  assert.equal(await page.locator('#card .bk .unknown').count(), 35, 'die anderen sind ein Fragezeichen');
   assert.equal(await page.locator('#card canvas').count(), 0, 'kein gemalter Fisch');
   await page.click('#card button.bk:has-text("Piranha")');
   await page.locator('#card .pic img.photo').waitFor();
@@ -403,7 +403,7 @@ test('Bestenliste: Spieler auf diesem iPad, sortiert nach Ludins', async () => {
   assert.match(await rows.nth(0).textContent(), /Papa.*1210 L/);
   assert.match(await rows.nth(1).textContent(), /Testkind.*345 L/);
   await page.click('#card .tabs button:has-text("Fischarten")');
-  assert.match(await page.locator('#card .rankrow').nth(0).textContent(), /Testkind.*2 \/ 25/);
+  assert.match(await page.locator('#card .rankrow').nth(0).textContent(), /Testkind.*2 \/ 37/);
   await page.click('#card .rankrow:has-text("Papa")');
   assert.match(await page.textContent('#card .catches'), /Hecht.*2× · größter 95 cm/);
   assert.deepEqual(errors, []);
@@ -602,6 +602,99 @@ test('Infotafeln: am Heimat-See lesen, +5 Ludins nur beim ersten Mal, bleibt ges
   s = JSON.parse(await read(page));
   assert.equal(s.ludins, 350);
   assert.deepEqual(s.infoRead, ['regeln']);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Die Flussplätze (SPOTS) direkt aus dem Spiel lesen
+function flussplaetze() {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const i = html.indexOf('const SPOTS=['), j = html.indexOf('];', i);
+  return new Function('return ' + html.slice(i + 'const SPOTS='.length, j + 1))();
+}
+const landeplatz = (s, dx = 4, dz = -11) => ({ x: dx, z: -1800 - s.hw + dz, f: 0, boat: false });
+
+test('Flüsse in Deutschland: ein Stempel öffnet den nächsten Fluss, der Ort bleibt gespeichert', async () => {
+  const spots = flussplaetze(), rhein = spots.find(s => s.id === 'bw-rhein');
+  assert.equal(spots.length, 18);
+  assert.ok(spots.every(s => s.q.length >= 2 && s.fish.length >= 6), 'jeder Platz hat Rätsel und Fische');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], visitedLake: true,
+    fluss: { 'bw-rhein': { f: ['barbe', 'nase', 'doebel'], q: true, s: true, r: true } }, flussAt: 'bw-rhein',
+    where: landeplatz(rhein, 10, -13.5) }) }); // gleich neben dem Flugzeug
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#deMap').waitFor();
+  assert.equal(await page.locator('[data-dest="nw-rhein"]').count(), 0, 'Köln ist noch zu');
+  assert.equal(await page.locator('[data-dest="bw-donau"]').count(), 1, 'Baden-Württemberg ist von Anfang an offen');
+  await page.click('[data-dest="rp-rhein"]'); // der Stempel am Rhein bei Breisach öffnet die Loreley
+  await page.waitForFunction(k => { const s = JSON.parse(localStorage.getItem(k)); return s.flussAt === 'rp-rhein' && s.where.z < -1300; }, KEY, { timeout: 15000 });
+  await page.locator('#flight').waitFor({ state: 'hidden', timeout: 15000 });
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  const vorher = JSON.parse(await read(page));
+  // neu laden: man steht wieder an der Loreley
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  const s = JSON.parse(await read(page));
+  assert.equal(s.flussAt, 'rp-rhein');
+  assert.ok(Math.abs(s.where.z - vorher.where.z) < 0.5 && s.where.z < -1300, 'der Platz am Fluss bleibt erhalten');
+  assert.deepEqual(s.fluss['bw-rhein'], { f: ['barbe', 'nase', 'doebel'], q: true, s: true, r: true });
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Flüsse in Deutschland: Infotafel lesen, Rätsel lösen, Stempel bekommen', async () => {
+  const rhein = flussplaetze().find(s => s.id === 'bw-rhein');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [],
+    fluss: { 'bw-rhein': { f: ['barbe', 'nase', 'doebel'] } }, flussAt: 'bw-rhein',
+    where: { x: -2.8, z: -1800 - rhein.hw - 9, f: 0, boat: false } }) }); // vor der Infotafel
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Infotafel")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Rhein bei Breisach")').waitFor();
+  assert.match(await page.textContent('#card'), /Baden-Württemberg/);
+  assert.equal(JSON.parse(await read(page)).ludins, 350, '+5 Ludins fürs Lesen');
+  await page.click('#btnRiddle');
+  for (const q of rhein.q) {
+    await page.locator('#card .qq', { hasText: q.q }).waitFor();
+    await page.click(`#card button.qa:text-is("${q.a}")`);
+    await page.click('#card button:has-text("Weiter")');
+  }
+  await page.locator('#card h2:has-text("Fluss-Stempel")').waitFor();
+  const text = await page.textContent('#card');
+  assert.match(text, /Rheinland-Pfalz/, 'ein neues Bundesland ist offen');
+  assert.match(text, /Loreley/);
+  const s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 375, '+25 Ludins für den Stempel');
+  assert.equal(s.fluss['bw-rhein'].s, true);
+  assert.equal(s.fluss['bw-rhein'].q, true);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Flüsse in Deutschland: am Rhein beißen Rhein-Fische und zählen für den Stempel', async () => {
+  const rhein = flussplaetze().find(s => s.id === 'bw-rhein');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], book: {}, flussAt: 'bw-rhein',
+    where: { x: 0, z: -1800 - rhein.hw + 6, f: 0, boat: false } }) }); // vorne auf dem Steg
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnFish');
+  await page.waitForFunction(() => document.querySelector('#fishLbl').textContent === 'ZIEHEN!', null, { timeout: 60000, polling: 200 });
+  await page.keyboard.press('Space');
+  await page.locator('#card h2:has-text("gefangen")').waitFor();
+  assert.match(await page.textContent('#card'), /Neue Fischart hier: 1 von 3/);
+  const s = JSON.parse(await read(page));
+  const ids = Object.keys(s.book);
+  assert.equal(ids.length, 1);
+  assert.ok(rhein.fish.includes(ids[0]), ids[0] + ' lebt im Rhein');
+  assert.deepEqual(s.fluss['bw-rhein'].f, ids);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
