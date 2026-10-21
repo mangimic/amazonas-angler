@@ -234,6 +234,7 @@ table.rules{border-collapse:collapse;width:100%;font-size:16px}
 .flylist{flex:1 1 230px;min-width:0;display:flex;flex-direction:column;gap:8px}
 .flylist .b{text-align:left}
 .flylist span{font-size:15px;font-weight:700}
+.flylist .flybl{font:800 14px var(--display);color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:4px}
 #deMap{cursor:pointer}
 table.rules th,table.rules td{border-bottom:2px solid #e9dfc5;padding:6px 4px;text-align:left}
 table.rules tr.now td{background:#ffe9c2}
@@ -1373,7 +1374,9 @@ function updateSonar(dt){
 
 /* =================== Oberfläche =================== */
 let toastT=null;
-function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),2600);}
+// Lange Texte bleiben länger stehen, damit Kinder sie in Ruhe lesen können (höchstens 9 Sekunden)
+const toastMs=msg=>Math.min(9000,2600+String(msg).length*55);
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove('show'),toastMs(msg));}
 function refreshHud(bump){
   $('#hudLudins').textContent=state.ludins;updateBaitBtn();$('#hudBucket').textContent=state.bucket.length+'/'+bucketMax();$('#hudName').textContent=state.avatar.name||'';
   if(bump){const p=$('#pillLudins');p.classList.remove('bump');void p.offsetWidth;p.classList.add('bump');}
@@ -1685,10 +1688,10 @@ function showHannes(){
   head.appendChild(el('div',null,'<h2>Fischer Hannes</h2><p>'+hi+', '+esc(state.avatar.name||'du')+'! Ich kaufe deine Fische und habe Angelsachen für dich.</p>'+
     (GRUSS[bl]?'<p class="small">„'+hi+'“ sagt man oft in '+esc(b.name)+'.</p>':'')));
   card.appendChild(head);
-  const tabs=el('div','tabs');[['verkaufen','🐟 Verkaufen'],['kaufen','🎣 Kaufen']].forEach(([id,lb])=>{const t=el('button',null,lb);t.setAttribute('aria-pressed',hannesTab===id);
+  const tabs=el('div','tabs four');[['verkaufen','🐟 Verkaufen']].concat(TIAGO_TABS.filter(([id])=>id!=='boot')).forEach(([id,lb])=>{const t=el('button',null,lb);t.setAttribute('aria-pressed',hannesTab===id);
     t.onclick=()=>{hannesTab=id;showHannes();};tabs.appendChild(t);});card.appendChild(tabs);
   if(hannesTab==='verkaufen'){sellList(showHannes,'Tschüss, Hannes');return;}
-  card.appendChild(buyList(TIAGO.filter(it=>it.tab!=='boot'),showHannes));
+  card.appendChild(buyList(TIAGO.filter(it=>it.tab===hannesTab),showHannes));
   card.appendChild(el('p','small','Boote gibt es bei Opa Tiago am Amazonas.'));
   const bt=el('div','btns');const c=el('button','b alt','Tschüss, Hannes');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);}
 
@@ -2654,7 +2657,11 @@ function showGermany(mode){
     go('🌴 Amazonas'+(here==='amazonas'?' (hier bist du)':''),'amazonas',here==='amazonas');
     go('🏞️ Heimat-See'+(here==='see'?' (hier bist du)':''),'see',here==='see');
     side.appendChild(el('h3','maphead','Flüsse in Deutschland'));
-    SPOTS.filter(s=>spotOpen(s.id)).forEach(s=>go((stamped(s.id)?'🏅 ':'🌊 ')+s.name+(here==='de'&&curSpot===s?' (hier bist du)':''),s.id,here==='de'&&curSpot===s));}
+    // nach Bundesländern sortiert, das Bundesland, in dem du bist, steht oben
+    const bls=[...new Set(SPOTS.filter(s=>spotOpen(s.id)).map(s=>s.bl))];
+    if(here==='de'&&curSpot&&bls.includes(curSpot.bl))bls.unshift(bls.splice(bls.indexOf(curSpot.bl),1)[0]);
+    bls.forEach(bl=>{side.appendChild(el('span','flybl',esc(BL[bl].name)));
+      SPOTS.filter(s=>s.bl===bl&&spotOpen(s.id)).forEach(s=>go((stamped(s.id)?'🏅 ':'🌊 ')+s.name+(here==='de'&&curSpot===s?' (hier bist du)':''),s.id,here==='de'&&curSpot===s));});}
   else{side.appendChild(el('p',null,atDE()&&curSpot?'Du bist am Fluss <b>'+esc(curSpot.river)+'</b> in <b>'+esc(BL[curSpot.bl].name)+'</b>. Der rote Ring zeigt, wo.':'Mit dem Flugzeug ✈️ fliegst du zu den Flüssen.'));
     [['•','Landeshauptstadt'],['🔴','Berlin, die Hauptstadt von Deutschland'],['〰️','Flüsse'],['🎣','Angelplatz, offen'],['🏅','Stempel geschafft'],['🔒','Noch nicht freigespielt']].forEach(([i,t])=>side.appendChild(el('span',null,i+' '+t)));}
   card.appendChild(el('p','small','Kartendaten: Natural Earth (gemeinfrei).'));
@@ -2714,7 +2721,7 @@ function trapSpot(){const w=findWater();if(!w)return null;
 function placeTrap(){const w=trapSpot();if(!w||state.reusen<1)return;
   const t={x:Math.round(w.x*100)/100,z:Math.round(w.z*100)/100,t:Date.now()};
   state.reusen--;state.traps.push(t);save();makeTrapMesh(t);splash(t.x,t.z);sfxSplash();
-  toast('Platsch! Deine Reuse liegt im Wasser. Komm in ein paar Minuten wieder. Wird die Boje grün, ist ein Fisch drin.');}
+  toast('Platsch! Deine Reuse liegt im Wasser. Komm in '+REUSE.every/60000+' Minuten wieder. Wird die Boje grün, ist ein Fisch drin.');}
 // Ein Fisch aus der Reuse: nur kleine und mittlere Fische, die am Ort leben (keine Riesenfische vom Boot)
 function trapFish(home){const pool=FISH.filter(f=>fishHome(f)===home&&!f.boat);
   let sum=0;pool.forEach(f=>sum+=f.w);let r=Math.random()*sum;for(const f of pool){r-=f.w;if(r<=0)return f;}return pool[0];}
@@ -2844,6 +2851,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:26,day:'21.10.2026',ico:'📖',t:'Mehr Zeit zum Lesen',d:'Lange Hinweise bleiben jetzt länger stehen. Bei Fischer Hannes gibt es Tabs, und auf der Deutschland-Karte sind die Flüsse nach Bundesländern sortiert.'},
  {v:25,day:'21.10.2026',ico:'🏞️',t:'Hannes am Heimat-See',d:'Fischer Hannes hat jetzt auch einen Stand am Heimat-See. Dort kannst du deine Fische gleich verkaufen und Köder kaufen.'},
  {v:24,day:'21.10.2026',ico:'🐟',t:'Fischer Hannes',d:'An jedem Fluss in Deutschland steht jetzt der Stand von Fischer Hannes. Dort verkaufst du deine Fische und kaufst Köder, Angeln und Kleidung.'},
  {v:23,day:'20.10.2026',ico:'🗺️',t:'Flüsse in Deutschland',d:'Mit dem Flugzeug fliegst du jetzt zu Rhein, Donau, Elbe und vielen anderen Flüssen. Dort leben 12 neue Fische. Fang 3 Fischarten und löse das Fluss-Rätsel, dann bekommst du einen Stempel und darfst dem Fluss ins nächste Bundesland folgen!'},
