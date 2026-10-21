@@ -52,6 +52,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   so folgt man dem Fluss ins nächste Bundesland. `state.fluss` (pro Platz `f`,`q`,`s`,`r`), `state.flussAt`. **`SPOTS`-ids nie ändern.**
   12 Flussfische (`home:'fluss'`). Aal, Lachs, Stör und Huchen sind „seltene Fische“ und werden immer zurückgesetzt (`RULES` mit `selten`).
   Der Flussplatz liegt in der Welt bei z um −1800 (`DE`) und wird beim Hinfliegen neu gebaut (`buildSpot`). Kartendaten: Natural Earth (gemeinfrei).
+  An jedem Flussplatz steht der Stand von **Fischer Hannes** (`buildHannes`, `showHannes`): Fische verkaufen (wie bei Rosa, `sellList`)
+  und Angelsachen kaufen (Opa Tiagos Waren ohne Boote, `buyList`). Er grüßt wie im Bundesland (`GRUSS`, z. B. „Grüß Gott“, „Moin“).
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
