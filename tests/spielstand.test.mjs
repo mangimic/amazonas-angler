@@ -742,3 +742,74 @@ test('Fischer Hannes am Heimat-See: Fische gleich dort verkaufen', async () => {
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+// Feste Stellen in Hafenhausen direkt aus dem Spiel lesen: const NAME={x:…,z:…,f:…,r:…} (nur reine Zahlen)
+function stadtWert(name) {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = html.match(new RegExp('const ' + name + '=\\{([^}]*)\\}'));
+  assert.ok(m, name + ' steht in index.html');
+  const o = {};
+  for (const [, k, v] of m[1].matchAll(/(\w+):(-?\d+(?:\.\d+)?)/g)) o[k] = Number(v);
+  assert.ok(Number.isFinite(o.x) && Number.isFinite(o.z), name + ' hat x und z als Zahlen');
+  return o;
+}
+const STADT_START = { visited: false, vehicles: { bike: true, roller: false, skate: false, truck: false }, parked: {}, riding: '' };
+
+test('Hafenhausen: hinfliegen, Ort bleibt gespeichert, Angeln geht dort nicht', async () => {
+  const VX = 10 * Math.sin(1) + 24, L = stadtWert('CITY_LAND'); // wie im Spiel: riverX(0)+24
+  assert.deepEqual(L, { x: -125, z: -3010, f: 1.5708 });
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [],
+    where: { x: VX + 13 - 3.4, z: 1, f: Math.PI / 2, boat: false } }) }); // 3,4 m neben dem Dorf-Flugzeug
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#deMap').waitFor();
+  await page.click('[data-dest="city"]');
+  await page.waitForFunction(k => JSON.parse(localStorage.getItem(k)).where.z < -2400, KEY, { timeout: 15000 });
+  await page.locator('#flight').waitFor({ state: 'hidden', timeout: 15000 });
+  await page.click('#btnFish');
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Angeln kannst du in der Angelwelt'), null, { timeout: 5000 });
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  const vorher = JSON.parse(await read(page));
+  assert.ok(Math.hypot(vorher.where.x - L.x, vorher.where.z - L.z) < 1, 'man steht am Landeplatz');
+  assert.equal(vorher.city.visited, true);
+  // neu laden: man ist immer noch in Hafenhausen
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  const s = JSON.parse(await read(page));
+  assert.ok(s.where.z < -2400, 'man ist nach dem Neuladen noch in Hafenhausen');
+  assert.ok(Math.hypot(s.where.x - vorher.where.x, s.where.z - vorher.where.z) < 0.5, 'der Platz bleibt erhalten');
+  assert.equal(s.city.visited, true);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: kaputter city-Wert im alten Spielstand wird repariert', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, city: 'x' }) });
+  await startGame(page);
+  await playAndLeave(page);
+  let s = JSON.parse(await read(page));
+  assert.deepEqual(s.city, STADT_START);
+  // einzelne kaputte Teile: nur diese werden repariert, gute Teile bleiben
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999,
+    city: { visited: true, vehicles: { truck: 'ja', roller: true, bike: false }, parked: { truck: { x: 'a', z: 1 }, rakete: { x: 1, z: 2, yaw: 0 }, bike: { x: -123, z: -3010, yaw: 0.5 } }, riding: 'rakete' } }) });
+  await startGame(page);
+  await playAndLeave(page);
+  s = JSON.parse(await read(page));
+  assert.equal(s.city.vehicles.truck, false);
+  assert.equal(s.city.vehicles.roller, true, 'gekaufter Roller bleibt');
+  assert.equal(s.city.vehicles.bike, true, 'das Fahrrad hat man immer');
+  assert.equal(s.city.vehicles.skate, false);
+  assert.equal(s.city.parked.truck, undefined);
+  assert.equal(s.city.parked.rakete, undefined);
+  assert.deepEqual(s.city.parked.bike, { x: -123, z: -3010, yaw: 0.5 }, 'gut geparktes Fahrrad bleibt');
+  assert.equal(s.city.riding, '');
+  assert.equal(s.city.visited, true);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
