@@ -101,7 +101,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .fish.wait{background:#2b6b65}
 .fish.bite{background:var(--macaw);animation:pulse .35s infinite alternate;font-size:26px}
 @keyframes pulse{to{transform:scale(1.1)}}
-.ctx{background:var(--gold);padding:12px 20px;font-size:22px}
+.ctx{background:var(--gold);padding:12px 20px;font-size:22px;min-height:60px}
 .baitbtn{background:var(--paper);min-height:60px;padding:8px 18px;font-size:20px}
 .hint-joy{position:fixed;left:calc(max(16px,env(safe-area-inset-left,0px)) + 10px);bottom:calc(env(safe-area-inset-bottom,0px) + 26px);
   width:120px;height:120px;border-radius:50%;border:3px dashed rgba(255,255,255,.7);display:grid;place-items:center;color:#fff;font-weight:800;
@@ -735,6 +735,21 @@ function merge(parts){
   return g;
 }
 const vcMat=new THREE.MeshLambertMaterial({vertexColors:true});
+// Viele feste Teile zu wenigen Meshes zusammenfassen: das sieht gleich aus, braucht aber viel weniger Zeichen-Aufrufe.
+// Nur einfarbige Lambert-Teile ohne Bild (Schilder mit Schrift bleiben einzeln). Die Normalen bleiben, wie sie sind.
+const bakeable=o=>{const m=o.material;return o.isMesh&&!o.isInstancedMesh&&o.visible&&!o.userData.tex&&m&&m.isMeshLambertMaterial&&!m.map&&!m.vertexColors&&!m.transparent&&m.side===THREE.FrontSide;};
+function bakePart(o,mx){const g=o.geometry.index?o.geometry.toNonIndexed():o.geometry.clone();g.applyMatrix4(mx);
+  const n=g.attributes.position.count,c=o.material.color,a=new Float32Array(n*3);for(let i=0;i<n;i++){a[i*3]=c.r;a[i*3+1]=c.g;a[i*3+2]=c.b;}
+  const out=new THREE.BufferGeometry();out.setAttribute('position',g.attributes.position);out.setAttribute('normal',g.attributes.normal);
+  out.setAttribute('color',new THREE.BufferAttribute(a,3));return out;}
+// die direkten Kinder einer Gruppe zu einem Mesh (für Teile, die sich als Ganzes bewegen: Arm, Bein, Fahrzeug)
+function bakeKids(g){g.children.forEach(o=>o.updateMatrix());const kids=g.children.filter(o=>bakeable(o)&&o.matrix.determinant()>0);if(kids.length<2)return;
+  const m=new THREE.Mesh(merge(kids.map(o=>bakePart(o,o.matrix))),vcMat);kids.forEach(o=>g.remove(o));g.add(m);}
+// alles Feste in der Gruppe root, nach Feldern von size Metern (so werden Felder hinter der Kamera weiter nicht gezeichnet)
+function bakeCells(root,size,x0,z0){root.updateMatrixWorld(true);const inv=new THREE.Matrix4().copy(root.matrixWorld).invert(),cells={},done=[],v=new THREE.Vector3();
+  root.traverseVisible(o=>{if(!bakeable(o)||o.matrixWorld.determinant()<=0)return;const mx=new THREE.Matrix4().multiplyMatrices(inv,o.matrixWorld);
+    v.setFromMatrixPosition(mx);const k=Math.floor((v.x-x0)/size)+','+Math.floor((v.z-z0)/size);(cells[k]||(cells[k]=[])).push(bakePart(o,mx));done.push(o);});
+  done.forEach(o=>o.parent.remove(o));Object.values(cells).forEach(p=>root.add(new THREE.Mesh(merge(p),vcMat)));}
 
 /* ---- Wasser ---- */
 const waterTex=(function(){
@@ -2804,8 +2819,8 @@ function placeTram(){tramCars(tram.s,tram.cars);tramCircles(tram.cars,tram.cols)
 // Wer der Bahn im Weg sein kann: die Menschen und der Spieler (auch auf dem Rad oder im Truck), aber nicht, wer mitfährt
 const tramObst=[],tramMe=[{x:0,z:0,r:0.35},{x:0,z:0,r:1.2},{x:0,z:0,r:1.2}],tramTry={cars:[{x:0,z:0,yaw:0},{x:0,z:0,yaw:0}],cols:[]};
 for(let i=0;i<10;i++)tramTry.cols.push({x:0,z:0,r:TRAM_COL_R});
-function tramBlocked(s){tramObst.length=0;for(const p of people)tramObst.push(p.col);
-  if(player.ride!=='tram'){const p=player.pos;tramMe[0].x=p.x;tramMe[0].z=p.z;tramMe[0].r=player.ride==='truck'?1.4:0.35;tramObst.push(tramMe[0]);
+function tramBlocked(s,noMe){tramObst.length=0;for(const p of people)tramObst.push(p.col); // noMe: ohne den Spieler prüfen
+  if(player.ride!=='tram'&&!noMe){const p=player.pos;tramMe[0].x=p.x;tramMe[0].z=p.z;tramMe[0].r=player.ride==='truck'?1.4:0.35;tramObst.push(tramMe[0]);
     if(player.ride==='truck'){const sx=Math.sin(player.facing)*2,sz=Math.cos(player.facing)*2; // Nase und Heck vom Truck (wie truckFits)
       tramMe[1].x=p.x+sx;tramMe[1].z=p.z+sz;tramMe[2].x=p.x-sx;tramMe[2].z=p.z-sz;tramObst.push(tramMe[1],tramMe[2]);}}
   tramCars(s,tramTry.cars);tramCircles(tramTry.cars,tramTry.cols);
@@ -2813,12 +2828,18 @@ function tramBlocked(s){tramObst.length=0;for(const p of people)tramObst.push(p.
   const front=s+TRAM.car+TRAM.gap/2;                                           // vorne am Zug: 6 m nach vorn frei?
   for(let d=0;d<=6;d+=1.5){const p=tramPos(front+d);if(hitsList(tramObst,p.x,p.z,1.3))return true;}
   return false;}
+// Steht man selbst länger als 2 s im Weg, bittet die Bahn freundlich darum, Platz zu machen (höchstens alle 8 s).
+// tramStuck wird beim Fahren nur langsam weniger: kriecht die Bahn ein Stückchen vor, zählt das Warten weiter.
+let tramStuck=0,tramHint=0;
 function updateTram(dt){if(!tram.g||!atCity())return; // weit weg (Amazonas, See, Flussplatz) wartet die Bahn
-  if(tram.wait>0){tram.wait-=dt;return;}
+  tramHint=Math.max(0,tramHint-dt);
+  if(tram.wait>0){tram.wait-=dt;tramStuck=0;return;}
   const next=(tram.stopIdx+1)%STOP_IDS.length,goal=TRAM_STOP_S[STOP_IDS[next]],left=((goal-tram.s)%TRAM_LEN+TRAM_LEN)%TRAM_LEN;
   const ns=TRAM.speed*dt>=left?goal:(tram.s+TRAM.speed*dt)%TRAM_LEN;
-  if(tramBlocked(ns))return;
-  tram.s=ns;tramBoard='';if(ns===goal){tram.stopIdx=next;tram.wait=TRAM.wait;}placeTram();}
+  if(tramBlocked(ns)){tramStuck=player.ride!=='tram'&&!tramBlocked(ns,true)?tramStuck+dt:Math.max(0,tramStuck-dt);
+    if(tramStuck>2&&tramHint<=0){tramHint=8;toast('Bitte geh von den Schienen. Die Bahn möchte weiterfahren.');}
+    return;}
+  tramStuck=Math.max(0,tramStuck-dt);tram.s=ns;tramBoard='';if(ns===goal){tram.stopIdx=next;tram.wait=TRAM.wait;}placeTram();}
 // An welcher Haltestelle die Bahn gerade steht (oder null)
 const tramAtStop=()=>tram.g&&tram.s===TRAM_STOP_S[STOP_IDS[tram.stopIdx]]?STOP_IDS[tram.stopIdx]:null;
 // Steht man an einer Haltestelle? Näher als 6 m an den Schienen der Haltestelle oder näher als 4 m am Häuschen.
@@ -2926,8 +2947,9 @@ function buildCity(){if(cityBuilt)return;
     fm.setMatrixAt(nf,M(x,1.45,z));fm.setColorAt(nf,fc.set(FLOWER_COLS[Math.floor(R()*5)]));nf++;}
   fm.count=nf;fm.userData.shared=true;g.add(fm);
   g.add(new THREE.Mesh(merge(deco),vcMat));
+  bakeCells(g,100,CITY.x-CITY.w,CITY.z-CITY.l); // Häuser, Brunnen, Boote, Flugzeug …: aus ~400 Teilen werden 9 Meshes (ohne Zufall)
   buildPeople(g,rng(815));
-  VEHICLE_IDS.forEach(id=>{vehMesh[id]=buildVehicleMesh(id);g.add(vehMesh[id]);}); // ohne Zufall, damit die Häuser bleiben, wo sie sind
+  VEHICLE_IDS.forEach(id=>{vehMesh[id]=buildVehicleMesh(id);bakeKids(vehMesh[id]);g.add(vehMesh[id]);}); // ohne Zufall, damit die Häuser bleiben, wo sie sind
   placeVehicles();
   buildTram(g); // zuletzt: ohne Zufall, und erst jetzt kommt die Bahn zu den Hindernissen (die Häuser stehen schon)
   cityBuilt=true;}
@@ -2942,6 +2964,7 @@ function buildPeople(g,R){const pick=a=>a[Math.floor(R()*a.length)],order=[];
     let i=0,x=0,z=0;for(let tr=0;tr<20;tr++){i=Math.floor(R()*4);const a=path[(i+3)%4],e=path[i],f=R();x=a.x+(e.x-a.x)*f;z=a.z+(e.z-a.z)*f;
       if(keepFree.every(p=>Math.hypot(p.x-x,p.z-z)>5))break;}
     const kid=R()<0.3,av=buildAvatar({skin:pick(SKINS),hair:pick(HAIRS)[0],hairColor:pick(HAIRCOLS),shirt:pick(SHIRTS),pants:pick(PANTS),hat:pick(HATS)[0]});
+    [av.group,...av.legs,...av.arms].forEach(bakeKids); // Körper, Beine und Arme: je 1 Mesh statt ~30 Teile
     if(kid)av.group.scale.setScalar(0.72);av.group.position.set(x,heightAt(x,z),z);g.add(av.group);
     const col={x,z,r:0.5};peopleCols.push(col);
     people.push({g:av.group,path,i,t:R()*6,speed:1.2,av,wave:0,wait:0,col});}}
