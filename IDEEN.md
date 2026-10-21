@@ -23,11 +23,19 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [x] Echte Fotos von den 10 See-Fischen, auch im Eimer, bei Rosa und in der Reuse
 - [x] Mehrere Spieler mit eigenem Spielstand („Wer spielt?“)
 - [x] Flüsse in Deutschland: Deutschland-Karte, 18 Angelplätze, Fluss-Stempel, Bundesländer freispielen
+- [x] Hafenhausen mit Fahrzeugen (Fahrrad, Roller, Skateboard, Cyber-Truck, Straßenbahn)
 
 ## Als Nächstes
 - [ ] Haus: Möbel
 - [ ] Haus: Aquarium mit gefangenen Fischen
 - [ ] Haus: Pokale für die größten Fänge
 - [ ] Haus: Spielzeug-Eisenbahn
+- [ ] Menschen mit Aufgaben
+- [ ] Läden in Hafenhausen
+- [ ] Eigenes Haus in der Stadt
+- [ ] Bus
+- [ ] Ampeln und Verkehrsregeln
+- [ ] Goldschürfen
+- [ ] Mehr Menschen in der Angelwelt
 - [ ] 
 - [ ] 
