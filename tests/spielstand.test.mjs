@@ -34,8 +34,8 @@ before(async () => {
 after(async () => { await browser?.close(); server?.close(); });
 
 // Neues Browserfenster. Three.js kommt aus npm statt aus dem Internet, Schriften werden übersprungen.
-async function newPage() {
-  const ctx = await browser.newContext();
+async function newPage(opts) { // opts: z. B. { viewport: … } (kleineres Fenster = mehr Bilder pro Sekunde)
+  const ctx = await browser.newContext(opts);
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -739,6 +739,408 @@ test('Fischer Hannes am Heimat-See: Fische gleich dort verkaufen', async () => {
   const s = JSON.parse(await read(page));
   assert.equal(s.ludins, 70);
   assert.deepEqual(s.bucket, []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Feste Stellen in Hafenhausen direkt aus dem Spiel lesen: const NAME={x:…,z:…,f:…,r:…} (nur reine Zahlen)
+function stadtWert(name) {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = html.match(new RegExp('const ' + name + '=\\{([^}]*)\\}'));
+  assert.ok(m, name + ' steht in index.html');
+  const o = {};
+  for (const [, k, v] of m[1].matchAll(/(\w+):(-?\d+(?:\.\d+)?)/g)) o[k] = Number(v);
+  assert.ok(Number.isFinite(o.x) && Number.isFinite(o.z), name + ' hat x und z als Zahlen');
+  return o;
+}
+const STADT_START = { visited: false, vehicles: { bike: true, roller: false, skate: false, truck: false }, parked: {}, riding: '' };
+
+test('Hafenhausen: hinfliegen, Ort bleibt gespeichert, Angeln geht dort nicht', async () => {
+  const VX = 10 * Math.sin(1) + 24, L = stadtWert('CITY_LAND'); // wie im Spiel: riverX(0)+24
+  assert.deepEqual(L, { x: -125, z: -3010, f: 1.5708 });
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [],
+    where: { x: VX + 13 - 3.4, z: 1, f: Math.PI / 2, boat: false } }) }); // 3,4 m neben dem Dorf-Flugzeug
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#deMap').waitFor();
+  await page.click('[data-dest="city"]');
+  await page.waitForFunction(k => JSON.parse(localStorage.getItem(k)).where.z < -2400, KEY, { timeout: 15000 });
+  await page.locator('#flight').waitFor({ state: 'hidden', timeout: 15000 });
+  await page.click('#btnFish');
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Angeln kannst du in der Angelwelt'), null, { timeout: 5000 });
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  const vorher = JSON.parse(await read(page));
+  assert.ok(Math.hypot(vorher.where.x - L.x, vorher.where.z - L.z) < 1, 'man steht am Landeplatz');
+  assert.equal(vorher.city.visited, true);
+  // neu laden: man ist immer noch in Hafenhausen
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
+  const s = JSON.parse(await read(page));
+  assert.ok(s.where.z < -2400, 'man ist nach dem Neuladen noch in Hafenhausen');
+  assert.ok(Math.hypot(s.where.x - vorher.where.x, s.where.z - vorher.where.z) < 0.5, 'der Platz bleibt erhalten');
+  assert.equal(s.city.visited, true);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: kaputter city-Wert im alten Spielstand wird repariert', async () => {
+  const { ctx, page, errors } = await newPage();
+  // alter Spielstand ganz ohne city (von vor Hafenhausen): bekommt den Startwert
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999 }) });
+  await startGame(page);
+  await playAndLeave(page);
+  let s = JSON.parse(await read(page));
+  assert.deepEqual(s.city, STADT_START, 'alter Spielstand ohne city bekommt den Startwert');
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, city: 'x' }) });
+  await startGame(page);
+  await playAndLeave(page);
+  s = JSON.parse(await read(page));
+  assert.deepEqual(s.city, STADT_START);
+  // einzelne kaputte Teile: nur diese werden repariert, gute Teile bleiben
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999,
+    city: { visited: true, vehicles: { truck: 'ja', roller: true, bike: false }, parked: { truck: { x: 'a', z: 1 }, rakete: { x: 1, z: 2, yaw: 0 }, bike: { x: -123, z: -3010, yaw: 0.5 } }, riding: 'rakete' } }) });
+  await startGame(page);
+  await playAndLeave(page);
+  s = JSON.parse(await read(page));
+  assert.equal(s.city.vehicles.truck, false);
+  assert.equal(s.city.vehicles.roller, true, 'gekaufter Roller bleibt');
+  assert.equal(s.city.vehicles.bike, true, 'das Fahrrad hat man immer');
+  assert.equal(s.city.vehicles.skate, false);
+  // nichts aus dem Spielstand löschen: unbekannte oder kaputte Einträge bleiben gespeichert, das Spiel beachtet sie nur nicht
+  assert.deepEqual(s.city.parked.truck, { x: 'a', z: 1 }, 'kaputter Eintrag bleibt gespeichert');
+  assert.deepEqual(s.city.parked.rakete, { x: 1, z: 2, yaw: 0 }, 'unbekanntes Fahrzeug bleibt gespeichert');
+  assert.deepEqual(s.city.parked.bike, { x: -123, z: -3010, yaw: 0.5 }, 'gut geparktes Fahrrad bleibt');
+  assert.equal(s.city.riding, '');
+  assert.equal(s.city.visited, true);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Fahrzeuge in Hafenhausen: das Fahrrad steht 2 m neben dem Landeplatz (Startplatz), Roller und Skateboard vor dem Fahrzeug-Laden
+const stadtSeed = (extra) => JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], ...extra });
+const halten = async (page, key, ms) => { await page.keyboard.down(key); await page.waitForTimeout(ms); await page.keyboard.up(key); };
+const weg = async (page) => { await page.evaluate(() => window.dispatchEvent(new Event('pagehide'))); return JSON.parse(await read(page)); };
+
+test('Hafenhausen: Fahrrad aufsteigen, fahren, absteigen, bleibt geparkt', async () => {
+  const L = stadtWert('CITY_LAND');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true }, where: { x: L.x, z: L.z, f: L.f, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Absteigen")').waitFor({ timeout: 5000 });
+  await halten(page, 'KeyW', 1500);
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 5000 });
+  const s = await weg(page);
+  const p = s.city.parked.bike;
+  assert.ok(p && [p.x, p.z, p.yaw].every(Number.isFinite), 'das Fahrrad ist geparkt');
+  assert.equal(s.city.riding, '');
+  assert.ok(Math.hypot(p.x - (L.x + 2), p.z - L.z) > 3, 'das Fahrrad ist weggefahren');
+  assert.ok(Math.hypot(s.where.x - p.x, s.where.z - p.z) < 4, 'man steht neben dem Fahrrad');
+  // neu laden: das Fahrrad steht noch da, wo man es abgestellt hat
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  const s2 = await weg(page);
+  assert.deepEqual(s2.city.parked.bike, p);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: beim Fahren gespeichert und neu geladen steht man zu Fuß', async () => {
+  const L = stadtWert('CITY_LAND');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, riding: 'bike', parked: { bike: { x: L.x + 2, z: L.z, yaw: 0 } } },
+    where: { x: L.x + 2, z: L.z, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 });
+  assert.equal(await page.locator('#btnCtx:has-text("Absteigen")').count(), 0, 'man fährt nicht mehr');
+  const s = await weg(page);
+  assert.equal(s.city.riding, '');
+  assert.deepEqual(s.city.parked.bike, { x: L.x + 2, z: L.z, yaw: 0 }, 'das Fahrrad bleibt stehen');
+  assert.ok(Math.hypot(s.where.x - (L.x + 2), s.where.z - L.z) > 0.5, 'man steht neben dem Fahrrad, nicht darauf');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: Roller kaufen im Fahrzeug-Laden, Werkstatt öffnen beim Fahren parkt ihn', async () => {
+  const S = stadtWert('SHOP_AT');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ludins: 100, city: { visited: true }, where: { x: S.x, z: S.z, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Fahrzeug-Laden")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.click('#card .item:has(b:text-is("Roller")) button');
+  let s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 40);
+  assert.equal(s.city.vehicles.roller, true);
+  assert.equal(s.city.vehicles.skate, false);
+  await page.click('#card button:has-text("Tschüss")');
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 5000 }); // der Roller steht vor dem Laden
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Absteigen")').waitFor({ timeout: 5000 });
+  s = JSON.parse(await read(page));
+  assert.equal(s.city.riding, 'roller');
+  await page.click('#btnAvatar');
+  s = await weg(page);
+  assert.equal(s.city.riding, '');
+  const p = s.city.parked.roller;
+  assert.ok(p && [p.x, p.z, p.yaw].every(Number.isFinite), 'der Roller ist geparkt');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: Fahrrad fährt nicht durch Häuser', async () => {
+  const H = stadtWert('TEST_HOUSE'); // Haus direkt südlich der Flugplatz-Straße
+  assert.ok(H.r > 3, 'TEST_HOUSE hat einen Radius');
+  const { ctx, page, errors } = await newPage();
+  const at = { x: H.x, z: H.z + H.r + 4 };
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, parked: { bike: { ...at, yaw: Math.PI } } },
+    where: { ...at, f: Math.PI, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Absteigen")').waitFor({ timeout: 5000 });
+  await halten(page, 'KeyW', 2000);
+  const s = await weg(page);
+  assert.equal(s.city.riding, 'bike');
+  assert.ok(s.where.z < at.z - 2, 'man ist auf das Haus zu gefahren');
+  assert.ok(Math.hypot(s.where.x - H.x, s.where.z - H.z) >= H.r, 'man steht nicht im Haus');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: Fahrzeuge halten an Hindernissen an und rutschen nicht daran entlang', async () => {
+  // schräg (45°) auf den Brunnen am Markt zu fahren, knapp neben der Mitte: hier laufen keine Menschen
+  const B = stadtWert('FOUNTAIN');
+  const r2 = v => Math.round(v * 100) / 100; // wie das Spiel beim Speichern rundet
+  assert.deepEqual(B, { x: 0, z: -2985, r: 3.6 });
+  const R = B.r + 0.35, f = -3 * Math.PI / 4, d = { x: Math.sin(f), z: Math.cos(f) }, n = { x: -d.z, z: d.x }; // n steht quer zur Fahrtrichtung
+  const at = { x: r2(B.x + 3.2 * n.x - 6 * d.x), z: r2(B.z + 3.2 * n.z - 6 * d.z) };
+  // dort berührt man den Brunnen zum ersten Mal
+  const px = at.x - B.x, pz = at.z - B.z, pd = px * d.x + pz * d.z, t = -pd - Math.sqrt(pd * pd - (px * px + pz * pz - R * R));
+  const touch = { x: at.x + t * d.x, z: at.z + t * d.z };
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, parked: { bike: { ...at, yaw: f } } }, where: { ...at, f, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 });
+  let s = await weg(page);
+  assert.ok(Math.hypot(s.where.x - at.x, s.where.z - at.z) < 0.05, 'die Startstelle ist frei, man steht genau dort');
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Absteigen")').waitFor({ timeout: 5000 });
+  await page.keyboard.down('KeyW');
+  // warten, bis das Rad am Brunnen ist (auf langsamen Rechnern dauert die Fahrt länger, der Browser hängt manchmal kurz)
+  let a = await weg(page);
+  for (let i = 0; i < 50 && Math.hypot(a.where.x - touch.x, a.where.z - touch.z) >= 0.8; i++) {
+    await page.waitForTimeout(300);
+    a = await weg(page);
+  }
+  assert.ok(Math.hypot(a.where.x - touch.x, a.where.z - touch.z) < 0.8, 'man hält dort an, wo man den Brunnen berührt (Halt bei ' + a.where.x + ',' + a.where.z + ')');
+  await page.waitForTimeout(1000);
+  const b = await weg(page);
+  await page.keyboard.up('KeyW');
+  assert.equal(b.city.riding, 'bike');
+  // ein paar Zentimeter geradeaus heranrollen ist erlaubt (kleinere Schritte bei langsamen Bildern), seitlich wegrutschen nicht
+  const dx = b.where.x - a.where.x, dz = b.where.z - a.where.z;
+  assert.ok(Math.abs(dx * n.x + dz * n.z) < 0.2, 'man rutscht nicht am Brunnen entlang');
+  assert.ok(Math.hypot(b.where.x - touch.x, b.where.z - touch.z) < 0.8, 'man bleibt am Brunnen stehen');
+  assert.ok(Math.hypot(b.where.x - B.x, b.where.z - B.z) >= B.r, 'man steht nicht im Brunnen');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: Cyber-Truck kaufen, einsteigen, hupen, bleibt nach Neuladen', async () => {
+  const S = stadtWert('SHOP_AT');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ludins: 1000, city: { visited: true }, where: { x: S.x, z: S.z, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Fahrzeug-Laden")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.click('#card .item:has(b:text-is("Cyber-Truck")) button');
+  let s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 200);
+  assert.equal(s.city.vehicles.truck, true);
+  await page.click('#card button:has-text("Tschüss")');
+  await page.locator('#btnCtx:has-text("Einsteigen")').waitFor({ timeout: 5000 }); // der Truck steht vor dem Laden
+  assert.ok(await page.locator('#btnHorn').isHidden(), 'zu Fuß gibt es keine Hupe');
+  await page.click('#btnCtx');
+  await page.locator('#btnHorn').waitFor({ state: 'visible', timeout: 5000 });
+  assert.equal((await page.locator('#btnHorn').textContent()).trim(), '📯 Hupe');
+  assert.ok((await page.locator('#btnHorn').boundingBox()).height >= 60, 'die Hupe ist ein großer Knopf');
+  await page.click('#btnHorn');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
+  s = JSON.parse(await read(page));
+  assert.equal(s.city.riding, 'truck');
+  await page.click('#btnCtx');
+  await page.locator('#btnHorn').waitFor({ state: 'hidden', timeout: 5000 });
+  s = await weg(page);
+  assert.equal(s.city.riding, '');
+  // neu laden: der Truck gehört einem immer noch
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  s = await weg(page);
+  assert.equal(s.city.vehicles.truck, true);
+  assert.equal(s.ludins, 200);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: Cyber-Truck steckt die Nase nicht in Häuser', async () => {
+  const H = stadtWert('TEST_HOUSE'); // Haus direkt südlich der Flugplatz-Straße
+  const r2 = v => Math.round(v * 100) / 100;
+  const at = { x: H.x, z: r2(H.z + H.r + 9) }; // auf der Straße, der Truck zeigt auf das Haus
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, vehicles: { bike: true, truck: true }, parked: { truck: { ...at, yaw: Math.PI } } },
+    where: { ...at, f: Math.PI, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Einsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
+  await halten(page, 'KeyW', 2000);
+  const s = await weg(page);
+  assert.equal(s.city.riding, 'truck');
+  assert.ok(s.where.z < at.z - 2, 'man ist auf das Haus zu gefahren');
+  // der Truck ist fast 6 m lang: seine Mitte bleibt mindestens 2 m weiter weg als die Hauswand
+  assert.ok(Math.hypot(s.where.x - H.x, s.where.z - H.z) >= H.r + 2, 'die Nase vom Truck steckt nicht im Haus');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Abstand eines Punktes zu den Schienen (CITY_RING, geschlossen), direkt aus index.html gelesen
+function schienenAbstand(p) {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const ring = [...html.match(/const CITY_RING=\[([^\]]*)\]/)[1].matchAll(/\{x:(-?\d+(?:\.\d+)?),z:(-?\d+(?:\.\d+)?)\}/g)].map(([, x, z]) => ({ x: Number(x), z: Number(z) }));
+  let best = Infinity;
+  ring.forEach((a, i) => { const b = ring[(i + 1) % ring.length], l = (b.x - a.x) ** 2 + (b.z - a.z) ** 2;
+    const k = Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.z - a.z) * (b.z - a.z)) / l));
+    best = Math.min(best, Math.hypot(a.x + (b.x - a.x) * k - p.x, a.z + (b.z - a.z) * k - p.z)); });
+  return best;
+}
+
+test('Hafenhausen: auf den Schienen kann man nicht parken', async () => {
+  const L = stadtWert('CITY_LAND'), S = stadtWert('SHOP_AT');
+  // die Startplätze der Fahrzeuge liegen weit weg von den Schienen
+  for (const p of [{ x: L.x + 2, z: L.z }, { x: S.x - 1.8, z: S.z + 1.5 }, { x: S.x + 1.8, z: S.z + 1.5 }, { x: S.x, z: S.z + 4 }])
+    assert.ok(schienenAbstand(p) > 6, 'Startplatz eines Fahrzeugs liegt nicht auf den Schienen');
+  // 4 m neben den Schienen (die Bahn fährt bei x = −60), hinter der Bahn (sie steht am Flugplatz und fährt nach Süden).
+  // Das Rad zeigt nach −x, also auf die Schienen zu.
+  const at = { x: -56, z: -2955 }, f = -Math.PI / 2;
+  assert.ok(Math.abs(schienenAbstand(at) - 4) < 0.01);
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, parked: { bike: { ...at, yaw: f } } }, where: { ...at, f, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Absteigen")').waitFor({ timeout: 5000 });
+  // auf die Schienen fahren und dort anhalten
+  await page.keyboard.down('KeyW');
+  let s;
+  for (let i = 0; i < 300; i++) { s = await weg(page); if (s.where.x <= -58.5) break; await page.waitForTimeout(30); }
+  await page.keyboard.up('KeyW');
+  s = await weg(page);
+  assert.ok(schienenAbstand(s.where) < 2.2, 'man steht mit dem Rad auf den Schienen (' + s.where.x + ')');
+  await page.click('#btnCtx');
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Hier fährt die Straßenbahn. Stell dein Fahrzeug an den Rand.'), null, { timeout: 5000 });
+  s = await weg(page);
+  assert.equal(s.city.riding, 'bike', 'man fährt noch');
+  assert.ok(await page.locator('#btnCtx:has-text("Absteigen")').isVisible());
+  // Werkstatt öffnen beim Fahren auf den Schienen: das Rad wird trotzdem nicht auf die Schienen gestellt
+  await page.click('#btnAvatar');
+  s = await weg(page);
+  assert.equal(s.city.riding, '');
+  assert.ok(schienenAbstand(s.city.parked.bike) >= 2.2, 'das Rad steht nicht auf den Schienen');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: auf den Schienen gespeichert, nach dem Neuladen steht das Fahrzeug nicht mehr darauf', async () => {
+  const at = { x: -60, z: -2955 };
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, riding: 'bike', parked: { bike: { ...at, yaw: 0 } } }, where: { ...at, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  const s = await weg(page);
+  assert.equal(s.city.riding, '');
+  assert.ok(schienenAbstand(s.city.parked.bike) >= 2.2, 'das Rad steht nicht mehr auf den Schienen');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Straßenbahn: fährt auf CITY_RING (TRAM_ROUTE) im Kreis, Haltestellen der Reihe nach Flugplatz → Markt → Hafen → Park
+const HALTESTELLEN = ['STOP_FLUGPLATZ', 'STOP_MARKT', 'STOP_HAFEN', 'STOP_PARK'];
+test('Hafenhausen: alle Haltestellen liegen genau auf der Strecke der Straßenbahn', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  assert.match(html, /const TRAM_ROUTE=CITY_RING;/, 'die Bahn fährt auf dem Ring');
+  const m = html.match(/const CITY_RING=\[([^\]]*)\]/);
+  assert.ok(m, 'CITY_RING steht in index.html');
+  const ring = [...m[1].matchAll(/\{x:(-?\d+(?:\.\d+)?),z:(-?\d+(?:\.\d+)?)\}/g)].map(([, x, z]) => ({ x: Number(x), z: Number(z) }));
+  assert.ok(ring.length >= 4);
+  const cum = [0];
+  for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; cum.push(cum[i] + Math.hypot(b.x - a.x, b.z - a.z)); }
+  const along = p => { for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length], l = cum[i + 1] - cum[i];
+    const k = ((p.x - a.x) * (b.x - a.x) + (p.z - a.z) * (b.z - a.z)) / (l * l);
+    if (k >= 0 && k <= 1 && Math.hypot(a.x + (b.x - a.x) * k - p.x, a.z + (b.z - a.z) * k - p.z) < 1e-6) return cum[i] + k * l; } return null; };
+  const s = HALTESTELLEN.map(n => along(stadtWert(n)));
+  s.forEach((v, i) => assert.ok(v !== null, HALTESTELLEN[i] + ' liegt auf der Strecke'));
+  const L = cum[ring.length];
+  for (let i = 0; i < s.length; i++) {
+    const d = ((s[(i + 1) % s.length] - s[i]) % L + L) % L;
+    assert.ok(d > 0 && d <= 240, 'von ' + HALTESTELLEN[i] + ' zur nächsten Haltestelle sind es höchstens 240 m (' + d + ')');
+  }
+  assert.equal(s.reduce((a, v, i) => a + ((s[(i + 1) % s.length] - v) % L + L) % L, 0), L, 'die Reihenfolge ist Flugplatz → Markt → Hafen → Park');
+});
+
+test('Hafenhausen: Straßenbahn einsteigen und an der nächsten Haltestelle aussteigen', async () => {
+  const F = stadtWert('STOP_FLUGPLATZ'), MK = stadtWert('STOP_MARKT');
+  // kleines Fenster: der unsichtbare Browser malt dann schneller, die Fahrt (gut 24 s Spielzeit) dauert nicht so lange
+  const { ctx, page, errors } = await newPage({ viewport: { width: 640, height: 480 } });
+  // 5,5 m neben dem Gleis (die Bahn fährt in der Straßenmitte bei x = F.x): nah an der Haltestelle, aber nicht in der Bahn
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true }, where: { x: F.x + 5.5, z: F.z, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  // die Bahn steht am Flugplatz. Verpasst man sie, kommt sie nach einer ganzen Runde wieder
+  // (gut 120 s Spielzeit; der unsichtbare Browser läuft nur etwa halb so schnell, darum bis zu 300 s)
+  await page.locator('#btnCtx:has-text("🚋 Einsteigen")').waitFor({ timeout: 300000 });
+  await page.click('#btnCtx');
+  assert.ok(await page.locator('#btnHorn').isHidden(), 'in der Straßenbahn gibt es keine Hupe');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 300000 }); // erst an der nächsten Haltestelle (auf langsamen Rechnern dauert das)
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ state: 'hidden', timeout: 5000 });
+  const s = await weg(page);
+  assert.ok(Math.hypot(s.where.x - MK.x, s.where.z - MK.z) < 8, 'man steht an der Haltestelle Markt');
+  assert.equal(s.city.riding, '');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: in der Straßenbahn wegfliegen geht nicht, speichern setzt an die letzte Haltestelle', async () => {
+  const stops = HALTESTELLEN.map(stadtWert);
+  const { ctx, page, errors } = await newPage();
+  // gespeichert, während man mit der Bahn zwischen Markt und Hafen fuhr (mitten auf der Strecke)
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, riding: 'tram' }, where: { x: 0, z: -3075, f: Math.PI, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('#btnCtx:has-text("Fliegen")').count(), 0, 'hier gibt es kein Flugzeug');
+  const s = await weg(page);
+  assert.equal(s.city.riding, '');
+  assert.ok(stops.some(p => Math.hypot(s.where.x - p.x, s.where.z - p.z) < 8), 'man steht zu Fuß an einer Haltestelle');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
