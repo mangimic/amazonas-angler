@@ -698,3 +698,29 @@ test('Flüsse in Deutschland: am Rhein beißen Rhein-Fische und zählen für den
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Fischer Hannes am Fluss: Fische verkaufen und Angelsachen kaufen', async () => {
+  const neckar = flussplaetze().find(s => s.id === 'bw-neckar');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, ludins: 100, flussAt: 'bw-neckar',
+    bucket: [{ id: 'barbe', cm: 50, value: 24 }, { id: 'zander', cm: 60, value: 55 }],
+    where: { x: -6, z: -1800 - neckar.hw - 12.5, f: 0, boat: false } }) }); // neben dem Stand
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Fischer Hannes")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Fischer Hannes")').waitFor();
+  assert.match(await page.textContent('#card'), /Grüß Gott/, 'in Baden-Württemberg sagt Hannes „Grüß Gott“');
+  await page.click('#card button:has-text("Alles verkaufen (+79 Ludins)")');
+  let s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 179);
+  assert.deepEqual(s.bucket, []);
+  await page.click('#card .tabs button:text-is("🎣 Kaufen")');
+  assert.equal(await page.locator('#card .item b:text-is("Yacht")').count(), 0, 'Boote gibt es nur bei Opa Tiago');
+  await page.click('#card .item:has(b:text-is("Blinker")) button');
+  s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 119);
+  assert.equal(s.baits.blinker, 1);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

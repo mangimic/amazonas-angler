@@ -187,6 +187,7 @@ button.bk:active{border-color:var(--ink)}
 .rosa .face::before,.rosa .face::after{content:"";position:absolute;top:20px;width:7px;height:7px;border-radius:50%;background:#1a1a1a}
 .rosa .face::before{left:14px}.rosa .face::after{right:14px}
 .rosa .face.tiago{background:#c98b5e}
+.rosa .face.hannes{background:#f0c8a8;border-top:10px solid #6b7d3a}
 .rosa .face .beard{position:absolute;left:7px;right:7px;bottom:-5px;height:22px;background:#f3f3f3;border:3px solid var(--ink);border-top:none;border-radius:0 0 22px 22px}
 .tabs.four button{font-size:16px;padding:6px 2px}
 .havecount{font-weight:800;color:var(--ink)}
@@ -1254,7 +1255,7 @@ $('#btnBait').onclick=()=>{const l=baitList();state.bait=l[(l.indexOf(state.bait
 function fishPress(){
   audio();
   if(fishing.state==='idle'){
-    if(state.bucket.length>=bucketMax()){toast('Dein Eimer ist voll! Bring die Fische zu Rosa.');return;}
+    if(state.bucket.length>=bucketMax()){toast('Dein Eimer ist voll! Bring die Fische zu '+(atDE()?'Fischer Hannes':'Rosa')+'.');return;}
     const w=findWater();if(!w){toast(player.inBoat?'Hier ist es zu flach. Fahr weiter in den Fluss!':'Hier ist kein Wasser. Stell dich ans Ufer oder auf den Steg!');return;}
     fishing.method=methodNow();fishing.state='cast';fishing.t=0;fishing.target.copy(w);fishing.bait=fishing.method==='spin'?'wurm':useBait();player.av.rod.visible=true;
     player.av.tip.getWorldPosition(fishing.from);tone(300,0.25,'sine',0.08);
@@ -1580,7 +1581,7 @@ function showCatch(f,cm,value,isNew,extra){
 function showBucket(){
   openModal();card.className='card';card.innerHTML='';
   card.appendChild(el('h2',null,'Dein Eimer'));
-  card.appendChild(el('p',null,state.bucket.length+' von '+bucketMax()+' Plätzen belegt. Verkaufen kannst du die Fische bei Rosa an der Hütte.'));
+  card.appendChild(el('p',null,state.bucket.length+' von '+bucketMax()+' Plätzen belegt. Verkaufen kannst du die Fische bei Rosa an der Hütte und bei Fischer Hannes an den Flüssen.'));
   const l=el('div','list');
   if(!state.bucket.length)l.appendChild(el('div','empty','Noch leer. Ab ans Wasser!'));
   state.bucket.forEach(it=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishThumb(f));
@@ -1629,8 +1630,13 @@ function showTiago(){
   const tabs=el('div','tabs four');
   TIAGO_TABS.forEach(([id,lb])=>{const b=el('button',null,lb);b.setAttribute('aria-pressed',tiagoTab===id);b.onclick=()=>{tiagoTab=id;showTiago();};tabs.appendChild(b);});
   card.appendChild(tabs);
+  card.appendChild(buyList(TIAGO.filter(it=>it.tab===tiagoTab),showTiago));
+  const bt=el('div','btns');const c=el('button','b alt','Tschüss, Opa Tiago');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
+}
+// Liste zum Kaufen (Opa Tiago, Fischer Hannes). again = Laden neu zeigen
+function buyList(items,again){
   const l=el('div','list');
-  TIAGO.filter(it=>it.tab===tiagoTab).forEach(it=>{const owned=it.owned&&it.owned(),lock=it.lock&&it.lock();
+  items.forEach(it=>{const owned=it.owned&&it.owned(),lock=it.lock&&it.lock();
     const row=el('div','item shopitem');row.appendChild(el('div','shopicon',it.ico));
     row.appendChild(el('div','t','<b>'+it.name+'</b><span>'+it.desc+(it.count?' <span class="havecount">Du hast '+it.count()+'.</span>':'')+'</span>'));
     const b=el('button','b',owned?(it.price?'Gekauft':'Hast du'):it.price+' L');
@@ -1638,10 +1644,9 @@ function showTiago(){
     else if(lock){b.disabled=true;b.textContent=lock;}
     else if(state.ludins<it.price){b.disabled=true;b.textContent='Noch '+(it.price-state.ludins)+' L';}
     b.onclick=()=>{if((it.owned&&it.owned())||(it.lock&&it.lock())||state.ludins<it.price)return;
-      state.ludins-=it.price;it.buy();save();sfxCatch();refreshHud(true);toast(it.msg);showTiago();};
+      state.ludins-=it.price;it.buy();save();sfxCatch();refreshHud(true);toast(it.msg);again();};
     row.appendChild(b);l.appendChild(row);});
-  card.appendChild(l);
-  const bt=el('div','btns');const c=el('button','b alt','Tschüss, Opa Tiago');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
+  return l;
 }
 function showShop(){
   openModal();card.className='card';card.innerHTML='';
@@ -1649,20 +1654,41 @@ function showShop(){
   head.appendChild(el('div',null,'<h2>Rosas Fischhandel</h2><p>Hallo '+esc(state.avatar.name||'du')+'! Zeig mal, was du gefangen hast.</p>'));
   card.appendChild(head);
   card.appendChild(el('p',null,'Angeln, Köder und Boote gibt es bei Opa Tiago nebenan.'));
+  sellList(showShop,'Tschüss');
+}
+// Fische aus dem Eimer verkaufen (Rosa, Fischer Hannes). again = Laden neu zeigen
+function sellList(again,bye){
   const l=el('div','list');
   {
     if(!state.bucket.length)l.appendChild(el('div','empty','Dein Eimer ist leer. Fang erst ein paar Fische!'));
     state.bucket.forEach((it,i)=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishThumb(f));
       row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm · '+it.value+' Ludins</span>'));
-      const b=el('button','b','Verkaufen');b.onclick=()=>{state.bucket.splice(i,1);state.ludins+=it.value;save();sfxCoins();refreshHud(true);showShop();};
+      const b=el('button','b','Verkaufen');b.onclick=()=>{state.bucket.splice(i,1);state.ludins+=it.value;save();sfxCoins();refreshHud(true);again();};
       row.appendChild(b);l.appendChild(row);});
     card.appendChild(l);
     const total=state.bucket.reduce((s,it)=>s+it.value,0);
     const bt=el('div','btns');
-    if(total){const all=el('button','b go','Alles verkaufen (+'+total+' Ludins)');all.onclick=()=>{state.ludins+=total;state.bucket=[];save();sfxCoins();refreshHud(true);toast('+'+total+' Ludins!');showShop();};bt.appendChild(all);}
-    const c=el('button','b alt','Tschüss');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
+    if(total){const all=el('button','b go','Alles verkaufen (+'+total+' Ludins)');all.onclick=()=>{state.ludins+=total;state.bucket=[];save();sfxCoins();refreshHud(true);toast('+'+total+' Ludins!');again();};bt.appendChild(all);}
+    const c=el('button','b alt',bye);c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
   }
 }
+
+// Fischer Hannes an den Flüssen: Fische verkaufen wie bei Rosa, Angelsachen kaufen wie bei Opa Tiago (ohne Boote)
+const GRUSS={bw:'Grüß Gott',by:'Servus',hh:'Moin',sh:'Moin',hb:'Moin',ni:'Moin',mv:'Moin'};
+let hannesTab='verkaufen';
+function showHannes(){if(!curSpot)return;
+  openModal();card.className='card';card.innerHTML='';
+  const b=BL[curSpot.bl],hi=GRUSS[curSpot.bl]||'Hallo';
+  const head=el('div','rosa');head.appendChild(el('div','face hannes'));
+  head.appendChild(el('div',null,'<h2>Fischer Hannes</h2><p>'+hi+', '+esc(state.avatar.name||'du')+'! Ich kaufe deine Fische und habe Angelsachen für dich.</p>'+
+    (GRUSS[curSpot.bl]?'<p class="small">„'+hi+'“ sagt man oft in '+esc(b.name)+'.</p>':'')));
+  card.appendChild(head);
+  const tabs=el('div','tabs');[['verkaufen','🐟 Verkaufen'],['kaufen','🎣 Kaufen']].forEach(([id,lb])=>{const t=el('button',null,lb);t.setAttribute('aria-pressed',hannesTab===id);
+    t.onclick=()=>{hannesTab=id;showHannes();};tabs.appendChild(t);});card.appendChild(tabs);
+  if(hannesTab==='verkaufen'){sellList(showHannes,'Tschüss, Hannes');return;}
+  card.appendChild(buyList(TIAGO.filter(it=>it.tab!=='boot'),showHannes));
+  card.appendChild(el('p','small','Boote gibt es bei Opa Tiago am Amazonas.'));
+  const bt=el('div','btns');const c=el('button','b alt','Tschüss, Hannes');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);}
 
 /* ---- Kontext-Knopf ---- */
 let ctxAction=null,exitSpot=null;
@@ -1676,6 +1702,7 @@ function updateCtx(){
   if(!player.inBoat){
     if(Math.hypot(p.x-ROSA.x,p.z-ROSA.z)<4.2)a='shop';
     else if(Math.hypot(p.x-TIAGO_AT.x,p.z-TIAGO_AT.z)<4.2)a='tiago';
+    else if(atDE()&&curSpot&&Math.hypot(p.x-hannes.x,p.z-hannes.z)<4.2)a='hannes';
     else if(infoNear())a='info';
     else if(planeNear())a='fly';
     else if(trapNear())a='trap';
@@ -1684,11 +1711,12 @@ function updateCtx(){
   }else{exitSpot=findExit();if(exitSpot)a='exit';else if(trapNear())a='trap';}
   if(!a&&state.reusen>0&&fishing.state==='idle'&&!atDE()&&trapSpot())a='placetrap';
   if(a!==ctxAction){ctxAction=a;const b=$('#btnCtx');b.hidden=!a;
-    b.textContent=a==='info'?'📋 Infotafel lesen':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
+    b.textContent=a==='info'?'📋 Infotafel lesen':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
 $('#btnCtx').onclick=()=>{audio();
   if(ctxAction==='shop'){stopFishing();showShop();}
   else if(ctxAction==='tiago'){stopFishing();showTiago();}
+  else if(ctxAction==='hannes'){stopFishing();showHannes();}
   else if(ctxAction==='info'){const ib=infoNear();if(ib){stopFishing();showInfo(ib);}return;}
   else if(ctxAction==='trap'){const tr=trapNear();if(tr){stopFishing();showTrap(tr);}return;}
   else if(ctxAction==='placetrap'){placeTrap();ctxAction='x';updateCtx();return;}
@@ -1711,7 +1739,7 @@ function tipText(){
   const found=Object.keys(state.book).length;
   if(fishing.state!=='idle')return '';
   if(found===0)return 'Lauf über den Holzsteg bis ans Wasser. Dann tippe auf „Angeln“.';
-  if(state.bucket.length>=bucketMax())return atLake()||atDE()?'Dein Eimer ist voll! Flieg zurück zum Amazonas und verkaufe die Fische bei Rosa.':'Dein Eimer ist voll! Bring die Fische zu Rosa an die Hütte.';
+  if(state.bucket.length>=bucketMax())return atDE()?'Dein Eimer ist voll! Verkaufe die Fische bei Fischer Hannes am Stand.':atLake()?'Dein Eimer ist voll! Flieg zurück zum Amazonas und verkaufe die Fische bei Rosa.':'Dein Eimer ist voll! Bring die Fische zu Rosa an die Hütte.';
   if(atLake()&&!Object.keys(state.book).some(id=>FISH_BY[id]&&fishHome(FISH_BY[id])==='see'))return 'Lauf über den Steg bis ans Wasser und wirf die Angel aus!';
   if(atDE()&&curSpot){const p=prog(curSpot.id);
     if(!p.s)return p.f.length<STAMP_FISH?'Fluss-Stempel: Fang hier '+STAMP_FISH+' Fischarten ('+p.f.length+' von '+STAMP_FISH+') und lies die Infotafel.':'Super! Jetzt noch das Rätsel an der Infotafel lösen.';
@@ -2466,6 +2494,7 @@ function buildSpot(id){const s=SPOTS_BY[id];if(!s)return false;
   const pz=DE.z-s.hw-16;Object.assign(PLANES[2],{x:12,z:pz,land:{x:3,z:DE.z-s.hw-13,f:0}});PLANES[2].mesh=makePlane(12,pz,-Math.PI/2,g,deCols);
   makeSign(s.river,BL[s.bl].name,6.5,DE.z-s.hw-9,'#2f7fd8',g,deCols,Math.PI);
   Object.assign(deBoard,{x:-2.8,z:DE.z-s.hw-6.5,title:s.name});makeBoard(deBoard,-2.8,DE.z,g,deCols);
+  buildHannes(g,-9,DE.z-s.hw-10);
   const noTree=[{x:2,z:DE.z-s.hw-12,r:20}];
   LOOKS[s.look](g,R,noTree);
   // Bäume: Laubbäume, Pappeln und Weiden am Wasser, Fichten oben auf den Bergen
@@ -2489,6 +2518,20 @@ function buildSpot(id){const s=SPOTS_BY[id];if(!s)return false;
   // Schiff
   deShip=null;if(s.ship){const sh=makeShip(s.ship);g.add(sh);deShip={g:sh,x:-DE.w*0.4,sp:s.ship==='gross'?1.6:2.2,lane:s.ship==='gross'?0.2:0.35};}
   return true;}
+/* ---- Fischer Hannes: Stand an jedem Flussplatz. Er kauft Fische und verkauft Angelsachen. ---- */
+const hannes={x:0,z:0};
+function buildHannes(g,x,z){Object.assign(hannes,{x,z});
+  const st=grp(g,x,z,-0.1);st.rotation.y=Math.atan2(1,-1); // die Theke schaut zum Landeplatz
+  bx(st,3.2,1,1,'#8a6340',0,0,0.7);bx(st,3.4,0.12,1.2,'#9a7148',0,1,0.7); // Theke
+  for(const sx of[-1.6,1.6])for(const sz of[-0.9,1.2])cy(st,0.08,0.08,2.6,'#5e4128',sx,0,sz,6);
+  for(let i=0;i<6;i++)bx(st,0.6,0.12,2.6,i%2?'#ffffff':'#2f7fd8',-1.5+i*0.6,2.6,0.15); // Dach mit Streifen
+  bx(st,0.9,0.25,0.6,'#bfe6f2',-0.8,1.1,0.7);bx(st,0.9,0.25,0.6,'#bfe6f2',0.4,1.1,0.7); // Kisten mit Eis
+  for(const [fx,fc] of[[-1,'#9aa6ad'],[-0.6,'#c9a24a'],[0.25,'#8a9a7a'],[0.6,'#b0b8bd']])ball(st,0.12,fc,fx,1.38,0.7,2.2,0.7,0.9);
+  const cv=document.createElement('canvas');cv.width=512;cv.height=128;const c=cv.getContext('2d');c.fillStyle='#fbf3df';c.fillRect(0,0,512,128);
+  c.strokeStyle='#1b2a20';c.lineWidth=10;c.strokeRect(5,5,502,118);c.fillStyle='#2f7fd8';c.font='800 54px "Trebuchet MS",sans-serif';c.textAlign='center';c.fillText('Fischer Hannes',256,84);
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3,0.75),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));sg.userData.tex=true;sg.position.set(0,3.15,1.3);st.add(sg);
+  const h=buildAvatar({skin:'#f0c8a8',hair:'kurz',hairColor:'#8a5a2e',shirt:'#2f7fd8',pants:'#3d3a33',hat:'angler'});h.group.position.set(0,0,-0.4);st.add(h.group);
+  h.arms[1].rotation.z=-0.9;deCols.push({x,z,r:2});}
 function updateDeShip(dt){if(!deShip)return;deShip.g.visible=atDE();if(!deShip.g.visible)return;
   deShip.x+=deShip.sp*dt;if(deShip.x>DE.w+12)deShip.x=-DE.w-12;const x=deShip.x;
   deShip.g.position.set(x,0.05,riverZ(x)+deP.hw*deShip.lane);deShip.g.rotation.y=-Math.atan(deP.bend*deP.k*Math.cos(x*deP.k));}
@@ -2715,6 +2758,7 @@ function mapMarkers(){const m=[
   {x:ROSA.x,z:ROSA.z,ico:'🐟',name:'Rosa'},{x:TIAGO_AT.x,z:TIAGO_AT.z,ico:'🎣',name:'Opa Tiago'},
   {x:(PLOT.x0+PLOT.x1)/2,z:(PLOT.z0+PLOT.z1)/2,ico:'🏠',name:state.builtOnce?'Dein Haus':'Bauplatz'}];
   PLANES.forEach(p=>{if(p.id!=='de'||deP)m.push({x:p.x,z:p.z,ico:'✈️',name:'Flugzeug'});});
+  if(deP)m.push({x:hannes.x,z:hannes.z,ico:'🐟',name:'Fischer Hannes'});
   if(state.hasBoat&&!player.inBoat)m.push({x:boat.pos.x,z:boat.pos.z,ico:'🛶',name:'Dein Boot'});
   state.traps.forEach(t=>m.push({x:t.x,z:t.z,ico:'🧺',name:'Reuse',full:trapFishCount(t)>0}));
   return m;}
@@ -2794,6 +2838,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:24,day:'21.10.2026',ico:'🐟',t:'Fischer Hannes',d:'An jedem Fluss in Deutschland steht jetzt der Stand von Fischer Hannes. Dort verkaufst du deine Fische und kaufst Köder, Angeln und Kleidung.'},
  {v:23,day:'20.10.2026',ico:'🗺️',t:'Flüsse in Deutschland',d:'Mit dem Flugzeug fliegst du jetzt zu Rhein, Donau, Elbe und vielen anderen Flüssen. Dort leben 12 neue Fische. Fang 3 Fischarten und löse das Fluss-Rätsel, dann bekommst du einen Stempel und darfst dem Fluss ins nächste Bundesland folgen!'},
  {v:22,day:'20.10.2026',ico:'📋',t:'Infotafeln',d:'Am Fluss und am Heimat-See stehen jetzt Infotafeln. Geh hin und lies sie! Für jede neue Tafel bekommst du 5 Ludins.'},
  {v:21,day:'20.10.2026',ico:'⏰',t:'15 Minuten Spielzeit',d:'Am Anfang darfst du jetzt 15 Minuten am Tag spielen. Erwachsene können das in der Avatar-Werkstatt (👕) unter „Spielzeit“ ändern.'},
