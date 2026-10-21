@@ -34,8 +34,8 @@ before(async () => {
 after(async () => { await browser?.close(); server?.close(); });
 
 // Neues Browserfenster. Three.js kommt aus npm statt aus dem Internet, Schriften werden übersprungen.
-async function newPage() {
-  const ctx = await browser.newContext();
+async function newPage(opts) { // opts: z. B. { viewport: … } (kleineres Fenster = mehr Bilder pro Sekunde)
+  const ctx = await browser.newContext(opts);
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -1002,6 +1002,67 @@ test('Hafenhausen: Cyber-Truck steckt die Nase nicht in Häuser', async () => {
   assert.ok(s.where.z < at.z - 2, 'man ist auf das Haus zu gefahren');
   // der Truck ist fast 6 m lang: seine Mitte bleibt mindestens 2 m weiter weg als die Hauswand
   assert.ok(Math.hypot(s.where.x - H.x, s.where.z - H.z) >= H.r + 2, 'die Nase vom Truck steckt nicht im Haus');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Straßenbahn: fährt auf CITY_RING (TRAM_ROUTE) im Kreis, Haltestellen der Reihe nach Flugplatz → Markt → Hafen → Park
+const HALTESTELLEN = ['STOP_FLUGPLATZ', 'STOP_MARKT', 'STOP_HAFEN', 'STOP_PARK'];
+test('Hafenhausen: alle Haltestellen liegen genau auf der Strecke der Straßenbahn', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  assert.match(html, /const TRAM_ROUTE=CITY_RING;/, 'die Bahn fährt auf dem Ring');
+  const m = html.match(/const CITY_RING=\[([^\]]*)\]/);
+  assert.ok(m, 'CITY_RING steht in index.html');
+  const ring = [...m[1].matchAll(/\{x:(-?\d+(?:\.\d+)?),z:(-?\d+(?:\.\d+)?)\}/g)].map(([, x, z]) => ({ x: Number(x), z: Number(z) }));
+  assert.ok(ring.length >= 4);
+  const cum = [0];
+  for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length]; cum.push(cum[i] + Math.hypot(b.x - a.x, b.z - a.z)); }
+  const along = p => { for (let i = 0; i < ring.length; i++) { const a = ring[i], b = ring[(i + 1) % ring.length], l = cum[i + 1] - cum[i];
+    const k = ((p.x - a.x) * (b.x - a.x) + (p.z - a.z) * (b.z - a.z)) / (l * l);
+    if (k >= 0 && k <= 1 && Math.hypot(a.x + (b.x - a.x) * k - p.x, a.z + (b.z - a.z) * k - p.z) < 1e-6) return cum[i] + k * l; } return null; };
+  const s = HALTESTELLEN.map(n => along(stadtWert(n)));
+  s.forEach((v, i) => assert.ok(v !== null, HALTESTELLEN[i] + ' liegt auf der Strecke'));
+  const L = cum[ring.length];
+  for (let i = 0; i < s.length; i++) {
+    const d = ((s[(i + 1) % s.length] - s[i]) % L + L) % L;
+    assert.ok(d > 0 && d <= 240, 'von ' + HALTESTELLEN[i] + ' zur nächsten Haltestelle sind es höchstens 240 m (' + d + ')');
+  }
+  assert.equal(s.reduce((a, v, i) => a + ((s[(i + 1) % s.length] - v) % L + L) % L, 0), L, 'die Reihenfolge ist Flugplatz → Markt → Hafen → Park');
+});
+
+test('Hafenhausen: Straßenbahn einsteigen und an der nächsten Haltestelle aussteigen', async () => {
+  const F = stadtWert('STOP_FLUGPLATZ'), MK = stadtWert('STOP_MARKT');
+  // kleines Fenster: der unsichtbare Browser malt dann schneller, die Fahrt (gut 24 s Spielzeit) dauert nicht so lange
+  const { ctx, page, errors } = await newPage({ viewport: { width: 640, height: 480 } });
+  // 5,5 m neben dem Gleis (die Bahn fährt in der Straßenmitte bei x = F.x): nah an der Haltestelle, aber nicht in der Bahn
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true }, where: { x: F.x + 5.5, z: F.z, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("🚋 Einsteigen")').waitFor({ timeout: 90000 }); // die Bahn steht am Flugplatz (oder kommt rundherum)
+  await page.click('#btnCtx');
+  assert.ok(await page.locator('#btnHorn').isHidden(), 'in der Straßenbahn gibt es keine Hupe');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 90000 }); // erst an der nächsten Haltestelle
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ state: 'hidden', timeout: 5000 });
+  const s = await weg(page);
+  assert.ok(Math.hypot(s.where.x - MK.x, s.where.z - MK.z) < 8, 'man steht an der Haltestelle Markt');
+  assert.equal(s.city.riding, '');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: in der Straßenbahn wegfliegen geht nicht, speichern setzt an die letzte Haltestelle', async () => {
+  const stops = HALTESTELLEN.map(stadtWert);
+  const { ctx, page, errors } = await newPage();
+  // gespeichert, während man mit der Bahn zwischen Markt und Hafen fuhr (mitten auf der Strecke)
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, riding: 'tram' }, where: { x: 0, z: -3075, f: Math.PI, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  assert.equal(await page.locator('#btnCtx:has-text("Fliegen")').count(), 0, 'hier gibt es kein Flugzeug');
+  const s = await weg(page);
+  assert.equal(s.city.riding, '');
+  assert.ok(stops.some(p => Math.hypot(s.where.x - p.x, s.where.z - p.z) < 8), 'man steht zu Fuß an einer Haltestelle');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
