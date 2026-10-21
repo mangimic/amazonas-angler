@@ -21,6 +21,7 @@ Wichtig: Die Regeln in `CLAUDE.md` gelten immer zuerst.
 | threejs-lighting | Licht und Schatten | CloudAI-X/threejs-skills @ `11ffda7` | MIT |
 | threejs-animation | Bewegung (Fische, Schwimmer, Wellen) | CloudAI-X/threejs-skills @ `11ffda7` | MIT |
 | threejs-textures | Bilder auf 3D-Formen (z. B. Fischfotos) | CloudAI-X/threejs-skills @ `11ffda7` | MIT |
+| i-have-adhd | Wie Claude antwortet: nächster Schritt zuerst, Schritte nummeriert, kurz. Auch zum Prüfen der Spieltexte | [ayghri/i-have-adhd](https://github.com/ayghri/i-have-adhd) @ `1ecea19` (nur `SKILL.md`, ohne `agents/` für andere Programme) | MIT |
 | sachkunde-grundschule | Sachkunde 3./4. Klasse: Karten, Deutschland, Bundesländer, Flüsse, Fische (geprüfte Fakten) | selbst geschrieben für dieses Spiel, nach dem Bildungsplan BW 2016 (Quellen stehen im Skill) | eigener Text |
 
 ## Bewusst weggelassen

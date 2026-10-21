@@ -8,6 +8,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - Erkläre nach jeder Änderung in 2–3 Sätzen, was jetzt neu ist und wie man es ausprobiert.
 - Wenn ein Wunsch unklar ist: eine kurze Frage stellen, dann bauen.
 - Keine Fachwörter ohne Erklärung.
+- Antworten im Stil von Skill `i-have-adhd`: nächster Schritt zuerst, Schritte nummeriert, Stand jedes Mal nennen, am Ende ein konkreter nächster Schritt.
+  Ausschalten, wenn wir „normaler Modus“ sagen. Die Regeln oben (Deutsch, einfache Wörter) gelten weiter.
 
 ## Die Spielidee (vom Kind)
 - Wie Minecraft, aber **ohne Blöcke**: offene 3D-Welt
