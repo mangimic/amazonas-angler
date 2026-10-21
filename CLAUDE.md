@@ -8,6 +8,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - Erkläre nach jeder Änderung in 2–3 Sätzen, was jetzt neu ist und wie man es ausprobiert.
 - Wenn ein Wunsch unklar ist: eine kurze Frage stellen, dann bauen.
 - Keine Fachwörter ohne Erklärung.
+- Antworten im Stil von Skill `i-have-adhd`: nächster Schritt zuerst, Schritte nummeriert, Stand jedes Mal nennen, am Ende ein konkreter nächster Schritt.
+  Ausschalten, wenn wir „normaler Modus“ sagen. Die Regeln oben (Deutsch, einfache Wörter) gelten weiter.
 
 ## Die Spielidee (vom Kind)
 - Wie Minecraft, aber **ohne Blöcke**: offene 3D-Welt
@@ -15,7 +17,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - Der Fluss ist über **2 km** lang, mit einer **Insel** und **Stromschnellen** (die schieben das Boot)
 - Man kann **angeln**, es gibt **viele Fische** (echte Amazonas-Fische)
 - **Heimat-See**: ein See wie in Deutschland, mit dem **Flugzeug** neben dem Dorf erreichbar.
-  Dort beißen nur die 10 deutschen Fische (`home:'see'` in `FISH`). Verkauft werden sie bei Rosa.
+  Dort beißen nur die 10 deutschen Fische (`home:'see'` in `FISH`). Verkauft werden sie bei Rosa oder am Stand von Fischer Hannes am See.
 - **Ab 7 Jahren**: nichts Gruseliges, keine Gewalt, kein Blut
 - Eigener **Avatar** (Name, Haut, Haare, T-Shirt, Hose, Hut)
 - Fische **verkaufen** bei Händlerin Rosa
@@ -52,7 +54,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   so folgt man dem Fluss ins nächste Bundesland. `state.fluss` (pro Platz `f`,`q`,`s`,`r`), `state.flussAt`. **`SPOTS`-ids nie ändern.**
   12 Flussfische (`home:'fluss'`). Aal, Lachs, Stör und Huchen sind „seltene Fische“ und werden immer zurückgesetzt (`RULES` mit `selten`).
   Der Flussplatz liegt in der Welt bei z um −1800 (`DE`) und wird beim Hinfliegen neu gebaut (`buildSpot`). Kartendaten: Natural Earth (gemeinfrei).
-  An jedem Flussplatz steht der Stand von **Fischer Hannes** (`buildHannes`, `showHannes`): Fische verkaufen (wie bei Rosa, `sellList`)
+  An jedem Flussplatz und am Heimat-See (`hannesSee`) steht der Stand von **Fischer Hannes** (`buildHannes`, `showHannes`): Fische verkaufen (wie bei Rosa, `sellList`)
   und Angelsachen kaufen (Opa Tiagos Waren ohne Boote, `buyList`). Er grüßt wie im Bundesland (`GRUSS`, z. B. „Grüß Gott“, „Moin“).
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot

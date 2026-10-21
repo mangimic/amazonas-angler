@@ -724,3 +724,21 @@ test('Fischer Hannes am Fluss: Fische verkaufen und Angelsachen kaufen', async (
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Fischer Hannes am Heimat-See: Fische gleich dort verkaufen', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, ludins: 10, visitedLake: true,
+    bucket: [{ id: 'hecht', cm: 70, value: 60 }], where: { x: -8.5, z: -954, f: 0, boat: false } }) }); // neben dem Stand am See
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Fischer Hannes")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Fischer Hannes")').waitFor();
+  await page.click('#card .tabs button:text-is("🐟 Verkaufen")');
+  await page.click('#card button:has-text("Alles verkaufen (+60 Ludins)")');
+  const s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 70);
+  assert.deepEqual(s.bucket, []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
