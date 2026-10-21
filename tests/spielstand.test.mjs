@@ -912,3 +912,36 @@ test('Hafenhausen: Fahrrad fährt nicht durch Häuser', async () => {
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Hafenhausen: Fahrzeuge halten an Hindernissen an und rutschen nicht daran entlang', async () => {
+  // schräg (45°) auf den Brunnen am Markt zu fahren, knapp neben der Mitte: hier laufen keine Menschen
+  const B = stadtWert('FOUNTAIN');
+  const r2 = v => Math.round(v * 100) / 100; // wie das Spiel beim Speichern rundet
+  assert.deepEqual(B, { x: 0, z: -2985, r: 3.6 });
+  const R = B.r + 0.35, f = -3 * Math.PI / 4, d = { x: Math.sin(f), z: Math.cos(f) }, n = { x: -d.z, z: d.x }; // n steht quer zur Fahrtrichtung
+  const at = { x: r2(B.x + 3.2 * n.x - 6 * d.x), z: r2(B.z + 3.2 * n.z - 6 * d.z) };
+  // dort berührt man den Brunnen zum ersten Mal
+  const px = at.x - B.x, pz = at.z - B.z, pd = px * d.x + pz * d.z, t = -pd - Math.sqrt(pd * pd - (px * px + pz * pz - R * R));
+  const touch = { x: at.x + t * d.x, z: at.z + t * d.z };
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, parked: { bike: { ...at, yaw: f } } }, where: { ...at, f, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 });
+  let s = await weg(page);
+  assert.ok(Math.hypot(s.where.x - at.x, s.where.z - at.z) < 0.05, 'die Startstelle ist frei, man steht genau dort');
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Absteigen")').waitFor({ timeout: 5000 });
+  await page.keyboard.down('KeyW');
+  await page.waitForTimeout(1200);
+  const a = await weg(page);
+  await page.waitForTimeout(1000);
+  const b = await weg(page);
+  await page.keyboard.up('KeyW');
+  assert.equal(b.city.riding, 'bike');
+  assert.ok(Math.hypot(a.where.x - touch.x, a.where.z - touch.z) < 0.8, 'man hält dort an, wo man den Brunnen berührt');
+  assert.ok(Math.hypot(b.where.x - a.where.x, b.where.z - a.where.z) < 0.2, 'man rutscht nicht am Brunnen entlang');
+  assert.ok(Math.hypot(b.where.x - B.x, b.where.z - B.z) >= B.r, 'man steht nicht im Brunnen');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

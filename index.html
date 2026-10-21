@@ -619,6 +619,7 @@ function cityHeight(x,z){const q=CITY.z-112.5-z,s=Math.abs(x-CITY.x);
 const CITY_LAND={x:-125,z:-3010,f:1.5708}; // Landeplatz am Flugplatz, man schaut in die Stadt
 const SHOP_AT={x:-103,z:-2991.7}; // auf dem Gehweg vor der Tür vom Fahrzeug-Laden
 const TEST_HOUSE={x:-78,z:-2997.2,r:4.3}; // das erste Wohnhaus südlich der Flugplatz-Straße (der Test fährt mit dem Rad dagegen)
+const FOUNTAIN={x:0,z:-2985,r:3.6}; // Brunnen in der Mitte vom Marktplatz (Hindernis mit Radius r)
 // Haltestellen der Straßenbahn, auf dem Ring um die Innenstadt (CITY_RING), Reihenfolge: Flugplatz → Markt → Hafen → Park
 const STOP_FLUGPLATZ={x:-60,z:-2985};
 const STOP_MARKT={x:-12,z:-3045};
@@ -1239,9 +1240,10 @@ function updatePlayer(dt,t){
     let dx=mx*sp,dz=mz*sp;
     if(player.inBoat||V){dx=Math.sin(player.facing)*sp;dz=Math.cos(player.facing)*sp;} // Boot und Fahrzeuge fahren dorthin, wohin sie zeigen
     const p=player.pos;
+    // Zu Fuß und im Boot rutscht man an Hindernissen entlang. Fahrzeuge (V) halten dort einfach an.
     if(ok(p.x+dx,p.z+dz)){p.x+=dx;p.z+=dz;moving=true;}
-    else if(ok(p.x+dx,p.z)){p.x+=dx;moving=true;}
-    else if(ok(p.x,p.z+dz)){p.z+=dz;moving=true;}
+    else if(!V&&ok(p.x+dx,p.z)){p.x+=dx;moving=true;}
+    else if(!V&&ok(p.x,p.z+dz)){p.z+=dz;moving=true;}
   }
   if(player.inBoat){const rp=rapidAt(player.pos.x,player.pos.z);
     if(rp>0){const dir=downstream(player.pos.z),push=6*rp*dt,nx=player.pos.x+dir.x*push,nz=player.pos.z+dir.z*push;
@@ -1775,7 +1777,7 @@ function vehicleNear(){if(!cityBuilt)return null;let best=null,bd=1e9;
   for(const id of VEHICLE_IDS){if(!state.city.vehicles[id]||player.ride===id)continue;const v=vehicleAt(id),d=Math.hypot(player.pos.x-v.x,player.pos.z-v.z);
     if(d<VEH_REACH[id]&&d<bd){best=id;bd=d;}}
   return best;}
-const exitFor=id=>findExit(VEH_EXIT[id],player.facing+Math.PI/2); // zuerst rechts neben dem Fahrzeug
+const exitFor=id=>findExit(VEH_EXIT[id],player.facing-Math.PI/2); // zuerst rechts neben dem Fahrzeug (in Fahrtrichtung gesehen)
 function mountVehicle(id){if(!VEHICLES[id]||!state.city.vehicles[id]||player.ride)return;stopFishing();
   const v=vehicleAt(id);player.pos.set(v.x,0,v.z);player.facing=v.yaw;player.y=groundY(v.x,v.z);
   player.ride=id;state.city.riding=id;state.city.parked[id]={x:r2(v.x),z:r2(v.z),yaw:r2(v.yaw)};save();}
@@ -1788,14 +1790,16 @@ function parkHere(){const id=player.ride;
 function dismount(){const id=player.ride;if(!VEHICLES[id])return false;
   const e=exitFor(id);if(!e)return false;parkHere();
   player.pos.x=e.x;player.pos.z=e.z;player.y=groundY(e.x,e.z);save();return true;}
+// In der Stadt zu Fuß: aufsteigen (nächstes eigenes Fahrzeug) oder zum Fahrzeug-Laden. Sonst null.
+function cityCtx(){const v=vehicleNear();if(v)return 'mount:'+v;
+  return Math.hypot(player.pos.x-SHOP_AT.x,player.pos.z-SHOP_AT.z)<4?'vshop':null;}
 function updateCtx(){
   let a=null;const p=player.pos;
-  if(!player.inBoat&&!player.ride&&atCity()){const v=vehicleNear();
-    if(v)a='mount:'+v;else if(Math.hypot(p.x-SHOP_AT.x,p.z-SHOP_AT.z)<4)a='vshop';}
-  if(a){} // schon gefunden: ein Fahrzeug oder der Fahrzeug-Laden
-  else if(player.ride){if(VEHICLES[player.ride]){exitSpot=exitFor(player.ride);if(exitSpot)a='dismount';}}
+  if(player.ride){if(VEHICLES[player.ride]){exitSpot=exitFor(player.ride);if(exitSpot)a='dismount';}}
   else if(!player.inBoat){
-    if(Math.hypot(p.x-ROSA.x,p.z-ROSA.z)<4.2)a='shop';
+    const city=atCity()&&!planeNear()?cityCtx():null; // am Flugzeug gewinnt „Fliegen“
+    if(city)a=city;
+    else if(Math.hypot(p.x-ROSA.x,p.z-ROSA.z)<4.2)a='shop';
     else if(Math.hypot(p.x-TIAGO_AT.x,p.z-TIAGO_AT.z)<4.2)a='tiago';
     else if(hannesNear())a='hannes';
     else if(infoNear())a='info';
@@ -1885,9 +1889,10 @@ function faceFreeSide(){const p=player.pos;
       if(hitsCollider(x,z,0.7)||hitsWall(x,z,0.5)||heightAt(x,z)>player.y+1.2){free=false;break;}}
     if(free){player.facing=a;return;}}}
 function openCreator(){
-  // Wer gerade fährt, steigt erst ab. Ist daneben kein Platz, bleibt das Fahrzeug hier stehen und man steht 2 m daneben.
-  if(player.ride&&!dismount()){const f=player.facing;parkHere();player.pos.x+=Math.cos(f)*2;player.pos.z-=Math.sin(f)*2;
-    player.y=groundY(player.pos.x,player.pos.z);save();}
+  // Wer gerade fährt, steigt erst ab. Ist daneben kein Platz, bleibt das Fahrzeug hier stehen und man steht 2 m rechts daneben
+  // (in Fahrtrichtung gesehen). Ist auch dort kein Platz, bleibt man zu Fuß an der Stelle vom Fahrzeug.
+  if(player.ride&&!dismount()){const f=player.facing,x=player.pos.x-Math.cos(f)*2,z=player.pos.z+Math.sin(f)*2;parkHere();
+    if(walkable(x,z)){player.pos.x=x;player.pos.z=z;}player.y=groundY(player.pos.x,player.pos.z);save();}
   mode='creator';$('#hud').hidden=true;$('#creator').hidden=false;$('#modal').hidden=true;buildCreator();creatorSpin=0;
   if(player.inBoat){player.inBoat=false;player.pos.set(VX-6,0,2);player.y=groundY(player.pos.x,player.pos.z);}
   faceFreeSide();}
@@ -2752,9 +2757,9 @@ function buildCity(){if(cityBuilt)return;
   tramStop(g,STOP_FLUGPLATZ,'Flugplatz','z',-1,-9);tramStop(g,STOP_MARKT,'Markt','x',1,-2);
   tramStop(g,STOP_HAFEN,'Hafen','x',1,0);tramStop(g,STOP_PARK,'Park','z',1,-5);
   // Marktplatz: Brunnen, Bänke, Marktstände
-  {const x=0,z=-2985,ST='#b8b0a0';cy(g,3.2,3.4,0.7,ST,x,1.15,z,24);cy(g,2.9,2.9,0.06,'#4aa3d0',x,1.78,z,24);
+  {const x=FOUNTAIN.x,z=FOUNTAIN.z,ST='#b8b0a0';cy(g,3.2,3.4,0.7,ST,x,1.15,z,24);cy(g,2.9,2.9,0.06,'#4aa3d0',x,1.78,z,24);
     cy(g,0.35,0.45,1.7,ST,x,1.8,z,10);cy(g,1.1,0.5,0.35,ST,x,3.4,z,16);cy(g,0.95,0.95,0.04,'#4aa3d0',x,3.73,z,16);
-    cityCols.push({x,z,r:3.6});
+    cityCols.push({x,z,r:FOUNTAIN.r});
     for(const [bxx,bzz,ry] of[[9,0,Math.PI/2],[-9,0,Math.PI/2],[0,9,0],[0,-9,0]]){dbox(2.2,0.12,0.6,'#8a6340',x+bxx,1.65,z+bzz,ry);
       dbox(0.3,0.45,0.5,'#5d6b72',x+bxx+(ry?0:-0.8),1.2,z+bzz+(ry?-0.8:0),ry);dbox(0.3,0.45,0.5,'#5d6b72',x+bxx+(ry?0:0.8),1.2,z+bzz+(ry?0.8:0),ry);
       cityCols.push({x:x+bxx,z:z+bzz,r:1.1});}
