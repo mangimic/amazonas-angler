@@ -945,3 +945,63 @@ test('Hafenhausen: Fahrzeuge halten an Hindernissen an und rutschen nicht daran 
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+test('Hafenhausen: Cyber-Truck kaufen, einsteigen, hupen, bleibt nach Neuladen', async () => {
+  const S = stadtWert('SHOP_AT');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ludins: 1000, city: { visited: true }, where: { x: S.x, z: S.z, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Fahrzeug-Laden")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.click('#card .item:has(b:text-is("Cyber-Truck")) button');
+  let s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 200);
+  assert.equal(s.city.vehicles.truck, true);
+  await page.click('#card button:has-text("Tschüss")');
+  await page.locator('#btnCtx:has-text("Einsteigen")').waitFor({ timeout: 5000 }); // der Truck steht vor dem Laden
+  assert.ok(await page.locator('#btnHorn').isHidden(), 'zu Fuß gibt es keine Hupe');
+  await page.click('#btnCtx');
+  await page.locator('#btnHorn').waitFor({ state: 'visible', timeout: 5000 });
+  assert.equal((await page.locator('#btnHorn').textContent()).trim(), '📯 Hupe');
+  assert.ok((await page.locator('#btnHorn').boundingBox()).height >= 60, 'die Hupe ist ein großer Knopf');
+  await page.click('#btnHorn');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
+  s = JSON.parse(await read(page));
+  assert.equal(s.city.riding, 'truck');
+  await page.click('#btnCtx');
+  await page.locator('#btnHorn').waitFor({ state: 'hidden', timeout: 5000 });
+  s = await weg(page);
+  assert.equal(s.city.riding, '');
+  // neu laden: der Truck gehört einem immer noch
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  s = await weg(page);
+  assert.equal(s.city.vehicles.truck, true);
+  assert.equal(s.ludins, 200);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: Cyber-Truck steckt die Nase nicht in Häuser', async () => {
+  const H = stadtWert('TEST_HOUSE'); // Haus direkt südlich der Flugplatz-Straße
+  const r2 = v => Math.round(v * 100) / 100;
+  const at = { x: H.x, z: r2(H.z + H.r + 9) }; // auf der Straße, der Truck zeigt auf das Haus
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, vehicles: { bike: true, truck: true }, parked: { truck: { ...at, yaw: Math.PI } } },
+    where: { ...at, f: Math.PI, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Einsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
+  await halten(page, 'KeyW', 2000);
+  const s = await weg(page);
+  assert.equal(s.city.riding, 'truck');
+  assert.ok(s.where.z < at.z - 2, 'man ist auf das Haus zu gefahren');
+  // der Truck ist fast 6 m lang: seine Mitte bleibt mindestens 2 m weiter weg als die Hauswand
+  assert.ok(Math.hypot(s.where.x - H.x, s.where.z - H.z) >= H.r + 2, 'die Nase vom Truck steckt nicht im Haus');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

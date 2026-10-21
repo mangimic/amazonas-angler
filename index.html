@@ -262,6 +262,7 @@ table.rules tr.now td{background:#ffe9c2}
   <div class="sonar" id="sonar" hidden><canvas id="sonarCv" width="240" height="160"></canvas><b id="sonarTxt">Echolot</b></div>
   <div class="hint-joy" id="hintJoy">Hier wischen<br>zum Laufen</div>
   <div class="actions">
+    <button class="act baitbtn" id="btnHorn" hidden>📯 Hupe</button>
     <button class="act ctx" id="btnCtx" hidden></button>
     <button class="act baitbtn" id="btnMethod" hidden aria-label="Angelart wechseln"></button>
     <button class="act baitbtn" id="btnBait" hidden aria-label="Köder wechseln"></button>
@@ -1217,6 +1218,10 @@ function hitsWall(x,z,r){for(const s of houseSegs){const dx=s.bx-s.ax,dz=s.bz-s.
 const walkable=(x,z)=>inBounds(x,z)&&(onDock(x,z)||onPlot(x,z)||heightAt(x,z)>0.15)&&!hitsCollider(x,z,0.35)&&!hitsWall(x,z,0.33);
 // Fahren: wie Laufen, aber mit dem Radius des Fahrzeugs (der Truck ist breit)
 const rideable=(x,z,r)=>inBounds(x,z)&&heightAt(x,z)>0.15&&!hitsCollider(x,z,r);
+// Der Truck ist fast 6 m lang: Mitte, Nase und Heck (je 2 m vor und hinter der Mitte) müssen frei sein.
+// Drehen geht immer, nur der Schritt wird geprüft. Vorne und hinten sind gleich, darum ist der Weg zurück immer frei.
+const truckFits=(x,z,yaw)=>{const sx=Math.sin(yaw)*2,sz=Math.cos(yaw)*2;
+  return rideable(x,z,1.4)&&rideable(x+sx,z+sz,1.2)&&rideable(x-sx,z-sz,1.2);};
 const nearDock=(x,z)=>x>DOCK.x0-1.6&&x<DOCK.x1+1&&z>DOCK.z0-1.8&&z<DOCK.z1+1.8;
 const boatable=(x,z)=>inBounds(x,z)&&heightAt(x,z)<-0.6&&!nearDock(x,z)&&!nearPlot(x,z,1.8)&&!hitsRock(x,z);
 function groundY(x,z){const h=heightAt(x,z);return onDock(x,z)?Math.max(h,DOCK.y):onPlot(x,z)?Math.max(h,PLOT.y):h;}
@@ -1236,7 +1241,7 @@ function updatePlayer(dt,t){
     const sp=(V?V.speed:player.inBoat?(state.hasYacht?YACHT.speed:state.hasMotor?18:9):5.5)*mag*dt;
     // Die Yacht ist lang: auch der Bug (vorne) muss im tiefen Wasser bleiben
     const yachtOk=(x,z)=>boatable(x,z)&&boatable(x+Math.sin(player.facing)*YACHT.len,z+Math.cos(player.facing)*YACHT.len);
-    const ok=V?(player.ride==='truck'?(x,z)=>rideable(x,z,1.4):walkable):player.inBoat?(state.hasYacht?yachtOk:boatable):walkable;
+    const ok=V?(player.ride==='truck'?(x,z)=>truckFits(x,z,player.facing):walkable):player.inBoat?(state.hasYacht?yachtOk:boatable):walkable;
     let dx=mx*sp,dz=mz*sp;
     if(player.inBoat||V){dx=Math.sin(player.facing)*sp;dz=Math.cos(player.facing)*sp;} // Boot und Fahrzeuge fahren dorthin, wohin sie zeigen
     const p=player.pos;
@@ -1791,6 +1796,10 @@ function dismount(){const id=player.ride;if(!VEHICLES[id])return false;
   const e=exitFor(id);if(!e)return false;parkHere();
   player.pos.x=e.x;player.pos.z=e.z;player.y=groundY(e.x,e.z);save();return true;}
 // In der Stadt zu Fuß: aufsteigen (nächstes eigenes Fahrzeug) oder zum Fahrzeug-Laden. Sonst null.
+// Hupe im Truck: zwei Töne, Menschen in 10 m Nähe winken 1,5 s lang
+function horn(){if(player.ride!=='truck')return;tone(523,0.15,'square',0.08);tone(659,0.15,'square',0.08,0.15);
+  for(const p of people)if(Math.hypot(p.g.position.x-player.pos.x,p.g.position.z-player.pos.z)<10)p.wave=1.5;}
+$('#btnHorn').onclick=()=>{audio();horn();};
 function cityCtx(){const v=vehicleNear();if(v)return 'mount:'+v;
   return Math.hypot(player.pos.x-SHOP_AT.x,player.pos.z-SHOP_AT.z)<4?'vshop':null;}
 function updateCtx(){
@@ -1809,6 +1818,7 @@ function updateCtx(){
     else if(state.hasBoat&&Math.hypot(p.x-boat.pos.x,p.z-boat.pos.z)<BOAT_REACH+(state.hasYacht?3:0))a='board';
   }else{exitSpot=findExit();if(exitSpot)a='exit';else if(trapNear())a='trap';}
   if(!a&&state.reusen>0&&fishing.state==='idle'&&!atDE()&&!atCity()&&trapSpot())a='placetrap';
+  const hb=$('#btnHorn'),noHorn=player.ride!=='truck';if(hb.hidden!==noHorn)hb.hidden=noHorn;
   if(a!==ctxAction){ctxAction=a;const b=$('#btnCtx');b.hidden=!a;
     const vm=a&&a.startsWith('mount:')&&VEHICLES[a.slice(6)];
     b.textContent=vm?vm.ico+' '+vm.on:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='info'?'📋 Infotafel lesen':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
@@ -2700,7 +2710,7 @@ const VEHICLES={bike:{name:'Fahrrad',ico:'🚲',price:0,speed:11,turn:6,on:'Aufs
 const VEH_DESC={roller:'Ein Tretroller. Ein Fuß steht drauf, der andere stößt ab.',
   skate:'Ein Brett mit vier kleinen Rollen. Damit rollst du durch die Stadt.',
   truck:'Ein großes Auto, das mit Strom fährt. Es ist das schnellste Fahrzeug der Stadt.'};
-const VEH_REACH={bike:2.5,roller:2.5,skate:2.5,truck:4};  // so nah muss man dran sein, um aufzusteigen
+const VEH_REACH={bike:2.5,roller:2.5,skate:2.5,truck:4.2};  // so nah muss man dran sein, um aufzusteigen (Truck: auch von SHOP_AT aus, 4 m weg)
 const VEH_LIFT={bike:0.14,roller:0.16,skate:0.14};       // so hoch steht bzw. sitzt der Avatar auf dem Fahrzeug
 const VEH_EXIT={bike:[1.2,1.8,2.4,3.5],roller:[1.2,1.8,2.4,3.5],skate:[1.2,1.8,2.4,3.5],truck:[2.4,3.2,3.9,5]}; // Abstände zum Absteigen
 const vehMesh={};
@@ -2726,9 +2736,15 @@ function buildVehicleMesh(id){const g=new THREE.Group();
   else if(id==='skate'){
     bx(g,0.26,0.04,0.9,'#8e44c4',0,0.1,0);bx(g,0.24,0.01,0.5,'#f6c13b',0,0.141,0);
     for(const z of[-0.3,0.3])for(const x of[-0.09,0.09])wheel(0.05,0.04,x,0.05,z,'#f4f4f0');}
-  else{ // Truck (Task 3 baut ihn schöner)
-    bx(g,2.2,0.9,5,'#b9bec4',0,0.45,0);bx(g,2,0.75,2.6,'#8fc3dd',0,1.35,-0.2);bx(g,2.05,0.08,2.7,'#b9bec4',0,2.1,-0.2);
-    bx(g,1.8,0.08,0.04,'#f4f4f0',0,1.15,2.51);for(const x of[-1.05,1.05])for(const z of[-1.6,1.6])wheel(0.45,0.3,x,0.45,z);}
+  else{ // Cyber-Truck: silbern und eckig, 5,8 m lang, ohne Schrift
+    const S='#c9cdd2',D='#2b2f33',tilt=(m,a)=>{m.rotation.x=a;return m;};
+    bx(g,2.2,0.75,3,S,0,0.35,0);tilt(bx(g,2.2,0.62,1.75,S,0,0.38,2.02),0.12);tilt(bx(g,2.2,0.66,1.75,S,0,0.38,-2.02),-0.08); // Mitte, vorne, hinten
+    const y0=1.1,h=0.85,zc=-0.1,a=Math.atan2(h,2.3);
+    gable(g,4.6,h,2,S,0,y0,zc);gable(g,3.4,0.62,2.04,D,0,y0+0.08,zc+0.05); // Dach (flache Pyramide) und Seitenfenster
+    const ws=new THREE.Mesh(new THREE.BoxGeometry(1.8,0.03,1.3),mat(D));ws.rotation.x=a; // Frontscheibe liegt auf der vorderen Dachschräge
+    ws.position.set(0,y0+h*0.5+0.02*Math.cos(a),zc+2.3*0.5+0.02*Math.sin(a));g.add(ws);
+    bx(g,2,0.08,0.08,'#ffffff',0,0.84,2.88);bx(g,2,0.08,0.06,'#e2412b',0,0.82,-2.9); // Lichtleiste vorne, Rücklicht hinten
+    for(const x of[-1,1])for(const z of[-1.85,1.85])wheel(0.45,0.3,x,0.45,z,'#1e1e1e');}
   return g;}
 // Fahrzeuge an ihren Platz stellen. Nur die eigenen sieht man. Das, auf dem man fährt, fährt mit (updatePlayer).
 function placeVehicles(){VEHICLE_IDS.forEach(id=>{const m=vehMesh[id];if(!m)return;m.visible=state.city.vehicles[id]===true;
@@ -3200,7 +3216,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
- {v:27,day:'21.10.2026',ico:'🏙️',t:'Hafenhausen',d:'Mit dem Flugzeug fliegst du jetzt in die Stadt Hafenhausen. Dort gibt es einen Hafen, einen Markt und viele Menschen. Dein Fahrrad wartet am Flugplatz! Im Fahrzeug-Laden gibt es auch einen Roller und ein Skateboard.'},
+ {v:27,day:'21.10.2026',ico:'🏙️',t:'Hafenhausen',d:'Mit dem Flugzeug fliegst du jetzt in die Stadt Hafenhausen. Dort gibt es einen Hafen, einen Markt und viele Menschen. Dein Fahrrad wartet am Flugplatz! Im Fahrzeug-Laden gibt es auch einen Roller, ein Skateboard und einen Cyber-Truck mit Hupe.'},
  {v:26,day:'21.10.2026',ico:'📖',t:'Mehr Zeit zum Lesen',d:'Lange Hinweise bleiben jetzt länger stehen. Bei Fischer Hannes gibt es Tabs, und auf der Deutschland-Karte sind die Flüsse nach Bundesländern sortiert.'},
  {v:25,day:'21.10.2026',ico:'🏞️',t:'Hannes am Heimat-See',d:'Fischer Hannes hat jetzt auch einen Stand am Heimat-See. Dort kannst du deine Fische gleich verkaufen und Köder kaufen.'},
  {v:24,day:'21.10.2026',ico:'🐟',t:'Fischer Hannes',d:'An jedem Fluss in Deutschland steht jetzt der Stand von Fischer Hannes. Dort verkaufst du deine Fische und kaufst Köder, Angeln und Kleidung.'},
