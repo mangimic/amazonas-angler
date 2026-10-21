@@ -62,6 +62,10 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   (800 Ludins, 20 m/s, **ohne Logo/Marke**). Kaufen im Fahrzeug-Laden (`SHOP_AT`). Geparkt wird, wo man absteigt.
   Gelbe **Straßenbahn** im Kreis (`TRAM_ROUTE`, 6 m/s) mit 4 Haltestellen (`STOPS`: Flugplatz, Markt, Hafen, Park); sie wartet, wenn jemand auf den Schienen steht.
   Spielstand in `state.city` (`visited`, `vehicles`, `parked`, `riding`). **Fahrzeug-ids nie ändern** (stehen im Spielstand: `state.city.vehicles/parked`).
+  **Nicht auf den Schienen parken** (`parkFree`): Absteigen sagt dort „Stell dein Fahrzeug an den Rand“. Geht es nicht anders (Werkstatt, Fliegen, Neuladen), kommt das Fahrzeug an seinen Startplatz (`vehicleHome`).
+  In der Bahn bleibt die Kamera hinter der Bahn. Unbekannte Einträge in `parked` bleiben gespeichert, `vehicleAt` beachtet sie nicht.
+  Stadtplan: Norden oben, Osten rechts (die kleine Karte zeigt wie überall Norden rechts).
+  Was sich bewegt oder ein-/ausgeblendet wird, erst nach `bakeCells` bauen. `heightAt` prüft `CITY` vor `DE`.
   Die Stadt wird für weniger Zeichen-Aufrufe zusammengefasst (`bakeCells`, `bakeKids`); in `buildCity` die Reihenfolge der Zufallszahlen nie ändern.
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
