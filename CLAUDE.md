@@ -64,6 +64,8 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Spielstand in `state.city` (`visited`, `vehicles`, `parked`, `riding`). **Fahrzeug-ids nie ändern** (stehen im Spielstand: `state.city.vehicles/parked`).
   **Nicht auf den Schienen parken** (`parkFree`): Absteigen sagt dort „Stell dein Fahrzeug an den Rand“. Geht es nicht anders (Werkstatt, Fliegen, Neuladen), kommt das Fahrzeug an seinen Startplatz (`vehicleHome`).
   Menschen laufen um den ganzen Truck herum (Mitte, Nase, Heck: `inPlayerWay`). Steht ein Fahrzeug, obwohl man lenkt, kommt ein Tipp.
+  **Abschleppdienst** (Stadtplan, `towList`/`callTow`, 10 Ludins `TOW.price`): bringt ein eigenes Fahrzeug, das weiter als 10 m weg steht, zu dir.
+  Der neue Parkplatz wird sofort gespeichert; der gelbe Abschleppwagen (`updateTow`) ist nur zum Anschauen und wartet, wenn jemand im Weg steht.
   In der Bahn bleibt die Kamera hinter der Bahn. Unbekannte Einträge in `parked` bleiben gespeichert, `vehicleAt` beachtet sie nicht.
   Stadtplan: Norden oben, Osten rechts (die kleine Karte zeigt wie überall Norden rechts).
   Was sich bewegt oder ein-/ausgeblendet wird, erst nach `bakeCells` bauen. `heightAt` prüft `CITY` vor `DE`.

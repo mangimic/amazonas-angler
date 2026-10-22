@@ -1823,7 +1823,7 @@ function findExit(rs,a0,c){ // rs = Abstände, a0 = in welche Richtung man zuers
 }
 // Fahrzeuge: das nächste eigene Fahrzeug in Reichweite (oder null)
 function vehicleNear(){if(!cityBuilt)return null;let best=null,bd=1e9;
-  for(const id of VEHICLE_IDS){if(!state.city.vehicles[id]||player.ride===id)continue;const v=vehicleAt(id),d=Math.hypot(player.pos.x-v.x,player.pos.z-v.z);
+  for(const id of VEHICLE_IDS){if(!state.city.vehicles[id]||player.ride===id||towBusy(id))continue;const v=vehicleAt(id),d=Math.hypot(player.pos.x-v.x,player.pos.z-v.z);
     if(d<VEH_REACH[id]&&d<bd){best=id;bd=d;}}
   return best;}
 const exitFor=id=>findExit(VEH_EXIT[id],player.facing-Math.PI/2); // zuerst rechts neben dem Fahrzeug (in Fahrtrichtung gesehen)
@@ -2814,6 +2814,60 @@ function buildVehicleMesh(id){const g=new THREE.Group();
 // Fahrzeuge an ihren Platz stellen. Nur die eigenen sieht man. Das, auf dem man fährt, fährt mit (updatePlayer).
 function placeVehicles(){VEHICLE_IDS.forEach(id=>{const m=vehMesh[id];if(!m)return;m.visible=state.city.vehicles[id]===true;
   if(player.ride===id)return;const v=vehicleAt(id);m.position.set(v.x,heightAt(v.x,v.z),v.z);m.rotation.y=v.yaw;});}
+// Abschleppdienst (Stadtplan): bringt ein eigenes Fahrzeug für TOW.price Ludins zu dir. Der gelbe Abschleppwagen fährt
+// auf einer freien Strecke heran, setzt das Fahrzeug seitlich neben sich ab (zwischen dir und ihm) und fährt weiter.
+// Der neue Parkplatz wird gleich beim Rufen gespeichert. Das Fahren ist nur zum Anschauen.
+const TOW={price:10,speed:7,side:2.6,me:4.5};
+const tow={g:null,light:null,id:'',phase:'',t:0,t0:0,t1:0,wait:0,p:null,u:null,s:null,cols:[]};
+function buildTowTruck(){const g=new THREE.Group(),Y='#f6c13b',D='#2b2f33';
+  bx(g,2.3,0.5,7,'#5d6b72',0,0.45,0);bx(g,2.3,1.6,1.9,Y,0,0.7,2.4);bx(g,2.32,0.6,1.2,D,0,1.55,2.6);   // Fahrgestell, Führerhaus, Fenster
+  bx(g,2.4,0.15,4.6,Y,0,0.95,-1.2);bx(g,0.12,0.5,4.6,Y,1.14,1.05,-1.2);bx(g,0.12,0.5,4.6,Y,-1.14,1.05,-1.2); // Ladefläche mit Rand
+  for(const x of[-1.1,1.1])for(const z of[-2.4,-0.6,2.4]){const w=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.5,0.35,16),mat('#1e1e1e'));w.rotation.z=Math.PI/2;w.position.set(x,0.5,z);g.add(w);}
+  const L=bx(g,1.2,0.22,0.35,'#ff8a1f',0,2.4,2.4);g.visible=false;return {g,light:L};}
+const towBusy=id=>tow.id===id&&(tow.phase==='in'||tow.phase==='drop'); // das Fahrzeug liegt gerade auf dem Abschleppwagen
+const towWay=(x,z,yaw)=>truckFits(x,z,yaw)&&Math.hypot(x-player.pos.x,z-player.pos.z)>4;
+// Wohin mit dem Fahrzeug? P liegt 4,5 m neben dir, der Abschleppwagen fährt 2,6 m dahinter vorbei (u = Fahrtrichtung).
+// Gesucht wird eine Stelle, an der P frei ist (nicht auf den Schienen) und die Strecke davor (≥ 8 m) und danach (≥ 10 m) frei ist.
+function towPlan(id){let best=null;const me=player.pos;
+  for(let i=0;i<16;i++){const a=i/16*Math.PI*2,w={x:Math.sin(a),z:Math.cos(a)},P={x:me.x+w.x*TOW.me,z:me.z+w.z*TOW.me};
+    for(const sg of[1,-1]){const u={x:w.z*sg,z:-w.x*sg},yaw=Math.atan2(u.x,u.z);
+      if(!parkFree(id,P.x,P.z,yaw)||!(id==='truck'?truckFits(P.x,P.z,yaw):walkable(P.x,P.z)))continue;
+      const C={x:P.x+w.x*TOW.side,z:P.z+w.z*TOW.side},free=(t)=>towWay(C.x+u.x*t,C.z+u.z*t,yaw);
+      let t0=0;while(t0<25&&free(-(t0+1)))t0++;let t1=0;while(t1<25&&free(t1+1))t1++;
+      const ok=free(0)&&t0>=8&&t1>=10,straight=Math.abs(u.x)<0.01||Math.abs(u.z)<0.01; // lieber gerade an der Straße entlang
+      const score=(ok?1000:0)+(onRoad(P.x,P.z)?100:0)+(straight?60:0)+t0+t1;
+      if(!best||score>best.score)best={score,ok,P,C,u,s:w,yaw,t0,t1};}}
+  return best;}
+function callTow(id){
+  if(!atCity()||player.ride||player.inBoat||!state.city.vehicles[id]||tow.phase)return;
+  if(state.ludins<TOW.price){toast('Der Abschleppdienst kostet '+TOW.price+' Ludins.');return;}
+  const pl=towPlan(id);if(!pl||pl.score<1000&&!(id==='truck'?truckFits(pl.P.x,pl.P.z,pl.yaw):walkable(pl.P.x,pl.P.z))){toast('Hier ist kein Platz für dein Fahrzeug. Geh auf eine Straße oder einen Platz.');return;}
+  state.ludins-=TOW.price;state.city.parked[id]={x:r2(pl.P.x),z:r2(pl.P.z),yaw:r2(pl.yaw)};save();refreshHud(true);
+  if(!tow.g){const t=buildTowTruck();tow.g=t.g;tow.light=t.light;cityGroup.add(tow.g);
+    for(let i=0;i<3;i++){const c={x:1e6,z:1e6,r:1.3};tow.cols.push(c);cityCols.push(c);}}
+  Object.assign(tow,{id,p:pl.P,u:pl.u,s:pl.s,C:pl.C,yaw:pl.yaw,t0:pl.ok?pl.t0:0,t1:pl.ok?pl.t1:0,t:pl.ok?-pl.t0:0,wait:0,phase:'in'});
+  toast('Der Abschleppdienst kommt! '+VEHICLES[id].ico);closeModal();}
+// Abschleppwagen bewegen. Steht ein Mensch oder du vor ihm (unter 3 m), wartet er. Niemand wird angefahren.
+function updateTow(dt,t){if(!tow.phase)return;
+  const m=vehMesh[tow.id],V=VEHICLES[tow.id];
+  if(!atCity()){tow.phase='';tow.g.visible=false;tow.cols.forEach(c=>{c.x=c.z=1e6;});placeVehicles();return;} // weggeflogen: das Fahrzeug steht schon da
+  const at=tt=>({x:tow.C.x+tow.u.x*tt,z:tow.C.z+tow.u.z*tt});
+  const blocked=tt=>{for(const k of[-2.6,0,2.6,3.5]){const n=at(tt+0.6+k),r=k>3?3:2.2; // Wagen (3 Kreise) und ein Stück vor der Nase
+      if(Math.hypot(n.x-player.pos.x,n.z-player.pos.z)<r)return true;
+      for(const p of people)if(Math.hypot(n.x-p.col.x,n.z-p.col.z)<r)return true;}return false;};
+  if(tow.phase==='in'||tow.phase==='out'){const end=tow.phase==='in'?0:tow.t1;
+    if(!blocked(tow.t)){const left=end-tow.t,v=tow.phase==='in'?Math.max(1.5,Math.min(TOW.speed,left*1.5)):TOW.speed;tow.t=Math.min(end,tow.t+v*dt);}
+    if(tow.t>=end){if(tow.phase==='in'){tow.phase='drop';tow.wait=0;}else{tow.phase='';tow.g.visible=false;tow.cols.forEach(c=>{c.x=c.z=1e6;});return;}}}
+  const c=at(tow.t);tow.g.visible=true;tow.g.position.set(c.x,heightAt(c.x,c.z),c.z);tow.g.rotation.y=tow.yaw;
+  tow.light.visible=Math.sin(t*8)>0; // Blinklicht
+  for(let i=0;i<3;i++){const k=(i-1)*2.6;tow.cols[i].x=c.x+tow.u.x*k;tow.cols[i].z=c.z+tow.u.z*k;}
+  if(!m)return;
+  if(tow.phase==='in'||tow.phase==='drop'){ // das Fahrzeug steht auf der Ladefläche und wird seitlich abgesetzt
+    const k=tow.phase==='drop'?Math.min(1,tow.wait/1.2):0,bed={x:c.x-tow.u.x*1.2,z:c.z-tow.u.z*1.2};
+    const x=bed.x+(tow.p.x-bed.x)*k,z=bed.z+(tow.p.z-bed.z)*k,gy=heightAt(tow.p.x,tow.p.z);
+    m.visible=true;m.position.set(x,gy+(1.05-0.05*k)*(1-k)+Math.sin(k*Math.PI)*0.6,z);m.rotation.y=tow.yaw;
+    if(tow.phase==='drop'){tow.wait+=dt;if(tow.wait>=1.4){tow.phase=tow.t1>0?'out':'';if(!tow.phase){tow.g.visible=false;tow.cols.forEach(q=>{q.x=q.z=1e6;});}
+      placeVehicles();tone(659,0.12,'sine',0.06);tone(784,0.15,'sine',0.06,0.12);toast('Dein '+V.name+' ist da!');}}}}
 // Straßenbahn (Werte bei TRAM oben). Sie ist ein bewegtes Hindernis: 5 Kreise pro Wagen in cityCols, jedes Bild neu gesetzt.
 // Steht ein Mensch oder der Spieler auf den Schienen vor ihr (unter 6 m), wartet sie. Sie schiebt niemanden.
 const tram={g:null,s:TRAM_STOP_S.flugplatz,stopIdx:0,wait:TRAM.wait,cars:[{x:0,z:0,yaw:0},{x:0,z:0,yaw:0}],cols:[]};
@@ -3331,6 +3385,22 @@ function showMap(){
   if(atLake()){const [sx,sy]=l2s(player.pos.x,player.pos.z);drawMe(d,sx,sy,-player.facing,10);}
 }
 // Stadtplan von Hafenhausen: Norden oben, Osten rechts (in der Welt ist Osten −x, darum wird x umgedreht)
+// Abschleppdienst auf dem Stadtplan: für jedes eigene Fahrzeug, das weiter als 10 m weg steht, ein Knopf
+function towList(){const box=el('div','towbox');box.appendChild(el('h3',null,'🛻 Abschleppdienst'));
+  const far=VEHICLE_IDS.filter(id=>state.city.vehicles[id]&&player.ride!==id&&!towBusy(id)&&
+    Math.hypot(vehicleAt(id).x-player.pos.x,vehicleAt(id).z-player.pos.z)>10);
+  let msg='Der Abschleppdienst bringt dein Fahrzeug zu dir. Das kostet '+TOW.price+' Ludins.';
+  if(player.ride==='tram')msg='In der Straßenbahn geht das nicht. Steig erst aus.';
+  else if(player.ride)msg='Steig erst ab, dann kann der Abschleppdienst kommen.';
+  else if(tow.phase)msg='Der Abschleppdienst ist gerade unterwegs.';
+  else if(!far.length)msg='Alle deine Fahrzeuge stehen in deiner Nähe.';
+  box.appendChild(el('p',null,msg));
+  if(!player.ride&&!tow.phase&&far.length){const bt=el('div','btns');
+    far.forEach(id=>{const V=VEHICLES[id],b=el('button','b',V.ico+' '+V.name+' holen · '+TOW.price+' L');
+      if(state.ludins<TOW.price){b.disabled=true;b.textContent=V.ico+' '+V.name+': noch '+(TOW.price-state.ludins)+' L';}
+      b.dataset.tow=id;b.onclick=()=>{audio();callTow(id);};bt.appendChild(b);});
+    box.appendChild(bt);}
+  return box;}
 function showCityMap(){
   stopFishing();openModal();card.className='card mapcard';card.innerHTML='';
   card.appendChild(el('h2',null,'🗺️ Stadtplan Hafenhausen'));
@@ -3339,6 +3409,7 @@ function showCityMap(){
   const leg=el('div','maplegend');
   [['🚋','Haltestelle der Straßenbahn'],['🛒','Fahrzeug-Laden'],['🚲','Dein Fahrrad'],['✈️','Flugzeug'],['🟫','Haus']].forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
   row.appendChild(leg);card.appendChild(row);
+  card.appendChild(towList());
   const bt=el('div','btns'),cl=el('button','b','Fertig');cl.onclick=closeModal;bt.appendChild(cl);card.appendChild(bt);
   const W=Math.round(Math.min((card.clientWidth||600)-36,Math.max(260,innerHeight*0.6),560));w.style.width=W+'px';
   const c=hiDPI(cv,W,W),k=W/(2*CITY.w);
@@ -3357,6 +3428,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:29,day:'22.10.2026',ico:'🛻',t:'Abschleppdienst',d:'Steht dein Fahrzeug weit weg? Tipp auf die Karte und ruf den Abschleppdienst! Für 10 Ludins bringt der gelbe Abschleppwagen es zu dir.'},
  {v:28,day:'22.10.2026',ico:'⚡',t:'Freie Fahrt für den Truck',d:'Die Menschen in Hafenhausen laufen jetzt um den Cyber-Truck herum. Kommst du nicht weiter, sagt dir das Spiel, was du tun kannst.'},
  {v:27,day:'21.10.2026',ico:'🏙️',t:'Hafenhausen',d:'Flieg in die Stadt Hafenhausen! Fahr mit Fahrrad, Roller, Skateboard, Cyber-Truck oder der gelben Straßenbahn.'},
  {v:26,day:'21.10.2026',ico:'📖',t:'Mehr Zeit zum Lesen',d:'Lange Hinweise bleiben jetzt länger stehen. Bei Fischer Hannes gibt es Tabs, und auf der Deutschland-Karte sind die Flüsse nach Bundesländern sortiert.'},
@@ -3522,7 +3594,7 @@ function loop(){
   const focusZ=mode==='build'?PLOT.z0:player.pos.z;updateChunks(focusZ,false);
   water.position.z=Math.round(focusZ/8)*8;{const fd=focusZ<DE.zone;scene.fog.near=fd?70:45;scene.fog.far=fd?260:150;} // am Fluss sieht man weiter
 updateFoam(dt,t);updateTraps(t);updateDeShip(dt);updatePeople(dt,t);rapidSound(player.pos.x,player.pos.z);
-  if(mode==='play'){updateTram(dt);updatePlayer(dt,t);updateFishing(dt,t);
+  if(mode==='play'){updateTram(dt);updatePlayer(dt,t);updateFishing(dt,t);updateTow(dt,t);
     slowT+=dt;if(slowT>0.2){slowT=0;updateCtx();updateTip();drawMini();}
     whereT+=dt;if(whereT>3){whereT=0;saveWhere();}}
   // Boot
