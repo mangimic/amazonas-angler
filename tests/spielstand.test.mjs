@@ -1011,6 +1011,10 @@ test('Hafenhausen: Cyber-Truck steckt die Nase nicht in Häuser', async () => {
   await page.click('#btnCtx');
   await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
   await halten(page, 'KeyW', 2000);
+  // lenkt man weiter gegen das Haus, gibt das Spiel einen Tipp
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Hier geht es nicht weiter. Lenk in eine andere Richtung.'), null, { timeout: 20000 });
+  await page.keyboard.up('KeyW');
   const s = await weg(page);
   assert.equal(s.city.riding, 'truck');
   assert.ok(s.where.z < at.z - 2, 'man ist auf das Haus zu gefahren');

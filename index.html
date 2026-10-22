@@ -1259,6 +1259,7 @@ const boatable=(x,z)=>inBounds(x,z)&&heightAt(x,z)<-0.6&&!nearDock(x,z)&&!nearPl
 function groundY(x,z){const h=heightAt(x,z);return onDock(x,z)?Math.max(h,DOCK.y):onPlot(x,z)?Math.max(h,PLOT.y):h;}
 function angleLerp(a,b,t){let d=((b-a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI;return a+d*t;}
 
+let rideStuck=0,rideHint=0; // wie lange das Fahrzeug schon hängt, und Pause zwischen zwei Tipps
 function updatePlayer(dt,t){
   if(player.ride==='tram'){ // in der Straßenbahn fährt man mit: Wischen bewegt nichts, Kamera und Karte folgen der Bahn
     const p=tramPos(tram.s);player.pos.set(p.x,0,p.z);player.facing=p.yaw;player.y=groundY(p.x,p.z);player.speed=0;
@@ -1289,6 +1290,9 @@ function updatePlayer(dt,t){
     else if(!V&&ok(p.x+dx,p.z)){p.x+=dx;moving=true;}
     else if(!V&&ok(p.x,p.z+dz)){p.z+=dz;moving=true;}
   }
+  // Fahrzeug steht, obwohl man lenkt: nach 1,5 s ein Tipp (höchstens alle 8 s)
+  rideHint=Math.max(0,rideHint-dt);rideStuck=V&&mag>0.12&&!moving?rideStuck+dt:0;
+  if(rideStuck>1.5&&rideHint<=0){rideHint=8;toast('Hier geht es nicht weiter. Lenk in eine andere Richtung.');}
   if(player.inBoat){const rp=rapidAt(player.pos.x,player.pos.z);
     if(rp>0){const dir=downstream(player.pos.z),push=6*rp*dt,nx=player.pos.x+dir.x*push,nz=player.pos.z+dir.z*push;
       if(boatable(nx,nz)){player.pos.x=nx;player.pos.z=nz;}
@@ -2988,6 +2992,11 @@ function buildPeople(g,R){const pick=a=>a[Math.floor(R()*a.length)],order=[];
     const col={x,z,r:0.5};peopleCols.push(col);
     people.push({g:av.group,path,i,t:R()*6,speed:1.2,av,wave:0,wait:0,col});}}
 let waveIn=6;
+// Steht der Spieler an der Stelle (x,z) im Weg? Der Cyber-Truck ist lang: dann zählen Mitte, Nase und Heck (wie bei truckFits).
+function inPlayerWay(x,z){const p=player.pos,r=0.55;
+  if(player.ride!=='truck')return Math.hypot(x-p.x,z-p.z)<0.95;
+  const sx=Math.sin(player.facing)*2,sz=Math.cos(player.facing)*2;
+  return Math.hypot(x-p.x,z-p.z)<1.4+r||Math.hypot(x-p.x-sx,z-p.z-sz)<1.2+r||Math.hypot(x-p.x+sx,z-p.z+sz)<1.2+r;}
 function updatePeople(dt,t){if(!people.length||!atCity())return;
   const px=player.pos.x,pz=player.pos.z;
   // alle 6–12 Sekunden winkt jemand in der Nähe
@@ -3001,7 +3010,8 @@ function updatePeople(dt,t){if(!people.length||!atCity())return;
       if(l<=step){o.x=w.x;o.z=w.z;p.i=(p.i+1)%p.path.length;}
       else{const nx=o.x+dx/l*step,nz=o.z+dz/l*step;
         // steht der Spieler im Weg, wartet der Mensch kurz und dreht dann um. Niemand wird geschoben.
-        if(Math.hypot(nx-px,nz-pz)<0.95){p.wait+=dt;if(p.wait>1.5){p.wait=0;p.path.reverse();p.i=(p.path.length-p.i)%p.path.length;}}
+        // (wer schon am Truck steht, z. B. weil er sich gedreht hat, darf weiterlaufen und kommt so heraus)
+        if(inPlayerWay(nx,nz)&&!inPlayerWay(o.x,o.z)){p.wait+=dt;if(p.wait>1.5){p.wait=0;p.path.reverse();p.i=(p.path.length-p.i)%p.path.length;}}
         else{p.wait=0;o.x=nx;o.z=nz;moving=true;p.g.rotation.y=angleLerp(p.g.rotation.y,Math.atan2(dx,dz),1-Math.exp(-dt*8));}}}
     p.t+=dt*(moving?7:0);const sw=moving?Math.sin(p.t)*0.55:0;
     av.legs[0].rotation.x+=(sw-av.legs[0].rotation.x)*0.3;av.legs[1].rotation.x+=(-sw-av.legs[1].rotation.x)*0.3;
@@ -3347,6 +3357,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:28,day:'22.10.2026',ico:'⚡',t:'Freie Fahrt für den Truck',d:'Die Menschen in Hafenhausen laufen jetzt um den Cyber-Truck herum. Kommst du nicht weiter, sagt dir das Spiel, was du tun kannst.'},
  {v:27,day:'21.10.2026',ico:'🏙️',t:'Hafenhausen',d:'Flieg in die Stadt Hafenhausen! Fahr mit Fahrrad, Roller, Skateboard, Cyber-Truck oder der gelben Straßenbahn.'},
  {v:26,day:'21.10.2026',ico:'📖',t:'Mehr Zeit zum Lesen',d:'Lange Hinweise bleiben jetzt länger stehen. Bei Fischer Hannes gibt es Tabs, und auf der Deutschland-Karte sind die Flüsse nach Bundesländern sortiert.'},
  {v:25,day:'21.10.2026',ico:'🏞️',t:'Hannes am Heimat-See',d:'Fischer Hannes hat jetzt auch einen Stand am Heimat-See. Dort kannst du deine Fische gleich verkaufen und Köder kaufen.'},
