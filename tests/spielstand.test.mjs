@@ -1011,11 +1011,52 @@ test('Hafenhausen: Cyber-Truck steckt die Nase nicht in Häuser', async () => {
   await page.click('#btnCtx');
   await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
   await halten(page, 'KeyW', 2000);
+  // lenkt man weiter gegen das Haus, gibt das Spiel einen Tipp
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Hier geht es nicht weiter. Lenk in eine andere Richtung.'), null, { timeout: 20000 });
+  await page.keyboard.up('KeyW');
   const s = await weg(page);
   assert.equal(s.city.riding, 'truck');
   assert.ok(s.where.z < at.z - 2, 'man ist auf das Haus zu gefahren');
   // der Truck ist fast 6 m lang: seine Mitte bleibt mindestens 2 m weiter weg als die Hauswand
   assert.ok(Math.hypot(s.where.x - H.x, s.where.z - H.z) >= H.r + 2, 'die Nase vom Truck steckt nicht im Haus');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: Abschleppdienst bringt das Fahrrad für 10 Ludins zu dir', async () => {
+  const me = { x: 30, z: -2985 }; // auf der Straße östlich vom Markt, weit weg vom Fahrrad am Flugplatz
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ludins: 25, city: { visited: true }, where: { ...me, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnMap');
+  await page.locator('#card button[data-tow="bike"]').click();
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Der Abschleppdienst kommt!'), null, { timeout: 5000 });
+  let s = await weg(page);
+  assert.equal(s.ludins, 15, '10 Ludins für den Abschleppdienst');
+  const p = s.city.parked.bike;
+  assert.ok(Math.hypot(p.x - me.x, p.z - me.z) < 6, 'der neue Parkplatz ist gleich neben dir (schon gespeichert)');
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Dein Fahrrad ist da!'), null, { timeout: 60000 });
+  s = await weg(page);
+  assert.deepEqual(s.city.parked.bike, p, 'das Fahrrad steht dort, wo es gespeichert wurde');
+  assert.equal(s.city.riding, '');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: Abschleppdienst mit zu wenig Ludins geht nicht', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ludins: 4, city: { visited: true }, where: { x: 30, z: -2985, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnMap');
+  const b = page.locator('#card button[data-tow="bike"]');
+  assert.ok(await b.isDisabled(), 'der Knopf ist grau');
+  assert.match(await b.textContent(), /noch 6 L/);
+  const s = await weg(page);
+  assert.equal(s.ludins, 4);
+  assert.equal(s.city.parked.bike, undefined, 'das Fahrrad bleibt am Flugplatz');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
