@@ -56,7 +56,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Der Flussplatz liegt in der Welt bei z um −1800 (`DE`) und wird beim Hinfliegen neu gebaut (`buildSpot`). Kartendaten: Natural Earth (gemeinfrei).
   An jedem Flussplatz und am Heimat-See (`hannesSee`) steht der Stand von **Fischer Hannes** (`buildHannes`, `showHannes`): Fische verkaufen (wie bei Rosa, `sellList`)
   und Angelsachen kaufen (Opa Tiagos Waren ohne Boote, `buyList`). Er grüßt wie im Bundesland (`GRUSS`, z. B. „Grüß Gott“, „Moin“).
-- **Stadtwelt Hafenhausen** (keine Angelwelt, Angeln geht dort nicht): Mit dem Flugzeug erreichbar, liegt in der Welt bei z um −3000
+- **Stadtwelt Hafenhausen** (Angeln geht dort nur im Hafen): Mit dem Flugzeug erreichbar, liegt in der Welt bei z um −3000
   (`CITY`, gebaut von `buildCity`). Häuser, Markt mit Brunnen, Hafen, Park, 24 Menschen, die winken. Der **Flugplatz liegt im Osten** der Stadt.
   Fahrzeuge in `VEHICLES`: 🚲 Fahrrad (hat jeder, 11 m/s), 🛴 Roller und 🛹 Skateboard (je 60 Ludins, 8 m/s), ⚡ **Cyber-Truck** mit Hupe
   (800 Ludins, 20 m/s, **ohne Logo/Marke**). Kaufen im Fahrzeug-Laden (`SHOP_AT`). Geparkt wird, wo man absteigt.
@@ -64,6 +64,9 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Spielstand in `state.city` (`visited`, `vehicles`, `parked`, `riding`). **Fahrzeug-ids nie ändern** (stehen im Spielstand: `state.city.vehicles/parked`).
   **Nicht auf den Schienen parken** (`parkFree`): Absteigen sagt dort „Stell dein Fahrzeug an den Rand“. Geht es nicht anders (Werkstatt, Fliegen, Neuladen), kommt das Fahrzeug an seinen Startplatz (`vehicleHome`).
   Menschen laufen um den ganzen Truck herum (Mitte, Nase, Heck: `inPlayerWay`). Steht ein Fahrzeug, obwohl man lenkt, kommt ein Tipp.
+  **Angeln im Hafen**: an der Kaimauer und den Molen (`findWater`), sonst sagt das Spiel „Angeln kannst du hier am Hafen!“.
+  Dort beißen nur die 5 Meeresfische (`home:'meer'`: Hering, Makrele, Scholle, Hornhecht, Dorsch). Der Dorsch ist ein seltener Fisch (`RULES`, immer zurücksetzen).
+  **Fischer Hannes** hat einen Stand an der Kaimauer (`hannesHafen`), grüßt mit „Moin“.
   **Abschleppdienst** (Stadtplan, `towList`/`callTow`, 10 Ludins `TOW.price`): bringt ein eigenes Fahrzeug, das weiter als 10 m weg steht, zu dir.
   Der neue Parkplatz wird sofort gespeichert; der gelbe Abschleppwagen (`updateTow`) ist nur zum Anschauen und wartet, wenn jemand im Weg steht.
   In der Bahn bleibt die Kamera hinter der Bahn. Unbekannte Einträge in `parked` bleiben gespeichert, `vehicleAt` beachtet sie nicht.
@@ -74,7 +77,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
   trägt den Avatar-Namen am Rumpf, Fischtank an Bord = 20 Plätze mehr im Eimer. Werte in `YACHT`.
-- **Echte Fotos** von allen 37 Fischen (15 Amazonas, 10 See, 12 Fluss), Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`.
+- **Echte Fotos** von allen 42 Fischen (15 Amazonas, 10 See, 12 Fluss, 5 Meer), Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`.
   Fang, Fischbuch, Eimer, Rosa und Reuse zeigen immer das Foto. Noch nicht gefangene Fische zeigt das Fischbuch als „?“.
 
 ## Technik

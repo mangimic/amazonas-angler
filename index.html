@@ -346,7 +346,13 @@ const FISH=[
  {id:'wels',name:'Wels',home:'fluss',fact:'Der größte Süßwasserfisch Europas! Er hat sechs Barteln, zwei davon sind ganz lang.',w:3,price:90,cm:[60,200]},
  {id:'lachs',name:'Lachs',home:'fluss',fact:'Wächst im Meer auf und schwimmt dann den Fluss hinauf, zurück zu dem Ort, wo er geschlüpft ist.',w:2.5,price:80,cm:[50,100]},
  {id:'huchen',name:'Huchen',home:'fluss',fact:'Lebt nur in der Donau und ihren Nebenflüssen. Er heißt auch Donaulachs und kann über einen Meter lang werden.',w:1.5,price:150,cm:[60,120]},
- {id:'stoer',name:'Stör',home:'fluss',fact:'Hat Knochenplatten wie eine Ritterrüstung. Störe gab es schon zur Zeit der Dinosaurier!',w:1.5,price:150,cm:[80,200]}
+ {id:'stoer',name:'Stör',home:'fluss',fact:'Hat Knochenplatten wie eine Ritterrüstung. Störe gab es schon zur Zeit der Dinosaurier!',w:1.5,price:150,cm:[80,200]},
+ // Fische aus dem Meer (Nordsee und Ostsee). home:'meer' = beißen nur im Hafen von Hafenhausen
+ {id:'hering',name:'Hering',home:'meer',fact:'Schwimmt in riesigen Schwärmen mit Tausenden Fischen. Alle drehen gleichzeitig um, wie ein einziges großes Tier.',w:30,price:6,cm:[15,30]},
+ {id:'makrele',art:'eine',name:'Makrele',home:'meer',fact:'Hat keine Schwimmblase. Darum muss sie immer schwimmen, sonst sinkt sie nach unten. Auf dem Rücken hat sie grün-blaue Tigerstreifen.',w:22,price:12,cm:[25,40]},
+ {id:'scholle',art:'eine',name:'Scholle',home:'meer',fact:'Als Baby sieht sie aus wie ein normaler Fisch. Dann wandert ein Auge auf die andere Seite, und sie liegt flach im Sand.',w:16,price:15,cm:[20,40]},
+ {id:'hornhecht',name:'Hornhecht',home:'meer',fact:'Hat einen langen, spitzen Schnabel mit vielen kleinen Zähnen. Und seine Gräten sind grün!',w:10,price:25,cm:[50,80]},
+ {id:'dorsch',name:'Dorsch',home:'meer',fact:'Hat einen Bartfaden am Kinn. Damit tastet er am Meeresgrund nach Krebsen und Würmern. In der Nordsee heißt er Kabeljau.',w:6,price:40,cm:[30,60]}
 ];
 const fishHome=f=>f.home||'amazonas';
 // Echte Fotos (nur frei lizenzierte, z. B. Wikimedia Commons). Dateien liegen im Ordner fotos/, Nachweis in fotos/BILDNACHWEIS.md.
@@ -391,7 +397,12 @@ const FOTOS={
  wels:{src:'fotos/wels.jpg',von:'HalbsHännile',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Freischwimmender_Wels_(cropped).jpg'},
  lachs:{src:'fotos/lachs.jpg',von:'Hans-Petter Fjeld',lizenz:'CC BY-SA 2.5',link:'https://commons.wikimedia.org/wiki/File:Salmo_salar-Atlantic_Salmon-Atlanterhavsparken_Norway_(cropped).JPG'},
  huchen:{src:'fotos/huchen.jpg',von:'Liquid Art',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Danube_Salmon_-_Huchen_(Hucho_hucho)_(cropped).jpg'},
- stoer:{src:'fotos/stoer.jpg',von:'NoonIcarus',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Acipenser_oxyrinchus_Montreal_Biodome_(cropped).JPG'}
+ stoer:{src:'fotos/stoer.jpg',von:'NoonIcarus',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Acipenser_oxyrinchus_Montreal_Biodome_(cropped).JPG'},
+ hering:{src:'fotos/hering.jpg',von:'zakqaryroy',lizenz:'CC BY 4.0',link:'https://commons.wikimedia.org/wiki/File:Clupea_harengus_New_Jersey.jpg'},
+ makrele:{src:'fotos/makrele.jpg',von:'Rohit Naniwadekar',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Mackerel_Kyle_P1120303.jpg'},
+ dorsch:{src:'fotos/dorsch.jpg',von:'Wilhelm Thomas Fiege',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Atlantic_Cod,_Atlantischer_Kabeljau_(Gadus_morhua).jpg'},
+ scholle:{src:'fotos/scholle.jpg',von:'NasserHalaweh',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Pleuronectidae_Pleuronectes_platessa_1.jpg'},
+ hornhecht:{src:'fotos/hornhecht.jpg',von:'euparkeria',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Belone_belone_-_Sardegna.JPG'}
 };
 const FISH_BY={};FISH.forEach(f=>FISH_BY[f.id]=f);
 // Angeln: je besser, desto schneller beißen die Fische und desto öfter kommen seltene
@@ -403,15 +414,15 @@ const RODS=[
 const BAITS={
  wurm:{name:'Wurm',ico:'🪱',like:[],x:1},
  frucht:{name:'Früchte',ico:'🍒',like:['tambaqui','pacu','doebel'],x:4},
- blinker:{name:'Blinker',ico:'✨',like:['pfauen','dorado','arowana','hecht','zander','barsch','forelle','rapfen','huchen'],x:3}};
+ blinker:{name:'Blinker',ico:'✨',like:['pfauen','dorado','arowana','hecht','zander','barsch','forelle','rapfen','huchen','makrele','hornhecht','dorsch'],x:3}};
 // Angelarten: Posenangeln hat jeder, Spinnrute und Grundrute gibt es bei Opa Tiago.
 // like = beißen viel öfter (×3), no = beißen kaum (×0,15)
 const METHODS={
  pose:{name:'Posenangeln',ico:'🎣',like:[],no:[],hint:'Posenangeln: Die Pose schwimmt oben. Taucht sie unter, beißt ein Fisch!'},
  spin:{name:'Spinnfischen',ico:'🌀',like:['hecht','zander','barsch','forelle','doebel','pfauen','dorado','arowana','piranha','rapfen','huchen'],
-   no:['neon','beil','skalar','diskus','karausche','schleie','karpfen','rotfeder','tambaqui','pacu','brachse','nase','quappe','aal','stoer'],
+   no:['neon','beil','skalar','diskus','karausche','schleie','karpfen','rotfeder','tambaqui','pacu','brachse','nase','quappe','aal','stoer','scholle'],
    hint:'Spinnfischen: Der Kunstköder kommt von selbst zu dir zurück. Raubfische jagen ihm nach!'},
- grund:{name:'Grundangeln',ico:'⚓',like:['karpfen','schleie','karausche','antennen','piraiba','rochen','tambaqui','pacu','barbe','brachse','wels','aal','quappe','stoer'],
+ grund:{name:'Grundangeln',ico:'⚓',like:['karpfen','schleie','karausche','antennen','piraiba','rochen','tambaqui','pacu','barbe','brachse','wels','aal','quappe','stoer','scholle','dorsch'],
    no:['neon','beil','skalar','diskus','arowana','rapfen'],hint:'Grundangeln: Das Blei liegt am Grund. Warte, bis der Bissanzeiger piept!'}};
 const methodNow=()=>state.method!=='pose'&&state.methods[state.method]?state.method:'pose';
 // Opa Tiagos Angelladen
@@ -1362,9 +1373,10 @@ $('#btnBait').onclick=()=>{const l=baitList();state.bait=l[(l.indexOf(state.bait
   toast('Köder: '+BAITS[state.bait].name);};
 function fishPress(){
   audio();
-  if(atCity()){toast('Angeln kannst du in der Angelwelt. Flieg zurück!');return;}
+  if(atCity()&&player.ride){toast('Steig erst ab, dann kannst du angeln.');return;}
+  if(atCity()&&fishing.state==='idle'&&!findWater()){toast('Angeln kannst du hier am Hafen! Stell dich an die Kaimauer und schau aufs Wasser.');return;}
   if(fishing.state==='idle'){
-    if(state.bucket.length>=bucketMax()){toast('Dein Eimer ist voll! Bring die Fische zu '+(atDE()||atLake()?'Fischer Hannes':'Rosa')+'.');return;}
+    if(state.bucket.length>=bucketMax()){toast('Dein Eimer ist voll! Bring die Fische zu '+(atDE()||atLake()||atCity()?'Fischer Hannes':'Rosa')+'.');return;}
     const w=findWater();if(!w){toast(player.inBoat?'Hier ist es zu flach. Fahr weiter in den Fluss!':'Hier ist kein Wasser. Stell dich ans Ufer oder auf den Steg!');return;}
     fishing.method=methodNow();fishing.state='cast';fishing.t=0;fishing.target.copy(w);fishing.bait=fishing.method==='spin'?'wurm':useBait();player.av.rod.visible=true;
     player.av.tip.getWorldPosition(fishing.from);tone(300,0.25,'sine',0.08);
@@ -1425,7 +1437,7 @@ function updateFishing(dt,t){
     lineGeo.attributes.position.needsUpdate=true;}
 }
 function chooseFish(){
-  const here=atDE()?'fluss':atLake()?'see':'amazonas';
+  const here=atCity()?'meer':atDE()?'fluss':atLake()?'see':'amazonas';
   const pool=here==='fluss'&&curSpot?curSpot.fish.map(id=>FISH_BY[id]).filter(Boolean):FISH.filter(f=>fishHome(f)===here&&(!f.boat||player.inBoat));
   const sc=schoolAt(fishing.target.x,fishing.target.z);
   const bt=BAITS[fishing.bait]||BAITS.wurm;
@@ -1523,7 +1535,8 @@ const RULES={
  aal:{selten:true,why:'Er ist sehr selten geworden.'},
  lachs:{selten:true,why:'Lachse kommen gerade erst langsam in unsere Flüsse zurück.'},
  stoer:{selten:true,why:'Er war bei uns ausgestorben. Jetzt werden wieder junge Störe ausgesetzt.'},
- huchen:{selten:true,why:'Es gibt nur noch wenige Huchen.'}};
+ huchen:{selten:true,why:'Es gibt nur noch wenige Huchen.'},
+ dorsch:{selten:true,why:'In der Ostsee gibt es nur noch ganz wenige Dorsche. Angler dürfen sie dort nicht mitnehmen.'}};
 const RELEASE_BONUS=5;
 const dateText=d=>d[1]+'.'+d[0]+'.';
 function inSeason(r,d){if(!r.von)return false;d=d||new Date();const md=(d.getMonth()+1)*100+d.getDate(),a=r.von[0]*100+r.von[1],b=r.bis[0]*100+r.bis[1];
@@ -1705,8 +1718,8 @@ function showBook(){
   const n=Object.keys(state.book).length;
   card.appendChild(el('h2',null,'Fischbuch'));
   card.appendChild(el('p',null,'Du hast '+n+' von '+FISH.length+' Fischarten gefunden.'));
-  const parts=[['amazonas','Amazonas'],['see','Heimat-See'],['fluss','Flüsse in Deutschland']]; // wo du gerade bist, steht oben
-  if(atLake())parts.unshift(parts.splice(1,1)[0]);else if(atDE())parts.unshift(parts.splice(2,1)[0]);
+  const parts=[['amazonas','Amazonas'],['see','Heimat-See'],['fluss','Flüsse in Deutschland'],['meer','Meer (Hafen von Hafenhausen)']]; // wo du gerade bist, steht oben
+  if(atLake())parts.unshift(parts.splice(1,1)[0]);else if(atDE())parts.unshift(parts.splice(2,1)[0]);else if(atCity())parts.unshift(parts.splice(3,1)[0]);
   parts.forEach(([home,title])=>{
     const list=FISH.filter(f=>fishHome(f)===home),got=list.filter(f=>state.book[f.id]).length;
     card.appendChild(el('h3','bookhead',title+' <span>'+got+' von '+list.length+'</span>'));
@@ -1714,7 +1727,7 @@ function showBook(){
     list.forEach(f=>{const b=state.book[f.id];const c=el(b?'button':'div','bk');c.appendChild(b?fishImg(f,'bkimg'):el('div','bkimg nofoto unknown','?'));
       if(b)c.onclick=()=>showFishPage(f);
       if(b)c.appendChild(el('b',null,esc(f.name))),c.appendChild(el('span',null,b.n+'× gefangen · größter: '+b.best+' cm'));
-      else c.appendChild(el('b',null,'???')),c.appendChild(el('span',null,f.boat?'Nur vom Boot aus':home==='see'?'Lebt im Heimat-See':home==='fluss'?'Lebt in Flüssen in Deutschland':'Noch nicht gefangen'));
+      else c.appendChild(el('b',null,'???')),c.appendChild(el('span',null,f.boat?'Nur vom Boot aus':home==='see'?'Lebt im Heimat-See':home==='fluss'?'Lebt in Flüssen in Deutschland':home==='meer'?'Lebt im Meer, beißt im Hafen':'Noch nicht gefangen'));
       g.appendChild(c);});
     card.appendChild(g);});
   const c=el('button','b','Fertig');c.onclick=closeModal;const bt=el('div','btns');bt.appendChild(c);card.appendChild(bt);
@@ -1788,13 +1801,13 @@ function sellList(again,bye){
 const GRUSS={bw:'Grüß Gott',by:'Servus',hh:'Moin',sh:'Moin',hb:'Moin',ni:'Moin',mv:'Moin'};
 let hannesTab='verkaufen';
 // Welcher Stand ist in der Nähe? (am Flussplatz oder am Heimat-See)
-const hannesNear=()=>{const h=atDE()?(curSpot&&hannes):atLake()?hannesSee:null;return h&&Math.hypot(player.pos.x-h.x,player.pos.z-h.z)<4.2;};
+const hannesNear=()=>{const h=atCity()?(cityBuilt&&hannesHafen):atDE()?(curSpot&&hannes):atLake()?hannesSee:null;return h&&Math.hypot(player.pos.x-h.x,player.pos.z-h.z)<4.2;};
 function showHannes(){
   openModal();card.className='card';card.innerHTML='';
-  const bl=atDE()&&curSpot?curSpot.bl:'',b=BL[bl],hi=GRUSS[bl]||'Hallo';
+  const bl=atDE()&&curSpot?curSpot.bl:'',b=BL[bl],hi=atCity()?'Moin':GRUSS[bl]||'Hallo';
   const head=el('div','rosa');head.appendChild(el('div','face hannes'));
   head.appendChild(el('div',null,'<h2>Fischer Hannes</h2><p>'+hi+', '+esc(state.avatar.name||'du')+'! Ich kaufe deine Fische und habe Angelsachen für dich.</p>'+
-    (GRUSS[bl]?'<p class="small">„'+hi+'“ sagt man oft in '+esc(b.name)+'.</p>':'')));
+    (GRUSS[bl]?'<p class="small">„'+hi+'“ sagt man oft in '+esc(b.name)+'.</p>':atCity()?'<p class="small">„Moin“ sagt man oft an der Küste.</p>':'')));
   card.appendChild(head);
   const tabs=el('div','tabs four');[['verkaufen','🐟 Verkaufen']].concat(TIAGO_TABS.filter(([id])=>id!=='boot')).forEach(([id,lb])=>{const t=el('button',null,lb);t.setAttribute('aria-pressed',hannesTab===id);
     t.onclick=()=>{hannesTab=id;showHannes();};tabs.appendChild(t);});card.appendChild(tabs);
@@ -2705,7 +2718,7 @@ function buildSpot(id){const s=SPOTS_BY[id];if(!s)return false;
   deShip=null;if(s.ship){const sh=makeShip(s.ship);g.add(sh);deShip={g:sh,x:-DE.w*0.4,sp:s.ship==='gross'?1.6:2.2,lane:s.ship==='gross'?0.2:0.35};}
   return true;}
 /* ---- Fischer Hannes: Stand an jedem Flussplatz und am Heimat-See. Er kauft Fische und verkauft Angelsachen. ---- */
-const hannes={x:0,z:0},hannesSee={x:0,z:0};
+const hannes={x:0,z:0},hannesSee={x:0,z:0},hannesHafen={x:0,z:0};
 // pos = wo der Stand steht (wird gemerkt), ry = wohin die Theke schaut, cols = Hindernisse
 function buildHannes(g,x,z,pos,ry,cols){Object.assign(pos||hannes,{x,z});
   const st=grp(g,x,z,-0.1);st.rotation.y=ry==null?Math.atan2(1,-1):ry; // die Theke schaut zum Landeplatz
@@ -2973,7 +2986,8 @@ function buildCity(){if(cityBuilt)return;
     lighthouse(g,110,-3140);cityCols.push({x:110,z:-3140,r:2.3});
     [[-112,-3122,'#c2401f'],[-110.6,-3122.4,'#2f7fd8'],[-111.3,-3124,'#f6a623'],[-111.2,-3123.2,'#2f9e5b']].forEach(([x,z,col],i)=>dbox(1.3,1.1,1.3,col,x,1.2+(i===3?1.1:0),z,i*0.4));
     cityCols.push({x:-111.3,z:-3123,r:1.8});
-    makeSign('Angeln?','In der Angelwelt!',15,-3111.6,'#c2401f',g,cityCols,0);}
+    makeSign('Angeln','Hier am Hafen!',15,-3111.6,'#c2401f',g,cityCols,0);
+    buildHannes(g,-80,-3109.5,hannesHafen,0,cityCols);} // Fischer Hannes an der Kaimauer, die Theke schaut zur Stadt
   // Park: Teich mit Enten, Bäume, Bänke, Blumen
   {const p=POND;cy(g,p.r+0.6,p.r+0.7,0.35,'#a9a294',p.x,1.1,p.z,28);cy(g,p.r,p.r,0.36,'#4aa3d0',p.x,1.1,p.z,28);cityCols.push({x:p.x,z:p.z,r:p.r+0.8});
     [[97,-2887,0.3],[103,-2882,2.2],[99,-2880,4]].forEach(([x,z,ry])=>{const d=new THREE.Group();d.position.set(x,1.5,z);d.rotation.y=ry;g.add(d);
@@ -3305,6 +3319,7 @@ function mapMarkers(){const m=[
   {x:(PLOT.x0+PLOT.x1)/2,z:(PLOT.z0+PLOT.z1)/2,ico:'🏠',name:state.builtOnce?'Dein Haus':'Bauplatz'}];
   PLANES.forEach(p=>{if((p.id!=='de'||deP)&&(p.id!=='city'||cityBuilt))m.push({x:p.x,z:p.z,ico:'✈️',name:'Flugzeug'});});
   if(cityBuilt){for(const id in STOPS)m.push({x:STOPS[id].x,z:STOPS[id].z,ico:'🚋',name:'Haltestelle'});m.push({x:SHOP_AT.x,z:SHOP_AT.z,ico:'🛒',name:'Fahrzeug-Laden'});
+    m.push({x:hannesHafen.x,z:hannesHafen.z,ico:'🐟',name:'Fischer Hannes'});
     VEHICLE_IDS.forEach(id=>{if(!state.city.vehicles[id]||player.ride===id)return;const v=vehicleAt(id);m.push({x:v.x,z:v.z,ico:VEHICLES[id].ico,name:'Dein '+VEHICLES[id].name});});}
   if(deP)m.push({x:hannes.x,z:hannes.z,ico:'🐟',name:'Fischer Hannes'});
   m.push({x:hannesSee.x,z:hannesSee.z,ico:'🐟',name:'Fischer Hannes'});
@@ -3407,7 +3422,7 @@ function showCityMap(){
   card.appendChild(el('p',null,'Du bist in der Stadt <b>Hafenhausen</b>. Der rote Pfeil bist du. Norden ist oben.'));
   const row=el('div','maprow'),w=el('div','mapwrap'),cv=el('canvas');cv.id='cityMap';w.appendChild(cv);row.appendChild(w);
   const leg=el('div','maplegend');
-  [['🚋','Haltestelle der Straßenbahn'],['🛒','Fahrzeug-Laden'],['🚲','Dein Fahrrad'],['✈️','Flugzeug'],['🟫','Haus']].forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
+  [['🚋','Haltestelle der Straßenbahn'],['🛒','Fahrzeug-Laden'],['🐟','Fischer Hannes (Angeln am Hafen)'],['🚲','Dein Fahrrad'],['✈️','Flugzeug'],['🟫','Haus']].forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
   row.appendChild(leg);card.appendChild(row);
   card.appendChild(towList());
   const bt=el('div','btns'),cl=el('button','b','Fertig');cl.onclick=closeModal;bt.appendChild(cl);card.appendChild(bt);
@@ -3428,6 +3443,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:30,day:'23.10.2026',ico:'🐟',t:'Angeln im Hafen',d:'Im Hafen von Hafenhausen kannst du jetzt angeln! Dort beißen Hering, Makrele, Scholle, Hornhecht und Dorsch, und Fischer Hannes kauft sie dir ab.'},
  {v:29,day:'22.10.2026',ico:'🛻',t:'Abschleppdienst',d:'Steht dein Fahrzeug weit weg? Tipp auf die Karte und ruf den Abschleppdienst! Für 10 Ludins bringt der gelbe Abschleppwagen es zu dir.'},
  {v:28,day:'22.10.2026',ico:'⚡',t:'Freie Fahrt für den Truck',d:'Die Menschen in Hafenhausen laufen jetzt um den Cyber-Truck herum. Kommst du nicht weiter, sagt dir das Spiel, was du tun kannst.'},
  {v:27,day:'21.10.2026',ico:'🏙️',t:'Hafenhausen',d:'Flieg in die Stadt Hafenhausen! Fahr mit Fahrrad, Roller, Skateboard, Cyber-Truck oder der gelben Straßenbahn.'},
