@@ -1,7 +1,7 @@
 # Bildnachweis – Fischfotos
 
 Alle Fotos kommen von [Wikimedia Commons](https://commons.wikimedia.org) und stehen unter freien Lizenzen.
-Sie wurden für das Spiel auf 800 × 600 Pixel zugeschnitten und verkleinert. Bei Pfauenbarsch, Arowana, Rotauge, Barsch, Döbel, Karpfen, Hecht und den Flussfischen (außer dem Aland) ist der Rand mit einer unscharfen Kopie des Fotos aufgefüllt, damit der ganze Fisch zu sehen ist. Sonst wurde nichts verändert.
+Sie wurden für das Spiel auf 800 × 600 Pixel zugeschnitten und verkleinert. Bei Pfauenbarsch, Arowana, Rotauge, Barsch, Döbel, Karpfen, Hecht, den Flussfischen (außer dem Aland) sowie bei Makrele, Scholle und Hornhecht ist der Rand mit einer unscharfen Kopie des Fotos aufgefüllt, damit der ganze Fisch zu sehen ist. Sonst wurde nichts verändert.
 Im Spiel steht unter jedem Foto der Name des Fotografen und die Lizenz. Die Links stehen nur hier, damit Kinder im Spiel nicht ins Internet gelangen.
 
 | Fisch | Datei | Foto von | Lizenz |
@@ -43,3 +43,8 @@ Im Spiel steht unter jedem Foto der Name des Fotografen und die Lizenz. Die Link
 | Lachs | [Salmo salar-Atlantic Salmon-Atlanterhavsparken Norway (cropped).JPG](https://commons.wikimedia.org/wiki/File:Salmo_salar-Atlantic_Salmon-Atlanterhavsparken_Norway_(cropped).JPG) | Hans-Petter Fjeld | [CC BY-SA 2.5](https://creativecommons.org/licenses/by-sa/2.5) |
 | Huchen | [Danube Salmon - Huchen (Hucho hucho) (cropped).jpg](https://commons.wikimedia.org/wiki/File:Danube_Salmon_-_Huchen_(Hucho_hucho)_(cropped).jpg) | Liquid Art | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
 | Stör | [Acipenser oxyrinchus Montreal Biodome (cropped).JPG](https://commons.wikimedia.org/wiki/File:Acipenser_oxyrinchus_Montreal_Biodome_(cropped).JPG) | NoonIcarus | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0) |
+| Hering | [Clupea harengus New Jersey.jpg](https://commons.wikimedia.org/wiki/File:Clupea_harengus_New_Jersey.jpg) | zakqaryroy | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0) |
+| Makrele | [Mackerel Kyle P1120303.jpg](https://commons.wikimedia.org/wiki/File:Mackerel_Kyle_P1120303.jpg) | Rohit Naniwadekar | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| Dorsch | [Atlantic Cod, Atlantischer Kabeljau (Gadus morhua).jpg](https://commons.wikimedia.org/wiki/File:Atlantic_Cod,_Atlantischer_Kabeljau_(Gadus_morhua).jpg) | Wilhelm Thomas Fiege | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| Scholle | [Pleuronectidae Pleuronectes platessa 1.jpg](https://commons.wikimedia.org/wiki/File:Pleuronectidae_Pleuronectes_platessa_1.jpg) | NasserHalaweh | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| Hornhecht | [Belone belone - Sardegna.JPG](https://commons.wikimedia.org/wiki/File:Belone_belone_-_Sardegna.JPG) | euparkeria | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
