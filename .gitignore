@@ -2,3 +2,6 @@ node_modules/
 tests/test-sicherheitskopie.json
 tests/test-rekordkarte.json
 tests/test-rekordkarte.png
+
+# Sicherheitsprüfung: nicht ins öffentliche Repo (zeigt Schwachstellen)
+.security-audit/
