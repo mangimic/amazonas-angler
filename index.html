@@ -481,6 +481,9 @@ const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{
   city:{visited:false,vehicles:{bike:true,roller:false,skate:false,truck:false},parked:{},riding:''},
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
+// Werte aus Dateien (Sicherheitskopie, alter Code) sind fremd: nur echte Zahlen und Farben übernehmen (siehe Sicherheitsprüfung SEC-001)
+const num=(v,max)=>{const n=Math.round(Number(v));return Number.isFinite(n)?Math.max(0,Math.min(max==null?1e9:max,n)):0;};
+const hexCol=(v,def)=>typeof v==='string'&&/^#[0-9a-fA-F]{6}$/.test(v)?v:def;
 function lsGet(k){try{return localStorage.getItem(k);}catch(e){return null;}}
 function lsSet(k,v){try{localStorage.setItem(k,v);return true;}catch(e){return false;}}
 function parseSave(raw){try{const s=JSON.parse(raw||'null');return isObj(s)?s:null;}catch(e){return null;}}
@@ -503,11 +506,17 @@ if(loaded){
   migrate(loaded);
   Object.assign(state,loaded);state.avatar=Object.assign({},state.avatar,isObj(loaded.avatar)?loaded.avatar:{});
 }
+// Avatar: nur Text, gültige Farben und bekannte Formen (sonst der Startwert). Nichts wird gelöscht, kaputte Werte werden ersetzt.
+{const a=state.avatar,d={name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'},id=v=>typeof v==='string'&&/^[a-z]{1,20}$/.test(v);
+  a.name=typeof a.name==='string'?a.name.slice(0,20):'';
+  ['skin','hairColor','shirt','pants'].forEach(k=>{a[k]=hexCol(a[k],d[k]);});
+  if(!id(a.hair))a.hair=d.hair;if(!id(a.hat))a.hat=d.hat;if('vest' in a)a.vest=a.vest===true;}
 // Alles prüfen und fehlende Teile ergänzen, damit nie ein kaputter Wert das Spiel stoppt
 if(!Number.isFinite(state.ludins)||state.ludins<0)state.ludins=Math.max(0,Number(state.ludins)||0);
 state.ludins=Math.round(state.ludins);
 if(!Array.isArray(state.bucket))state.bucket=[];
 if(!isObj(state.book))state.book={};
+for(const id in state.book){const b=state.book[id];state.book[id]=isObj(b)?Object.assign(b,{n:num(b.n),best:num(b.best,10000)}):{n:1,best:0};}
 state.baits=Object.assign({frucht:0,blinker:0},isObj(state.baits)?state.baits:{});
 state.clothes=Object.assign({anglerhut:false,weste:false},isObj(state.clothes)?state.clothes:{});
 if(!BAITS[state.bait])state.bait='wurm';
@@ -532,10 +541,12 @@ if(!isObj(state.city))state.city={visited:false,vehicles:{bike:true,roller:false
   if(!isObj(c.parked))c.parked={}; // unbekannte oder kaputte Einträge bleiben gespeichert (nie löschen), vehicleAt beachtet sie nicht
   if(!VEHICLE_IDS.includes(c.riding)&&c.riding!=='tram')c.riding='';}
 state.traps=state.traps.filter(t=>isObj(t)&&Number.isFinite(t.x)&&Number.isFinite(t.z));
-state.traps.forEach(t=>{if(!Number.isFinite(t.t))t.t=Date.now();});
+state.traps.forEach(t=>{if(!Number.isFinite(t.t))t.t=Date.now();
+  if(Array.isArray(t.fish))t.fish=t.fish.filter(isObj).map(f=>Object.assign(f,{cm:num(f.cm,10000),value:num(f.value,1e6)}));});
 // Fische, die es im Spiel nicht mehr gibt: Rosa kauft sie ab, damit nichts verloren geht
 let lostFishLudins=0;
-state.bucket=state.bucket.filter(it=>{if(it&&FISH_BY[it.id])return true;lostFishLudins+=Math.max(0,Math.round(Number(it&&it.value)||0));return false;});
+state.bucket=state.bucket.filter(it=>{if(isObj(it)&&FISH_BY[it.id])return true;lostFishLudins+=num(it&&it.value,1e6);return false;});
+state.bucket.forEach(it=>{it.cm=num(it.cm,10000);it.value=num(it.value,1e6);});
 state.ludins+=lostFishLudins;
 const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
 // Sicherheitskopie: der Stand vom letzten Spielstart. Geht der Hauptstand kaputt, lädt das Spiel diese Kopie.
@@ -1506,7 +1517,7 @@ let modalBack='play';
 function openModal(){if(mode!=='modal')modalBack=mode;mode='modal';$('#modal').hidden=false;input.jx=input.jy=0;joyId=null;lookId=null;joyBase.hidden=true;}
 function closeModal(){$('#modal').hidden=true;mode=modalBack;}
 function el(tag,cls,html){const e=document.createElement(tag);if(cls)e.className=cls;if(html!=null)e.innerHTML=html;return e;}
-function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
 // Bild eines Fisches: immer das echte Foto. Lädt es nicht, kommt ein einfacher Fisch-Platz (🐟).
 function fishImg(f,cls){const ft=FOTOS[f.id],none=()=>el('div',cls+' nofoto','🐟');
@@ -2055,7 +2066,7 @@ function showPlayers(){
   card.appendChild(el('p',null,'Jeder Spieler hat seinen eigenen Spielstand. Das Spiel speichert von selbst.'));
   const l=el('div','list players');
   players.list.forEach(p=>{const me=p.id===state.playerId,b=el('button','item player'+(me?' me':''));
-    const face=el('div','pface');face.style.background=p.skin||SKINS[1];face.style.borderColor=p.shirt||'#2f9e5b';b.appendChild(face);
+    const face=el('div','pface');face.style.background=hexCol(p.skin,SKINS[1]);face.style.borderColor=hexCol(p.shirt,'#2f9e5b');b.appendChild(face);
     b.appendChild(el('div','t','<b>'+esc(p.name||'Neuer Spieler')+'</b><span>'+(Math.round(Number(p.ludins))||0)+' Ludins · '+(p.fish|0)+((p.fish|0)===1?' Fischart':' Fischarten')+'</span>'));
     b.appendChild(el('span','sum',me?'spielt gerade':'▶'));
     b.onclick=()=>{if(me)closeModal();else switchPlayer(p.id);};l.appendChild(b);});
@@ -2147,8 +2158,9 @@ function myCard(){if(!state.cardId){state.cardId='k'+Date.now().toString(36)+Mat
 function rankEntries(){
   const list=players.list.map(p=>{let s=p.id===state.playerId?state:parseSave(lsGet(slotKey(p.id)));
     if(!s)s={avatar:{name:p.name},ludins:p.ludins,book:{}};
-    return {name:(s.avatar&&s.avatar.name)||p.name||'Neuer Spieler',ludins:Math.round(Number(s.ludins)||0),book:isObj(s.book)?s.book:{},schein:s.angelschein===true,
-      skin:(s.avatar&&s.avatar.skin)||p.skin,shirt:(s.avatar&&s.avatar.shirt)||p.shirt,me:p.id===state.playerId,here:true};})
+    const book={};if(isObj(s.book))for(const id in s.book){const b=s.book[id];if(isObj(b))book[id]={n:num(b.n),best:num(b.best,10000)};} // andere Spieler: noch ungeprüft
+    return {name:String((s.avatar&&s.avatar.name)||p.name||'Neuer Spieler'),ludins:num(s.ludins),book,schein:s.angelschein===true,
+      skin:hexCol(s.avatar&&s.avatar.skin,hexCol(p.skin,'')),shirt:hexCol(s.avatar&&s.avatar.shirt,hexCol(p.shirt,'')),me:p.id===state.playerId,here:true};})
     .filter(e=>e.name!=='Neuer Spieler'||e.ludins>0);
   friends.forEach(c=>list.push({...c,friend:true}));
   list.forEach(e=>{e.kinds=Object.keys(e.book).filter(id=>FISH_BY[id]).length;let big=null;
@@ -3443,6 +3455,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:31,day:'27.10.2026',ico:'🔒',t:'Sicherer Spielstand',d:'Wenn du eine Sicherheitskopie lädst, prüft das Spiel jetzt jeden Wert ganz genau. So kann eine fremde Datei nichts kaputt machen.'},
  {v:30,day:'23.10.2026',ico:'🐟',t:'Angeln im Hafen',d:'Im Hafen von Hafenhausen kannst du jetzt angeln! Dort beißen Hering, Makrele, Scholle, Hornhecht und Dorsch, und Fischer Hannes kauft sie dir ab.'},
  {v:29,day:'22.10.2026',ico:'🛻',t:'Abschleppdienst',d:'Steht dein Fahrzeug weit weg? Tipp auf die Karte und ruf den Abschleppdienst! Für 10 Ludins bringt der gelbe Abschleppwagen es zu dir.'},
  {v:28,day:'22.10.2026',ico:'⚡',t:'Freie Fahrt für den Truck',d:'Die Menschen in Hafenhausen laufen jetzt um den Cyber-Truck herum. Kommst du nicht weiter, sagt dir das Spiel, was du tun kannst.'},

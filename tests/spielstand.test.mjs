@@ -300,6 +300,45 @@ test('Mehrere Spieler: Sicherheitskopie kommt als neuer Spieler dazu', async () 
   await ctx.close();
 });
 
+test('Sicherheit: eine präparierte Sicherheitskopie kann kein HTML einschleusen (SEC-001)', async () => {
+  const { ctx, page, errors } = await newPage();
+  const fremd = '<b class="eingeschleust">x</b>'; // harmloser Marker: taucht er als Element auf, wurde HTML eingeschleust
+  const kopie = JSON.stringify({ app: 'amazonas-angler', state: { ...ALT_V1, v: 2, newsSeen: 999, ludins: 10,
+    book: { piranha: { n: fremd, best: fremd } }, bucket: [{ id: 'piranha', cm: fremd, value: fremd }],
+    traps: [{ x: 9, z: 9, t: 0, fish: [{ id: 'piranha', cm: fremd, value: fremd }] }],
+    avatar: { name: 'Fremd' + fremd, skin: 'url(http://127.0.0.1:9/x.png)', hair: fremd, hairColor: 'red', shirt: 'url(x)', pants: '#3d3a33', hat: 'kappe' } } });
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+  await startGame(page);
+  await page.click('#btnSaveCode');
+  await page.setInputFiles('#backupFile', { name: 'cheat.json', mimeType: 'application/json', buffer: Buffer.from(kopie) });
+  await page.locator('text=Er kommt als neuer Spieler dazu').waitFor();
+  assert.equal(await page.locator('.eingeschleust').count(), 0, 'auch die Frage vor dem Laden zeigt kein HTML');
+  await Promise.all([page.waitForEvent('load'), page.click('text=Ja, laden')]);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  await page.click('#btnGo');
+  const s = await weg(page); // speichern wie beim Schließen
+  assert.deepEqual(s.book.piranha, { n: 0, best: 0 }, 'Fischbuch: nur Zahlen');
+  assert.deepEqual([s.bucket[0].cm, s.bucket[0].value], [0, 0], 'Eimer: nur Zahlen');
+  assert.deepEqual([s.traps[0].fish[0].cm, s.traps[0].fish[0].value], [0, 0], 'Reuse: nur Zahlen');
+  assert.equal(s.avatar.skin, '#eab48c', 'Hautfarbe: nur echte Farben, sonst der Startwert');
+  assert.equal(s.avatar.shirt, '#2f9e5b');
+  assert.equal(s.avatar.hairColor, '#5a3720');
+  assert.equal(s.avatar.hair, 'kurz');
+  assert.equal(s.avatar.hat, 'kappe', 'gültige Werte bleiben genau so');
+  assert.equal(s.avatar.pants, '#3d3a33');
+  assert.equal(s.ludins, 10);
+  for (const knopf of ['#btnBook', '#btnBucket', '#btnRank']) {
+    await page.click(knopf);
+    await page.locator('#card h2').first().waitFor();
+    if (knopf === '#btnRank') { await page.locator('#card .rankrow').first().click(); await page.locator('#card .catches').waitFor(); }
+    assert.equal(await page.locator('.eingeschleust').count(), 0, knopf + ': kein eingeschleustes HTML');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => { const c = document.querySelector('#card .b.alt, #card button:last-child'); if (c) c.click(); });
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 test('Mehrere Spieler: kaputte Spielerliste, aber kein Spieler geht verloren', async () => {
   const { ctx, page, errors } = await newPage();
   await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playerId: 'p1' }),
