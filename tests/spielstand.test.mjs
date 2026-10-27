@@ -2188,3 +2188,195 @@ test('Alter Spielstand: museum bekommt Startwert {}', async () => {
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+// Jeden Tag neu: Tagesfisch, Tagesaufgaben, Flaschenpost. dayHash wie in index.html (FNV-1a, 32 Bit).
+function dayHash(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; }
+// Die drei Orte der Flaschenpost direkt aus index.html lesen: const FLASCHE_SPOTS=[{x:…,z:…,ort:'…'},…]
+function flascheOrte() {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = html.match(/const FLASCHE_SPOTS=\[([^\]]*)\]/);
+  assert.ok(m, 'FLASCHE_SPOTS steht in index.html');
+  const l = [...m[1].matchAll(/\{x:(-?\d+(?:\.\d+)?),z:(-?\d+(?:\.\d+)?),ort:'(\w+)'\}/g)].map(([, x, z, ort]) => ({ x: Number(x), z: Number(z), ort }));
+  assert.deepEqual(l.map(o => o.ort), ['amazonas', 'see', 'stadt']);
+  return l;
+}
+const fischNamen = () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8'), n = {};
+  for (const [, id, name] of html.matchAll(/\{id:'(\w+)',(?:art:'\w+',)?name:'([^']+)'/g)) n[name] = id;
+  return n;
+};
+const spielRegeln = () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const i = html.indexOf('const RULES='), j = html.indexOf('}};', i);
+  return new Function('return ' + html.slice(i + 'const RULES='.length, j + 2))();
+};
+const schonzeitAm = (r, d) => { if (!r || !r.von) return false; const md = (d.getMonth() + 1) * 100 + d.getDate(), a = r.von[0] * 100 + r.von[1], b = r.bis[0] * 100 + r.bis[1]; return a <= b ? md >= a && md <= b : md >= a || md <= b; };
+
+test('Tagesfisch: zählt doppelt', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-10-31T10:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ ludins: 0, where: NEBEN_ROSA }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBook');
+  const kopf = (await page.textContent('#card .tagesfisch')).trim();
+  const m = kopf.match(/^⭐ Tagesfisch heute: (.+)$/);
+  assert.ok(m, 'Kopfzeile im Fischbuch: ' + kopf);
+  const id = fischNamen()[m[1]];
+  assert.ok(id, 'Tagesfisch ' + m[1] + ' steht in FISH');
+  const anderer = id === 'piranha' ? 'skalar' : 'piranha';
+  await seed(page, { [KEY]: stadtSeed({ ludins: 0, where: NEBEN_ROSA, bucket: [{ id: anderer, cm: 20, value: 10 }, { id, cm: 30, value: 10 }] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Rosa")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Rosas Fischhandel")').waitFor();
+  const reihe = page.locator('#card .item:has-text("⭐ Tagesfisch ×2")');
+  assert.equal(await reihe.count(), 1, 'nur der Tagesfisch zählt doppelt');
+  assert.match(await reihe.textContent(), /20 Ludins/);
+  assert.match(await page.textContent('#card'), /Alles verkaufen \(\+30 Ludins\)/);
+  await reihe.locator('button:has-text("Verkaufen")').click();
+  let s = await weg(page);
+  assert.equal(s.ludins, 20, 'Tagesfisch mit Wert 10 bringt 20 Ludins');
+  assert.deepEqual(s.bucket.map(b => b.id), [anderer]);
+  await page.click('#card .item button:has-text("Verkaufen")');
+  s = await weg(page);
+  assert.equal(s.ludins, 30, 'ein anderer Fisch zählt normal');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Tagesfisch: jeden Tag fest, nie Bootsfisch, seltener Fisch oder Schonzeit', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-10-31T10:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ where: NEBEN_ROSA }) });
+  await startGame(page);
+  const tage = Array.from({ length: 366 }, (_, i) => { const d = new Date(2026, 0, 1 + i, 12); return [d, d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')]; });
+  const ids = await page.evaluate(keys => keys.map(k => window.__test.tagesfisch(k)), tage.map(t => t[1]));
+  const noch = await page.evaluate(keys => keys.map(k => window.__test.tagesfisch(k)), tage.map(t => t[1]));
+  assert.deepEqual(noch, ids, 'gleicher Tag = gleicher Fisch');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8'), RULES = spielRegeln();
+  const boot = [...html.matchAll(/\{id:'(\w+)'[^\n]*boat:true/g)].map(m => m[1]);
+  assert.deepEqual(boot, ['piraiba', 'arapaima']);
+  tage.forEach(([d, k], i) => {
+    const id = ids[i], r = RULES[id];
+    assert.ok(!boot.includes(id), k + ': ' + id + ' gibt es nur vom Boot');
+    assert.ok(!(r && r.selten), k + ': ' + id + ' ist ein seltener Fisch');
+    assert.ok(!schonzeitAm(r, d), k + ': ' + id + ' hat Schonzeit');
+  });
+  assert.ok(new Set(ids).size >= 15, 'viele verschiedene Tagesfische im Jahr: ' + new Set(ids).size);
+  assert.ok(ids.includes('forelle'), 'im Sommer kann die Forelle Tagesfisch sein');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Tagesaufgaben: derselbe Mensch wünscht sich am selben Tag denselben Fisch', async () => {
+  // Liste wie AUFGABEN_FISCHE (See- und Meeresfische ohne Dorsch), am 31.10. ohne Forelle (Schonzeit 1.10.–28.2.)
+  const liste = ['rotauge', 'rotfeder', 'barsch', 'karausche', 'doebel', 'schleie', 'karpfen', 'zander', 'hecht', 'hering', 'makrele', 'scholle', 'hornhecht'];
+  const erwartet = liste[dayHash('2026-10-31n0') % liste.length];
+  for (let mal = 0; mal < 2; mal++) {
+    const { ctx, page, errors } = await stadtSeite({});
+    await page.evaluate(() => { Math.random = () => 0.99; }); // der Zufall darf keine Rolle spielen
+    await redeMit(page, 0);
+    await page.click('#card button:has-text("Kann ich dir helfen?")');
+    const s = await weg(page);
+    assert.equal(s.aufgaben.length, 1);
+    assert.equal(s.aufgaben[0].fish, erwartet, 'Fisch aus dayHash(Tag + id)');
+    const a = await page.evaluate(() => window.__test.aufgabe(50)), b = await page.evaluate(() => window.__test.aufgabe(50));
+    assert.deepEqual(a, b, 'kein Zufall');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+// Was in der heutigen Flaschenpost steckt (wie in index.html): 0 = Rätsel, 1 = Tipp, 2 = Ludins
+async function flascheOeffnen(page, key) {
+  const art = dayHash(key + 'f') % 3;
+  await page.locator('#btnCtx:has-text("🍾 Flaschenpost")').waitFor({ timeout: 20000 });
+  const knopf = await page.locator('#btnCtx').boundingBox();
+  assert.ok(knopf.height >= 60, 'Knopf mindestens 60 px');
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("🍾 Flaschenpost")').waitFor();
+  if (art === 0) {
+    const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+    const frage = (await page.textContent('#card .qq')).trim();
+    const m = html.match(new RegExp("q:'" + frage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "',a:'([^']+)'"));
+    assert.ok(m, 'Frage aus QUIZ: ' + frage);
+    assert.equal((await weg(page)).tag.flasche, false, 'erst nach der Antwort ist die Flasche leer');
+    await page.click('#card .qa:text-is("' + m[1] + '")');
+    await page.locator('#card .qe:has-text("Richtig")').waitFor();
+    return 10;
+  }
+  if (art === 1) { assert.match(await page.textContent('#card'), /💡/); return 0; }
+  const l = 10 + dayHash(key + 'l') % 21;
+  assert.match(await page.textContent('#card'), new RegExp(l + ' Ludins'));
+  return l;
+}
+
+test('Flaschenpost: einmal pro Tag', async () => {
+  const orte = flascheOrte();
+  let save = null;
+  for (const key of ['2026-10-28', '2026-10-29', '2026-10-31']) {
+    const ort = orte[dayHash(key) % 3];
+    const { ctx, page, errors } = await zeitSeite(key + 'T10:00:00+01:00');
+    const where = { x: ort.x, z: ort.z, f: 0, boat: false };
+    await seed(page, { [KEY]: save ? JSON.stringify({ ...save, where }) : stadtSeed({ ludins: 0, city: { visited: true }, where }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    const vorher = await weg(page);
+    assert.deepEqual(vorher.tag, { day: key, flasche: false }, key + ': neuer Tag, neue Flaschenpost');
+    const plus = await flascheOeffnen(page, key);
+    let s = await weg(page);
+    assert.deepEqual(s.tag, { day: key, flasche: true }, key);
+    assert.equal(s.ludins, vorher.ludins + plus, key + ': +' + plus + ' Ludins');
+    // neu laden: heute keine zweite Flaschenpost
+    await page.click('#card .btns button:has-text("Fertig")');
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.waitForTimeout(1500);
+    assert.equal(await page.locator('#btnCtx:has-text("Flaschenpost")').isVisible(), false, key + ': kein zweites Mal');
+    s = await weg(page);
+    assert.deepEqual(s.tag, { day: key, flasche: true });
+    save = s;
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Flaschenpost: alle Orte liegen an Land, gleich am Wasser', async () => {
+  const { ctx, page, errors } = await stadtSeite({}, '2026-10-31T10:00:00+01:00', true);
+  for (const o of flascheOrte()) {
+    await page.evaluate(([x, z]) => window.__test.warp(x, z), [o.x, o.z]);
+    await page.waitForTimeout(1500); // Welt-Stücke in der Nähe bauen (Bäume sind Hindernisse)
+    const p = await page.evaluate(([x, z]) => {
+      const t = window.__test, w = [];
+      for (let r = 1; r <= 6; r += 0.5) for (let a = 0; a < 32; a++) w.push(t.hoehe(x + Math.sin(a / 32 * 6.283) * r, z + Math.cos(a / 32 * 6.283) * r));
+      return { h: t.hoehe(x, z), frei: t.begehbar(x, z), wasser: Math.min(...w), rail: t.stadtPunkt(x, z).rail };
+    }, [o.x, o.z]);
+    assert.ok(p.h > 0.3, o.ort + ': an Land (' + p.h + ')');
+    assert.ok(p.frei, o.ort + ': man kann hingehen');
+    assert.ok(p.wasser < -0.35, o.ort + ': Wasser höchstens 6 m weit weg (' + p.wasser + ')');
+    if (o.ort === 'stadt') assert.ok(p.rail > 2.2, 'nicht auf den Schienen');
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Alter Spielstand: tag bekommt Startwert, kaputte Werte werden repariert', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-10-31T10:00:00+01:00');
+  await seed(page, { [KEY]: JSON.stringify(ALT_V1) });
+  await startGame(page);
+  await playAndLeave(page);
+  assert.deepEqual(JSON.parse(await read(page)).tag, { day: '2026-10-31', flasche: false }, 'Startwert, dann gleich der heutige Tag');
+  for (const [tag, soll] of [
+    ['x', { day: '2026-10-31', flasche: false }],
+    [{ day: '<b>', flasche: true }, { day: '2026-10-31', flasche: false }],
+    [{ day: '2026-10-31', flasche: 'ja' }, { day: '2026-10-31', flasche: false }],
+    [{ day: '2026-10-31', flasche: true, extra: 1 }, { day: '2026-10-31', flasche: true, extra: 1 }],
+    [{ day: '2026-10-30', flasche: true }, { day: '2026-10-31', flasche: false }]]) {
+    await seed(page, { [KEY]: stadtSeed({ tag }) });
+    await startGame(page);
+    await playAndLeave(page);
+    assert.deepEqual(JSON.parse(await read(page)).tag, soll, JSON.stringify(tag));
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

@@ -225,6 +225,7 @@ button.bk:active{border-color:var(--ink)}
 .rule b{font:800 20px var(--display)}.rule p{margin:4px 0}.rule small{color:var(--muted)}
 .tipline{background:#e3f1ea;border-radius:12px;padding:8px 12px;font-size:16px}
 .card .small{font-size:14px;color:var(--muted)}
+.card .tagesfisch{background:#fff3c4;border-radius:12px;padding:8px 12px;margin-bottom:0}
 .quiz .qq{font:800 22px/1.25 var(--display)}
 .quiz .qa{text-align:left;font-size:18px}
 .quiz .qa.right{background:#5fb36a;color:#fff}
@@ -412,7 +413,7 @@ const FOTOS={
 };
 const FISH_BY={};FISH.forEach(f=>FISH_BY[f.id]=f);
 // Fische nach Uhrzeit (Uhr am Gerät, WT.hour): zeit:'nacht' = 16–6 Uhr, 'tag' = 6–18 Uhr, 'daemmerung' = 5–9 und 16–21 Uhr.
-// Nach der Schule (16–18 Uhr) kann so jeder Fisch beißen. Fische ohne zeit beißen immer. zeit nur, wo es in der Natur stimmt (Belege im Task-3-Report).
+// Nach der Schule (16–18 Uhr) kann so jeder Fisch beißen. Fische ohne zeit beißen immer. zeit nur, wo es in der Natur stimmt (Belege in docs/fakten-quellen.md).
 const ZEIT_FENSTER={nacht:[[16,24],[0,6]],tag:[[6,18]],daemmerung:[[5,9],[16,21]]};
 const ZEIT_TEXT={nacht:'🌙 abends und nachts',tag:'☀️ tagsüber',daemmerung:'🌅 morgens und abends'};
 const fishActive=(f,hour)=>{const w=ZEIT_FENSTER[f.zeit];return !w||w.some(([a,b])=>hour>=a&&hour<b);};
@@ -490,7 +491,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false,muetze:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],fluss:{},flussAt:'',nachbarn:{},aufgaben:[],museum:{},
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false,muetze:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],fluss:{},flussAt:'',nachbarn:{},aufgaben:[],museum:{},tag:{day:'',flasche:false},
   city:{visited:false,vehicles:{bike:true,roller:false,skate:false,truck:false},parked:{},riding:''},
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
@@ -578,6 +579,8 @@ state.aufgaben.forEach(a=>{a.day=dayOk(a.day);});
 if(!isObj(state.museum))state.museum={};
 for(const f of FISH){if(!Object.prototype.hasOwnProperty.call(state.museum,f.id))continue;const v=state.museum[f.id];
   state.museum[f.id]=isObj(v)?Object.assign(v,{cm:num(v.cm,10000),t:num(v.t,1e14)}):{cm:0,t:0};}
+// Jeden Tag neu: day = welcher Tag (wie todayKey), flasche = die Flaschenpost von diesem Tag ist schon geöffnet. Andere Teile bleiben gespeichert.
+state.tag=isObj(state.tag)?Object.assign(state.tag,{day:dayOk(state.tag.day),flasche:state.tag.flasche===true}):{day:'',flasche:false};
 const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
 // Sicherheitskopie: der Stand vom letzten Spielstart. Geht der Hauptstand kaputt, lädt das Spiel diese Kopie.
 if(loadedFrom==='main')lsSet(BACKUP_KEY,savedRaw);
@@ -773,6 +776,8 @@ const sun=new THREE.DirectionalLight('#fff0c0',0.75);sun.position.set(50,80,30);
 const LAT={amazonas:-3,de:51};
 const pad2=n=>String(n).padStart(2,'0');
 const todayKey=(d=new Date())=>d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+// Einfache, feste Zahl aus einem Text (FNV-1a, 32 Bit). Gleicher Tag = gleiche Zahl, auf jedem iPad. Für Tagesfisch, Tagesaufgaben, Flaschenpost.
+function dayHash(s){let h=0x811c9dc5;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,0x01000193);}return h>>>0;}
 const dayOfYear=d=>Math.round((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-Date.UTC(d.getFullYear(),0,1))/864e5)+1;
 const regionNow=()=>atLake()||atDE()||atCity()?'de':'amazonas';
 // Sonnen-Uhrzeit: in Deutschland aus der Weltzeit (UTC) und 10° Ost, am Amazonas einfach die Uhrzeit auf dem iPad
@@ -835,6 +840,8 @@ function applySky(e,h,doy,region){const c=skyColor(e,new THREE.Color()),k=smooth
   lampMat.color.copy(night?GLOW:LAMP_DAY);lampMat.emissive.copy(GLOW).multiplyScalar(night?0.95:0);}
 function updateWorldTime(){const d=new Date(),region=regionNow(),h=solarHour(d,region),doy=dayOfYear(d),elev=sunElevation(LAT[region],h,doy);
   Object.assign(WT,{phase:phaseOf(elev),elev,season:season(d),hour:d.getHours()+d.getMinutes()/60,region,key:todayKey(d)});
+  if(state.tag.day!==WT.key)Object.assign(state.tag,{day:WT.key,flasche:false}); // neuer Tag: neue Flaschenpost
+  placeFlasche();
   document.body.dataset.phase=WT.phase;document.body.dataset.season=WT.season;document.body.dataset.region=WT.region;
   applySeason(WT.season);
   $('#clockChip').textContent=(WT.phase==='tag'?'☀️':WT.phase==='daemmerung'?'🌅':'🌙')+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
@@ -1718,6 +1725,11 @@ const RELEASE_BONUS=5;
 const dateText=d=>d[1]+'.'+d[0]+'.';
 function inSeason(r,d){if(!r.von)return false;d=d||new Date();const md=(d.getMonth()+1)*100+d.getDate(),a=r.von[0]*100+r.von[1],b=r.bis[0]*100+r.bis[1];
   return a<=b?md>=a&&md<=b:md>=a||md<=b;}
+// Tagesfisch: jeden Tag ein anderer Fisch, für den Rosa und Fischer Hannes doppelt zahlen. Nie ein Fisch nur vom Boot,
+// nie ein seltener Fisch und nie einer mit Schonzeit an diesem Tag (die darf man nicht mitnehmen, also auch nicht verkaufen).
+function tagesfisch(key){const m=/^(\d{4})-(\d\d)-(\d\d)$/.exec(key),d=m?new Date(+m[1],+m[2]-1,+m[3],12):new Date();
+  const l=FISH.filter(f=>{const r=RULES[f.id];return !f.boat&&!(r&&(r.selten||inSeason(r,d)));});
+  return l[dayHash(key)%l.length];}
 const pron=f=>f.art==='eine'?'sie':f.art==='ein'?'es':'ihn';
 // Darf dieser Fisch mitgenommen werden? Sonst: warum nicht
 function ruleProblem(f,cm){const r=RULES[f.id];if(!r)return null;
@@ -1824,6 +1836,47 @@ function showQuiz(round){
     box.appendChild(b);});
   card.appendChild(box);
 }
+/* ---- Flaschenpost: jeden Tag liegt an einem von drei Ufern eine Flasche mit einem Zettel ---- */
+// Orte (reine Zahlen, die Tests lesen sie aus dieser Datei): am Ufer beim Dorf (zwischen Opa Tiagos Hütte und dem Bauplatz),
+// am Südostufer vom Heimat-See, an der Kaimauer in Hafenhausen (zwischen zwei Pollern).
+// Alle an Land (heightAt > 0,3), begehbar und gleich am Wasser. Welcher Ort heute: dayHash(Tag) % 3.
+const FLASCHE_SPOTS=[{x:29,z:13,ort:'amazonas'},{x:22,z:-935,ort:'see'},{x:-37.5,z:-3111.5,ort:'stadt'}];
+const FLASCHE_LUDINS=10; // für ein richtig gelöstes Rätsel
+const flascheHeute=()=>FLASCHE_SPOTS[dayHash(WT.key||todayKey())%FLASCHE_SPOTS.length];
+const flascheNear=()=>{if(state.tag.flasche)return false;const f=flascheHeute();return Math.hypot(player.pos.x-f.x,player.pos.z-f.z)<=3;};
+// Die Flasche: grünes Glas, Korken, ein Zettel darin. Sie liegt im Sand. Ein eigenes Objekt in der Szene (nicht in bakeCells zusammengefasst).
+const flasche=(function(){const g=new THREE.Group(),b=new THREE.Group(),glas=new THREE.MeshLambertMaterial({color:'#4f9f6a',transparent:true,opacity:0.8});
+  const body=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.42,12),glas);
+  const hals=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.12,0.16,12),glas);hals.position.y=0.29;
+  const kork=new THREE.Mesh(new THREE.CylinderGeometry(0.055,0.05,0.08,8),mat('#b0835a'));kork.position.y=0.41;
+  const zettel=new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,0.3,8),mat('#f6ecd0'));
+  b.add(body,hals,kork,zettel);b.rotation.z=Math.PI/2-0.12;b.position.y=0.12;g.add(b);g.scale.setScalar(1.5);g.rotation.y=0.6;g.visible=false;scene.add(g);return g;})();
+function placeFlasche(){const f=flascheHeute();flasche.position.set(f.x,heightAt(f.x,f.z),f.z);flasche.visible=!state.tag.flasche;}
+// Flasche öffnen. Was drin ist, hängt vom Tag ab (dayHash): 0 = Rätsel aus dem Angel-Quiz, 1 = Angel-Tipp, 2 = 10 bis 30 Ludins.
+// Danach ist die Flasche für heute leer (state.tag.flasche) und wird gleich gespeichert. Das Rätsel zählt nicht für den Junior-Angelschein.
+function showFlasche(){const key=WT.key||todayKey(),art=dayHash(key+'f')%3;
+  openModal();card.className='card quiz';card.innerHTML='';
+  card.appendChild(el('h2',null,'🍾 Flaschenpost'));
+  const bt=el('div','btns'),ok=el('button','b go','Fertig');ok.onclick=closeModal;bt.appendChild(ok);
+  const leer=gain=>{state.tag.flasche=true;state.ludins+=gain;save();placeFlasche();refreshHud(true);if(gain)sfxCoins();ctxAction='x';updateCtx();};
+  const note=el('p','small','Morgen liegt eine neue Flaschenpost an einem Ufer. Auf der Karte siehst du, wo.');
+  if(art===0){const q=QUIZ[dayHash(key+'q')%QUIZ.length],box=el('div','btns col');
+    card.appendChild(el('p',null,'Du ziehst einen Zettel aus der Flasche. Darauf steht ein Rätsel:'));
+    card.appendChild(el('p','qq',esc(q.q)));
+    [q.a].concat(q.w).map(t=>[Math.random(),t]).sort((x,y)=>x[0]-y[0]).forEach(([,t])=>{const b=el('button','b alt qa',esc(t));b.onclick=()=>{
+      if(box.dataset.done)return;box.dataset.done='1';const right=t===q.a;
+      [...box.children].forEach(x=>{if(x.textContent===q.a)x.classList.add('right');});
+      if(!right){b.classList.add('wrong');tone(220,0.2,'sine',0.1);}
+      leer(right?FLASCHE_LUDINS:0);
+      card.insertBefore(el('p','qe',(right?'✅ Richtig! +'+FLASCHE_LUDINS+' Ludins. ':'Nicht ganz. ')+esc(q.e)),note);};
+      box.appendChild(b);});
+    card.appendChild(box);}
+  else if(art===1){card.appendChild(el('p',null,'Du ziehst einen Zettel aus der Flasche. Darauf steht ein Angel-Tipp:'));
+    card.appendChild(el('p','qe','💡 '+esc(TIPS[dayHash(key+'t')%TIPS.length])));leer(0);}
+  else{const l=10+dayHash(key+'l')%21;
+    card.appendChild(el('p',null,'Du ziehst einen Zettel aus der Flasche. Darauf steht: „Ein Geschenk für dich!“'));
+    card.appendChild(el('p','qe','🎁 In der Flasche stecken auch <b>'+l+' Ludins</b>.'));leer(l);}
+  card.append(note,bt);}
 // Texte der Infotafeln (kindgerecht, Fakten geprüft). fish = Fotos, die auf der Tafel gezeigt werden.
 const INFO_TEXT={
  amazonas:{fish:['neon','piranha','diskus','skalar'],p:['Der Amazonas fließt durch Südamerika, vor allem durch Brasilien. Er ist einer der längsten Flüsse der Welt und führt mehr Wasser als jeder andere Fluss.',
@@ -1910,6 +1963,9 @@ function showBook(){
   const n=Object.keys(state.book).length;
   card.appendChild(el('h2',null,'Fischbuch'));
   card.appendChild(el('p',null,'Du hast '+n+' von '+FISH.length+' Fischarten gefunden.'));
+  const tf=tagesfisch(todayKey());
+  card.appendChild(el('p','tagesfisch','⭐ Tagesfisch heute: <b>'+esc(tf.name)+'</b>'));
+  card.appendChild(el('p','small','Dafür zahlen Rosa und Fischer Hannes heute doppelt so viele Ludins. Jeden Tag gibt es einen neuen Tagesfisch.'));
   const parts=[['amazonas','Amazonas'],['see','Heimat-See'],['fluss','Flüsse in Deutschland'],['meer','Meer (Hafen von Hafenhausen)']]; // wo du gerade bist, steht oben
   if(atLake())parts.unshift(parts.splice(1,1)[0]);else if(atDE())parts.unshift(parts.splice(2,1)[0]);else if(atCity())parts.unshift(parts.splice(3,1)[0]);
   parts.forEach(([home,title])=>{
@@ -1974,16 +2030,17 @@ function showShop(){
   sellList(showShop,'Tschüss');
 }
 // Fische aus dem Eimer verkaufen (Rosa, Fischer Hannes). again = Laden neu zeigen
+// Der Tagesfisch (tagesfisch) bringt doppelt so viele Ludins.
 function sellList(again,bye){
-  const l=el('div','list');
+  const l=el('div','list'),tf=tagesfisch(todayKey()).id,wert=it=>it.id===tf?it.value*2:it.value;
   {
     if(!state.bucket.length)l.appendChild(el('div','empty','Dein Eimer ist leer. Fang erst ein paar Fische!'));
-    state.bucket.forEach((it,i)=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishThumb(f));
-      row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm · '+it.value+' Ludins</span>'));
-      const b=el('button','b','Verkaufen');b.onclick=()=>{state.bucket.splice(i,1);state.ludins+=it.value;save();sfxCoins();refreshHud(true);again();};
+    state.bucket.forEach((it,i)=>{const f=FISH_BY[it.id],v=wert(it);const row=el('div','item');row.appendChild(fishThumb(f));
+      row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm · '+v+' Ludins'+(it.id===tf?' · ⭐ Tagesfisch ×2':'')+'</span>'));
+      const b=el('button','b','Verkaufen');b.onclick=()=>{state.bucket.splice(i,1);state.ludins+=v;save();sfxCoins();refreshHud(true);again();};
       row.appendChild(b);l.appendChild(row);});
     card.appendChild(l);
-    const total=state.bucket.reduce((s,it)=>s+it.value,0);
+    const total=state.bucket.reduce((s,it)=>s+wert(it),0);
     const bt=el('div','btns');
     if(total){const all=el('button','b go','Alles verkaufen (+'+total+' Ludins)');all.onclick=()=>{state.ludins+=total;state.bucket=[];save();sfxCoins();refreshHud(true);toast('+'+total+' Ludins!');again();};bt.appendChild(all);}
     const c=el('button','b alt',bye);c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
@@ -2122,7 +2179,8 @@ function updateCtx(){
     else if(player.ride==='tram'){const st=tramAtStop();if(st&&st!==tramBoard)a='tramoff';}} // in der Bahn: nur Aussteigen (kein Fliegen)
   else if(!player.inBoat){
     const city=atCity()&&!planeNear()?cityCtx():null; // am Flugzeug gewinnt „Fliegen“
-    if(city)a=city;
+    if(flascheNear())a='flasche'; // die Flaschenpost liegt nicht bei Läden oder Flugzeugen
+    else if(city)a=city;
     else if(Math.hypot(p.x-ROSA.x,p.z-ROSA.z)<4.2)a='shop';
     else if(Math.hypot(p.x-TIAGO_AT.x,p.z-TIAGO_AT.z)<4.2)a='tiago';
     else if(hannesNear())a='hannes';
@@ -2137,7 +2195,7 @@ function updateCtx(){
   const closed=!!a&&SHOP_CTX.includes(a)&&!shopOpen();
   if(a!==ctxAction||closed!==ctxClosed){ctxAction=a;ctxClosed=closed;const b=$('#btnCtx');b.hidden=!a;
     const vm=a&&a.startsWith('mount:')&&VEHICLES[a.slice(6)],tk=a&&a.startsWith('talk:')&&nachbarInfo(+a.slice(5));
-    b.textContent=closed?SHOP_CLOSED_TXT:vm?vm.ico+' '+vm.on:tk?'💬 Reden mit '+tk.name:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='museum'?'🏛️ Ins Museum':a==='tram'?'🚋 Einsteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
+    b.textContent=closed?SHOP_CLOSED_TXT:vm?vm.ico+' '+vm.on:tk?'💬 Reden mit '+tk.name:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='museum'?'🏛️ Ins Museum':a==='tram'?'🚋 Einsteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='flasche'?'🍾 Flaschenpost':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
 $('#btnCtx').onclick=()=>{audio();
   if(SHOP_CTX.includes(ctxAction)&&!shopOpen()){toast(SHOP_CLOSED_TXT);return;} // Laden zu: nichts öffnet sich
@@ -2145,6 +2203,7 @@ $('#btnCtx').onclick=()=>{audio();
   else if(ctxAction==='tiago'){stopFishing();showTiago();}
   else if(ctxAction==='hannes'){stopFishing();showHannes();}
   else if(ctxAction==='info'){const ib=infoNear();if(ib){stopFishing();showInfo(ib);}return;}
+  else if(ctxAction==='flasche'){if(flascheNear()){stopFishing();showFlasche();}}
   else if(ctxAction==='trap'){const tr=trapNear();if(tr){stopFishing();showTrap(tr);}return;}
   else if(ctxAction==='placetrap'){placeTrap();ctxAction='x';updateCtx();return;}
   else if(ctxAction==='fly'){const pl=planeNear();if(pl){fly(pl);return;}}
@@ -3386,9 +3445,10 @@ const TIPPS_STADT=[
  'Auf dem Stadtplan siehst du alle deine Aufgaben.'];
 // Fische für Aufgaben: aus dem Meer (Hafen) und dem Heimat-See, keine seltenen Fische (die setzen wir immer zurück)
 const AUFGABEN_FISCHE=FISH.filter(f=>(f.home==='meer'||f.home==='see')&&!(RULES[f.id]&&RULES[f.id].selten)).map(f=>f.id);
-// Fisch für eine neue Aufgabe: keiner, der gerade Schonzeit hat (den dürfte man nicht mitnehmen)
+// Fisch für eine neue Aufgabe von Mensch id: keiner, der gerade Schonzeit hat (den dürfte man nicht mitnehmen).
+// Tagesaufgaben: kein Zufall, sondern dayHash(Tag + id). So wünscht sich derselbe Mensch am selben Tag denselben Fisch.
 const schonzeit=id=>!!RULES[id]&&inSeason(RULES[id]);
-const aufgabeFisch=()=>rnd(AUFGABEN_FISCHE.filter(id=>!schonzeit(id)));
+const aufgabeFisch=id=>{const l=AUFGABEN_FISCHE.filter(f=>!schonzeit(f));return l[dayHash(todayKey()+id)%l.length];};
 const AUFGABEN_MAX=3,FREUND_STUFEN=['Bekannt','Freund','Bester Freund'];
 const freundStufe=f=>f>=15?2:f>=5?1:0; // unter 5 Bekannt, ab 5 Freund, ab 15 Bester Freund
 function nachbarInfo(k){const p=people[k];if(!p)return null;if(p.info)return p.info;
@@ -3436,13 +3496,13 @@ function showTalk(k,say){const p=people[k],info=nachbarInfo(k);if(!p||!info)retu
   [b1,b2,b3].forEach(b=>bt.appendChild(b));card.appendChild(bt);}
 // Offene Aufgabe, deren Fisch inzwischen Schonzeit hat: der Mensch wünscht sich freundlich einen anderen (sofort gespeichert). Sonst ''.
 function swapSchonzeit(p){const a=state.aufgaben.find(x=>x.n===p.id);if(!a||!schonzeit(a.fish))return '';
-  const alt=FISH_BY[a.fish],f=FISH_BY[aufgabeFisch()];a.fish=f.id;save();
+  const alt=FISH_BY[a.fish],f=FISH_BY[aufgabeFisch(p.id)];a.fish=f.id;save();
   return 'Oh, '+fishDer(alt)+' '+alt.name+' hat gerade Schonzeit. Dann bring mir lieber '+fishAcc(f)+'!';}
 // „Kann ich dir helfen?“: neue Aufgabe, oder sagen, worauf er noch wartet
 function helpText(k){const p=people[k],sw=swapSchonzeit(p);if(sw)return sw;const a=state.aufgaben.find(x=>x.n===p.id);
   if(a){const f=FISH_BY[a.fish];return 'Ich warte noch auf '+fishAcc(f)+'. '+fishWo(f);}
   if(state.aufgaben.length>=AUFGABEN_MAX)return 'Danke! Aber du hast schon '+AUFGABEN_MAX+' Aufgaben. Mach erst eine fertig.';
-  const f=FISH_BY[aufgabeFisch()];state.aufgaben.push({n:p.id,fish:f.id,day:todayKey()});save();
+  const f=FISH_BY[aufgabeFisch(p.id)];state.aufgaben.push({n:p.id,fish:f.id,day:todayKey()});save();
   toast('📝 Neue Aufgabe! Auf dem Stadtplan (🗺️) siehst du alle Aufgaben.');
   return 'Oh ja! Bringst du mir '+fishAcc(f)+'? '+fishWo(f);}
 // „Hier, bitte!“: Fisch abgeben. Belohnung 2 × Preis + 10 Ludins und +3 Freundschaft
@@ -3734,6 +3794,7 @@ function mapMarkers(){const m=[
   m.push({x:hannesSee.x,z:hannesSee.z,ico:'🐟',name:'Fischer Hannes'});
   if(state.hasBoat&&!player.inBoat)m.push({x:boat.pos.x,z:boat.pos.z,ico:'🛶',name:'Dein Boot'});
   state.traps.forEach(t=>m.push({x:t.x,z:t.z,ico:'🧺',name:'Reuse',full:trapFishCount(t)>0}));
+  if(!state.tag.flasche){const f=flascheHeute();m.push({x:f.x,z:f.z,ico:'🍾',name:'Flaschenpost'});}
   return m;}
 function drawIcon(c,ico,x,y,size,ring){if(ring){c.fillStyle=ring;c.beginPath();c.arc(x,y,size*0.62,0,7);c.fill();}
   c.font=size+'px system-ui,"Apple Color Emoji","Segoe UI Emoji",sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(ico,x,y+1);}
@@ -3853,6 +3914,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:39,day:'27.10.2026',ico:'🍾',t:'Jeden Tag neu',d:'Jeden Tag gibt es einen Tagesfisch: Rosa und Fischer Hannes zahlen dafür doppelt. Und an einem Ufer liegt eine Flaschenpost mit einem Rätsel, einem Tipp oder Ludins!'},
  {v:38,day:'27.10.2026',ico:'🏛️',t:'Museum',d:'In Hafenhausen gibt es ein Museum. Schenk Herrn Eugen von jeder Fischart einen Fisch, dann steht er in der Ausstellung!'},
  {v:37,day:'27.10.2026',ico:'💬',t:'Nachbarn',d:'In Hafenhausen haben alle Menschen jetzt Namen. Rede mit ihnen, hilf ihnen und werde Freund!'},
  {v:36,day:'27.10.2026',ico:'🚦',t:'Verkehrsregeln',d:'Menschen laufen jetzt um Fahrzeuge herum. Wer zu schnell irgendwo dagegenfährt, bekommt einen Strafzettel.'},
@@ -4093,7 +4155,9 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
   nachbar(k){const p=people[k];if(!p)return null;const w=p.path[p.i];return {x:p.g.position.x,z:p.g.position.z,sichtbar:!!p.awake,kid:p.kid,ziel:{x:w.x,z:w.z}};},
   // welcher Fisch würde jetzt hier beißen (n-mal ausgewürfelt, Angel muss ausgeworfen sein) / in die Reuse schwimmen
   fische:n=>Array.from({length:n},()=>chooseFish().id),
-  aufgabe:n=>Array.from({length:n},aufgabeFisch), // welchen Fisch würde ein Mensch sich jetzt wünschen (n-mal ausgewürfelt)
+  aufgabe:n=>Array.from({length:n},(_,i)=>aufgabeFisch('t'+i)), // welche Fische würden sich heute n verschiedene Menschen wünschen (ids t0, t1, …)
+  tagesfisch:k=>tagesfisch(k).id, // Tagesfisch am Tag k (JJJJ-MM-TT)
+  begehbar:(x,z)=>walkable(x,z), // kann man an (x,z) stehen? (an Land, kein Baum, kein Haus)
   reuse:(home,n)=>Array.from({length:n},()=>trapFish(home).id),
   // jeden Flussplatz bauen: wie hoch stehen Hannes und die Infotafel? (unter 0 = im Wasser)
   ufer(){const was=curSpot&&curSpot.id,fa=state.flussAt,r=SPOTS.map(s=>{buildSpot(s.id);return {id:s.id,hannes:heightAt(hannes.x,hannes.z),tafel:heightAt(deBoard.x,deBoard.z)};});if(was)buildSpot(was);state.flussAt=fa;return r;}};

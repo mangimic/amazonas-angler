@@ -24,13 +24,14 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [x] Mehrere Spieler mit eigenem Spielstand („Wer spielt?“)
 - [x] Flüsse in Deutschland: Deutschland-Karte, 18 Angelplätze, Fluss-Stempel, Bundesländer freispielen
 - [x] Hafenhausen mit Fahrzeugen (Fahrrad, Roller, Skateboard, Cyber-Truck, Straßenbahn)
+- [x] Animal-Crossing-Welt: echte Tageszeit, Jahreszeiten, Fische nach Uhrzeit, Öffnungszeiten, Verkehrsregeln, Nachbarn, Museum, Tagesfisch und Flaschenpost
+- [x] Menschen mit Aufgaben
 
 ## Als Nächstes
 - [ ] Haus: Möbel
 - [ ] Haus: Aquarium mit gefangenen Fischen
 - [ ] Haus: Pokale für die größten Fänge
 - [ ] Haus: Spielzeug-Eisenbahn
-- [ ] Menschen mit Aufgaben
 - [ ] Läden in Hafenhausen
 - [ ] Eigenes Haus in der Stadt
 - [ ] Bus

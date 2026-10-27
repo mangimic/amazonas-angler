@@ -45,7 +45,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   (150 Ludins: Kunstköder wird von selbst eingeholt, manchmal beißt keiner; Raubfische beißen 3× öfter) und ⚓ **Grundangeln**
   mit der Grundrute (120 Ludins: Blei am Grund, Bissanzeiger piept, längere Wartezeit, Grundfische und große Fische öfter).
   `state.methods`, `state.method`. Die Angel-Stufe (Bambus/Profi/Gold) gilt für alle Angelarten.
-- **Infotafeln** (`INFOBOARDS`, Texte in `INFO_TEXT`): 7 Tafeln am Fluss und am Heimat-See. Hingehen, „📋 Infotafel lesen“ tippen.
+- **Infotafeln** (`INFOBOARDS`, Texte in `INFO_TEXT`): 8 Tafeln am Fluss und am Heimat-See (neu: `regenzeit` am Dorf). Hingehen, „📋 Infotafel lesen“ tippen.
   Jede neue Tafel bringt +5 Ludins (`state.infoRead`). Die Tafel „Regeln am See“ zeigt die Tabelle aus `RULES`. Tafel-`id`s nie ändern.
 - **Flüsse in Deutschland** (Sachkunde wie in der 4. Klasse, Skill `sachkunde-grundschule`): Mit dem Flugzeug (es öffnet die **Deutschland-Karte**,
   Norden oben, Bundesländer, Landeshauptstädte, Flüsse, Nachbarländer) fliegt man zu 18 Angelplätzen an echten Flüssen (`SPOTS`, Bundesländer in `BL`).
@@ -73,6 +73,17 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Stadtplan: Norden oben, Osten rechts (die kleine Karte zeigt wie überall Norden rechts).
   Was sich bewegt oder ein-/ausgeblendet wird, erst nach `bakeCells` bauen. `heightAt` prüft `CITY` vor `DE`.
   Die Stadt wird für weniger Zeichen-Aufrufe zusammengefasst (`bakeCells`, `bakeKids`); in `buildCity` die Reihenfolge der Zufallszahlen nie ändern.
+- **Animal-Crossing-Welt** (Fakten-Quellen in `docs/fakten-quellen.md`):
+  **Echte Tageszeit**: Uhrzeit und Datum vom iPad (`WT`, `updateWorldTime`, alle 30 s). Himmel, Sonne, Sterne, Mond; Amazonas fast am Äquator, Deutschland bei 51° Nord.
+  **Jahreszeiten** in Deutschland (`applySeason`, Farben über `laubMat`/`wieseMat`), am Amazonas immer grün (Tafel `regenzeit`).
+  **Fische nach Uhrzeit**: `zeit:'nacht'|'tag'|'daemmerung'` in `FISH`, Fenster in `ZEIT_FENSTER`, `fishActive`. Zwischen 16 und 18 Uhr kann jeder Fisch beißen.
+  **Öffnungszeiten** 8–22 Uhr für alle Läden (`SHOP_HOURS`, `shopOpen`, `SHOP_CTX`). Fische im Eimer freilassen geht immer.
+  **Verkehrsregeln**: Menschen schlafen nachts (`personAwake`) und laufen um Fahrzeuge herum. Wer zu schnell dagegenfährt, bekommt einen **Strafzettel** (`crash`, `FINE`), nie unter 0 Ludins.
+  **Nachbarn** in Hafenhausen: Namen, Reden (+1 Freundschaft pro Tag), Aufgaben (höchstens 3), Geschenke, Mütze vom besten Freund.
+  Ids `n0`–`n23` **nie ändern** (stehen im Spielstand), `PEOPLE_N` = 24. **Museum** (`MUSEUM_AT`, Herr Eugen): von jeder Fischart einen Fisch spenden.
+  **Jeden Tag neu**: `dayHash` (FNV-1a) aus dem Tag. **Tagesfisch** (`tagesfisch`, nie Bootsfisch, seltener Fisch oder Schonzeit): Rosa und Hannes zahlen doppelt.
+  **Tagesaufgaben**: der Fisch einer neuen Aufgabe kommt aus `dayHash(Tag + id)`. **Flaschenpost** (`FLASCHE_SPOTS`, 3 Ufer, einmal pro Tag): Rätsel (+10), Tipp oder 10–30 Ludins.
+  Spielstand: `state.museum`, `state.nachbarn`, `state.aufgaben`, `state.tag` (`day`, `flasche`). Test-Helfer `window.__test` gibt es nur bei `navigator.webdriver` (automatische Tests).
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
