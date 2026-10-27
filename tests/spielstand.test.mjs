@@ -34,8 +34,19 @@ before(async () => {
 after(async () => { await browser?.close(); server?.close(); });
 
 // Neues Browserfenster. Three.js kommt aus npm statt aus dem Internet, Schriften werden übersprungen.
+// Die Uhr im Spiel steht am Anfang immer auf heute, 11 Uhr (Ortszeit dieses Rechners), und läuft dann weiter.
+// So ist im Spiel immer Tag, auch wenn die Tests nachts laufen (Läden zu, Menschen schlafen …).
+// Nur Date wird verschoben. Nicht ctx.clock.setSystemTime: die Playwright-Uhr springt bei langsamen Bildern
+// manchmal viele Sekunden vor (dann ist z. B. der Kunstköder beim Spinnfischen sofort wieder da).
 async function newPage(opts) { // opts: z. B. { viewport: … } (kleineres Fenster = mehr Bilder pro Sekunde)
   const ctx = await browser.newContext(opts);
+  const elf = new Date(); elf.setHours(11, 0, 0, 0);
+  await ctx.addInitScript(off => {
+    const Echt = Date;
+    function Uhr(...a) { if (!new.target) return new Echt(Echt.now() + off).toString(); return a.length ? new Echt(...a) : new Echt(Echt.now() + off); }
+    Uhr.prototype = Echt.prototype; Uhr.now = () => Echt.now() + off; Uhr.UTC = Echt.UTC; Uhr.parse = Echt.parse;
+    window.Date = Uhr;
+  }, elf.getTime() - Date.now());
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -1259,6 +1270,71 @@ test('Hafenhausen: in der Straßenbahn wegfliegen geht nicht, speichern setzt an
   const s = await weg(page);
   assert.equal(s.city.riding, '');
   assert.ok(stops.some(p => Math.hypot(s.where.x - p.x, s.where.z - p.z) < 8), 'man steht zu Fuß an einer Haltestelle');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Weltzeit: die Uhr im Spiel steht fest auf iso (deutsche Zeit). Für Tests, die eine bestimmte Tageszeit brauchen.
+async function zeitSeite(iso) {
+  const { ctx, page, errors } = await newPage({ timezoneId: 'Europe/Berlin' });
+  await ctx.clock.setFixedTime(new Date(iso));
+  return { ctx, page, errors };
+}
+const SEE_ORT = { x: 4, z: -951, f: 0, boat: false }; // am Heimat-See, da landet das Flugzeug
+const phase = page => page.evaluate(() => document.body.dataset.phase);
+
+test('Weltzeit: Nachmittag im Juni ist Tag', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-06-21T14:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('body[data-phase="tag"]').waitFor({ state: 'attached', timeout: 5000 });
+  assert.match(await page.textContent('#clockChip'), /14:00/);
+  assert.match(await page.textContent('#clockChip'), /☀️/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Weltzeit: 23 Uhr ist Nacht, mit Sternen', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-06-21T23:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('body[data-phase="nacht"]').waitFor({ state: 'attached', timeout: 5000 });
+  assert.match(await page.textContent('#clockChip'), /🌙 23:00/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Weltzeit: um 19 Uhr ist am Amazonas Nacht, in Deutschland Tag', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-06-21T19:00:00+02:00');
+  const VX = 10 * Math.sin(1) + 24; // wie im Spiel: riverX(0)+24
+  await seed(page, { [KEY]: stadtSeed({ where: { x: VX + 13 - 3.4, z: 1, f: Math.PI / 2, boat: false } }) }); // am Dorf, neben dem Flugzeug
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('body[data-phase]').waitFor({ state: 'attached', timeout: 5000 });
+  assert.equal(await phase(page), 'nacht', 'am Amazonas geht die Sonne um 18 Uhr unter');
+  // zum Heimat-See fliegen: dort gilt gleich die deutsche Sonne
+  await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#deMap').waitFor();
+  await page.click('[data-dest="see"]');
+  await page.locator('body[data-phase="tag"]').waitFor({ state: 'attached', timeout: 15000 });
+  assert.ok((await weg(page)).where.z < -600, 'man ist am Heimat-See');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Weltzeit: Jahreszeit', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-04-15T12:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
+  for (const [iso, jz] of [['2026-04-15T12:00:00+02:00', 'fruehling'], ['2026-07-15T12:00:00+02:00', 'sommer'],
+    ['2026-10-15T12:00:00+02:00', 'herbst'], ['2026-12-15T12:00:00+01:00', 'winter']]) {
+    await ctx.clock.setFixedTime(new Date(iso));
+    await startGame(page);
+    await page.locator('body[data-season]').waitFor({ state: 'attached', timeout: 5000 });
+    assert.equal(await page.evaluate(() => document.body.dataset.season), jz, iso);
+  }
   assert.deepEqual(errors, []);
   await ctx.close();
 });

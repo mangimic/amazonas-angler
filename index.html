@@ -251,6 +251,7 @@ table.rules tr.now td{background:#ffe9c2}
     <button class="chip" id="btnBucket" aria-label="Eimer anschauen">🪣 <span class="sum" id="hudBucket">0/15</span></button>
     <button class="chip" id="btnBook">📖 Fischbuch</button>
     <button class="chip" id="btnRank" aria-label="Bestenliste">🏆</button>
+    <span class="chip timechip" id="clockChip"></span>
     <span class="chip timechip" id="timeChip" hidden></span>
     <button class="chip" id="btnNews">✨ Neu<span class="newsdot" id="newsDot" hidden></span></button>
     <span class="spacer"></span>
@@ -734,8 +735,75 @@ const scene=new THREE.Scene();
 const SKY=new THREE.Color('#a6dccd');
 scene.background=SKY;scene.fog=new THREE.Fog(SKY,45,150);
 const camera=new THREE.PerspectiveCamera(58,1,0.1,400);
-scene.add(new THREE.HemisphereLight('#fff6d8','#2e5a2a',0.9));
+const hemi=new THREE.HemisphereLight('#fff6d8','#2e5a2a',0.9);scene.add(hemi);
 const sun=new THREE.DirectionalLight('#fff0c0',0.75);sun.position.set(50,80,30);scene.add(sun);
+
+/* ---- Weltzeit: im Spiel ist dieselbe Uhrzeit und Jahreszeit wie auf dem iPad ---- */
+// Breitengrad: Amazonas fast am Äquator (dort immer etwa 6–18 Uhr hell), Deutschland, Heimat-See und Hafenhausen bei 51° Nord.
+const LAT={amazonas:-3,de:51};
+const pad2=n=>String(n).padStart(2,'0');
+const todayKey=(d=new Date())=>d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+const dayOfYear=d=>Math.round((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-Date.UTC(d.getFullYear(),0,1))/864e5)+1;
+const regionNow=()=>atLake()||atDE()||atCity()?'de':'amazonas';
+// Sonnen-Uhrzeit: in Deutschland aus der Weltzeit (UTC) und 10° Ost, am Amazonas einfach die Uhrzeit auf dem iPad
+const solarHour=(d,region)=>region==='de'?d.getUTCHours()+d.getUTCMinutes()/60+10/15:d.getHours()+d.getMinutes()/60;
+const DEG=Math.PI/180;
+const sunDecl=doy=>-23.44*Math.cos(2*Math.PI*(doy+10)/365); // so weit steht die Sonne nördlich (+) oder südlich (−) vom Äquator
+// Sonnenhöhe in Grad über dem Horizont (einfache Formel, genau genug für Tag und Nacht)
+function sunElevation(lat,h,doy){const la=lat*DEG,de=sunDecl(doy)*DEG,ha=15*(h-12)*DEG;
+  return Math.asin(Math.sin(la)*Math.sin(de)+Math.cos(la)*Math.cos(de)*Math.cos(ha))/DEG;}
+const phaseOf=e=>e>6?'tag':e>-6?'daemmerung':'nacht';
+// Jahreszeit wie beim Wetterdienst: Frühling ab 1.3., Sommer ab 1.6., Herbst ab 1.9., Winter ab 1.12.
+const season=d=>['winter','winter','fruehling','fruehling','fruehling','sommer','sommer','sommer','herbst','herbst','herbst','winter'][d.getMonth()];
+const WT={phase:'tag',elev:45,season:'sommer',hour:12,region:'amazonas',key:''};
+const isNight=()=>WT.phase==='nacht';
+// Himmel: Tag hellgrün-blau, Dämmerung rosa-orange, Nacht dunkelblau (nie schwarz)
+const SKY_DAY=new THREE.Color('#a6dccd'),SKY_DUSK=new THREE.Color('#f2a07b'),SKY_NIGHT=new THREE.Color('#22335e');
+function skyColor(e,out){return e>=0?out.copy(SKY_DUSK).lerp(SKY_DAY,smooth(0,8,e)):out.copy(SKY_NIGHT).lerp(SKY_DUSK,smooth(-8,0,e));}
+const HEMI_DAY=new THREE.Color('#fff6d8'),HEMI_NIGHT=new THREE.Color('#c8d4ff');
+const SUN_DAY=new THREE.Color('#fff0c0'),SUN_DUSK=new THREE.Color('#ffc08a'),SUN_NIGHT=new THREE.Color('#9fb4ff');
+// Nachts: Sterne (ein einziges Points-Objekt) und ein heller Mond. Beide wandern mit der Kamera mit.
+const stars=(function(){const n=400,p=new Float32Array(n*3),c=new Float32Array(n*3),r=rng(99);
+  for(let i=0;i<n;i++){const a=r()*Math.PI*2,y=0.08+r()*0.92,s=Math.sqrt(1-y*y),b=0.7+r()*0.3;
+    p[i*3]=Math.cos(a)*s*300;p[i*3+1]=y*300;p[i*3+2]=Math.sin(a)*s*300;c[i*3]=b;c[i*3+1]=b;c[i*3+2]=Math.min(1,b+0.1);}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(p,3));g.setAttribute('color',new THREE.BufferAttribute(c,3));
+  const s=new THREE.Points(g,new THREE.PointsMaterial({size:2*Math.min(window.devicePixelRatio||1,2),sizeAttenuation:false,vertexColors:true,fog:false,depthWrite:false}));
+  s.visible=false;s.frustumCulled=false;scene.add(s);return s;})();
+const moon=new THREE.Mesh(new THREE.CircleGeometry(10,24),new THREE.MeshBasicMaterial({color:'#fff8dc',fog:false}));moon.visible=false;scene.add(moon);
+const moonDir=new THREE.Vector3(0,1,0);
+// Glühwürmchen am Dorf: höchstens 30 kleine Lichtpunkte, nur nachts am Amazonas
+const flies=(function(){const n=30,p=new Float32Array(n*3),base=[],r=rng(31);
+  for(let i=0;i<n;i++){const a=r()*Math.PI*2,d=4+r()*22;base.push({x:VX+Math.cos(a)*d,z:VZ+Math.sin(a)*d,y:0.6+r()*1.6,ph:r()*6.28});}
+  const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.BufferAttribute(p,3));
+  const cv=document.createElement('canvas');cv.width=cv.height=32;const x=cv.getContext('2d'),rg=x.createRadialGradient(16,16,0,16,16,16);
+  rg.addColorStop(0,'rgba(255,255,255,1)');rg.addColorStop(0.4,'rgba(255,255,255,0.8)');rg.addColorStop(1,'rgba(255,255,255,0)');x.fillStyle=rg;x.fillRect(0,0,32,32); // weicher, runder Lichtpunkt
+  const f=new THREE.Points(g,new THREE.PointsMaterial({color:'#eaff8f',size:0.45,map:new THREE.CanvasTexture(cv),transparent:true,opacity:0.85,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
+  f.userData.base=base;f.visible=false;f.frustumCulled=false;scene.add(f);return f;})();
+function updateFlies(t){if(!flies.visible)return;const P=flies.geometry.attributes.position,b=flies.userData.base;
+  for(let i=0;i<b.length;i++){const q=b[i];P.setXYZ(i,q.x+Math.sin(t*0.4+q.ph)*1.2,Math.max(0,heightAt(q.x,q.z))+q.y+Math.sin(t*0.9+q.ph*2)*0.3,q.z+Math.cos(t*0.33+q.ph)*1.2);}
+  P.needsUpdate=true;flies.material.opacity=0.6+0.25*Math.sin(t*1.5);}
+// Fenster und Laternen in Hafenhausen: eigene Materialien (nicht aus matCache), nachts leuchten sie warm-gelb
+const winMat=new THREE.MeshLambertMaterial({color:'#8fc3dd'}),lampMat=new THREE.MeshLambertMaterial({color:'#f2efe2'});
+const WIN_DAY=new THREE.Color('#8fc3dd'),LAMP_DAY=new THREE.Color('#f2efe2'),GLOW=new THREE.Color('#ffe39a');
+function applySky(e,h,doy,region){const c=skyColor(e,new THREE.Color()),k=smooth(-8,8,e);
+  SKY.copy(c);scene.fog.color.copy(c);
+  hemi.intensity=0.45+0.45*k;hemi.color.copy(HEMI_NIGHT).lerp(HEMI_DAY,k);
+  sun.intensity=0.15+0.6*k;if(e>=0)sun.color.copy(SUN_DUSK).lerp(SUN_DAY,smooth(0,12,e));else sun.color.copy(SUN_NIGHT).lerp(SUN_DUSK,smooth(-8,0,e));
+  // Richtung der Sonne (in der Welt: +x Westen, +z Norden). Nachts kommt das Licht vom Mond, ungefähr gegenüber.
+  const la=LAT[region]*DEG,de=sunDecl(doy)*DEG,ha=15*(h-12)*DEG;
+  const v=new THREE.Vector3(Math.cos(de)*Math.sin(ha),Math.sin(la)*Math.sin(de)+Math.cos(la)*Math.cos(de)*Math.cos(ha),Math.cos(la)*Math.sin(de)-Math.sin(la)*Math.cos(de)*Math.cos(ha));
+  if(v.y<0)v.negate();v.y=Math.max(v.y,0.35);v.normalize();sun.position.copy(v).multiplyScalar(100);
+  moonDir.set(v.x,0,v.z);if(moonDir.lengthSq()<1e-4)moonDir.set(0,0,-1);moonDir.normalize().multiplyScalar(0.94).setY(0.34); // Mond tief am Himmel, damit man ihn sieht
+  const night=WT.phase==='nacht';stars.visible=moon.visible=night;flies.visible=night&&region==='amazonas';
+  winMat.color.copy(night?GLOW:WIN_DAY);winMat.emissive.copy(GLOW).multiplyScalar(night?0.8:0);
+  lampMat.color.copy(night?GLOW:LAMP_DAY);lampMat.emissive.copy(GLOW).multiplyScalar(night?0.95:0);}
+function updateWorldTime(){const d=new Date(),region=regionNow(),h=solarHour(d,region),doy=dayOfYear(d),elev=sunElevation(LAT[region],h,doy);
+  Object.assign(WT,{phase:phaseOf(elev),elev,season:season(d),hour:d.getHours()+d.getMinutes()/60,region,key:todayKey(d)});
+  document.body.dataset.phase=WT.phase;document.body.dataset.season=WT.season;
+  $('#clockChip').textContent=(WT.phase==='tag'?'☀️':WT.phase==='daemmerung'?'🌅':'🌙')+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
+  applySky(elev,h,doy,region);}
+setInterval(updateWorldTime,30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateWorldTime();}); // zurück im Spiel: gleich die richtige Uhrzeit
 
 const matCache={};
 function mat(c){return matCache[c]||(matCache[c]=new THREE.MeshLambertMaterial({color:c}));}
@@ -2969,6 +3037,7 @@ function buildCity(){if(cityBuilt)return;
   geo.setAttribute('color',new THREE.BufferAttribute(cols,3));g.add(new THREE.Mesh(geo,vcMat));
   // Kleine Teile (Zebrastreifen, Fenster, Poller …) kommen alle in EIN Mesh, das spart Arbeit beim Zeichnen
   const deco=[],dbox=(w,h,d,col,x,y,z,ry)=>deco.push(part(new THREE.BoxGeometry(w,h,d),col,M(x,y+h/2,z,0,ry||0,0)));
+  const win=[],wbox=(w,h,d,x,y,z,ry)=>win.push(part(new THREE.BoxGeometry(w,h,d),'#8fc3dd',M(x,y+h/2,z,0,ry||0,0))); // Fenster: leuchten nachts (winMat)
   // Zebrastreifen an den 4 Straßen, die auf den Marktplatz führen
   for(const sx of[-1,1])for(let k=0;k<8;k++)dbox(3,0.03,0.6,'#f4f4f0',sx*23.5,1.2,-2989.2+k*1.2);
   for(const sz of[-1,1])for(let k=0;k<8;k++)dbox(0.6,0.03,3,'#f4f4f0',-4.2+k*1.2,1.2,-2985+sz*23.5);
@@ -3010,7 +3079,7 @@ function buildCity(){if(cityBuilt)return;
   const setback=r=>WALK_W+r+0.4; // so weit steht die Hausmitte vom Blockrand weg, damit der Gehweg frei bleibt
   const slotPos=(b,side,along,r)=>side==='-z'?[along,b.z0+setback(r)]:side==='+z'?[along,b.z1-setback(r)]:side==='-x'?[b.x0+setback(r),along]:[b.x1-setback(r),along];
   const windows=(x,z,ry,w,d,h,shop)=>{const n=Math.max(1,Math.floor((w-1)/2.2)),fl=h>6.5?2:1;
-    for(let f=shop?1:0;f<fl;f++)for(let k=0;k<n;k++){const lx=-(n-1)*1.1+k*2.2;if(f===0&&Math.abs(lx)<1)continue;const [wx,wz]=rotXZ(x,z,ry,lx,-d/2-0.05);dbox(1,1.1,0.1,'#8fc3dd',wx,3+f*2.6,wz,ry);}};
+    for(let f=shop?1:0;f<fl;f++)for(let k=0;k<n;k++){const lx=-(n-1)*1.1+k*2.2;if(f===0&&Math.abs(lx)<1)continue;const [wx,wz]=rotXZ(x,z,ry,lx,-d/2-0.05);wbox(1,1.1,0.1,wx,3+f*2.6,wz,ry);}};
   const addHouse=(x,z,side,w,d,h,wall,roof,shop)=>{const ry=DOOR[side],hs=house(g,x,z,wall,roof,w,d,h);hs.rotation.y=ry;
     cityHouses.push({x,z,w,d,ry});cityCols.push({x,z,r:w/2+0.3});windows(x,z,ry,w,d,h,shop);return ry;};
   const shopSlots=new Set();
@@ -3021,7 +3090,7 @@ function buildCity(){if(cityBuilt)return;
     const b=cityBlock(s.blk[0],s.blk[1]),r=s.w/2+0.3,along=s.along!=null?s.along:s.side[1]==='x'?(b.z0+b.z1)/2:b.x0+13;
     const [x,z]=slotPos(b,s.side,along,r),ry=addHouse(x,z,s.side,s.w,s.d,s.h,s.wall,s.roof,true);shopSlots.add(s.blk+s.side);
     for(let i=0;i<6;i++){const lx=-(s.w-1)/2+(i+0.5)*(s.w-1)/6,[ax,az]=rotXZ(x,z,ry,lx,-s.d/2-0.7);dbox((s.w-1)/6,0.15,1.4,i%2?'#ffffff':s.aw,ax,3.4,az,ry);} // Markise
-    for(const lx of[-s.w/4-0.6,s.w/4+0.6]){const [wx,wz]=rotXZ(x,z,ry,lx,-s.d/2-0.06);dbox(2.2,1.6,0.1,'#8fc3dd',wx,1.5,wz,ry);} // Schaufenster
+    for(const lx of[-s.w/4-0.6,s.w/4+0.6]){const [wx,wz]=rotXZ(x,z,ry,lx,-s.d/2-0.06);wbox(2.2,1.6,0.1,wx,1.5,wz,ry);} // Schaufenster
     const [sx,sz]=rotXZ(x,z,ry,-(s.w/2+0.5),-(s.d/2+1.5));makeSign(s.name,'Laden',sx,sz,s.name==='Fahrzeuge'?'#2f7fd8':'#c2401f',g,cityCols,ry+Math.PI);});
   // Häuser: in jedem Block 4–6 Stück, die Tür schaut zur Straße
   for(let i=0;i<4;i++)for(let j=0;j<4;j++){if(i===3&&j===3)continue;const b=cityBlock(i,j);
@@ -3051,6 +3120,12 @@ function buildCity(){if(cityBuilt)return;
   fm.count=nf;fm.userData.shared=true;g.add(fm);
   g.add(new THREE.Mesh(merge(deco),vcMat));
   bakeCells(g,100,CITY.x-CITY.w,CITY.z-CITY.l); // Häuser, Brunnen, Boote, Flugzeug …: aus ~400 Teilen werden 9 Meshes (ohne Zufall)
+  // Erst jetzt (nach bakeCells, ohne Zufall): Fenster und Laternen, die nachts leuchten. 4 Laternen an den Ecken vom Marktplatz, dazu das Licht oben im Leuchtturm.
+  g.add(new THREE.Mesh(merge(win),winMat));
+  {const poles=[],heads=[];for(const sx of[-1,1])for(const sz of[-1,1]){const x=FOUNTAIN.x+sx*17.5,z=FOUNTAIN.z+sz*17.5;
+      poles.push(part(new THREE.CylinderGeometry(0.08,0.12,3.4,8),'#2b2f33',M(x,2.9,z)));heads.push(part(new THREE.SphereGeometry(0.34,12,8),'#f2efe2',M(x,4.75,z)));cityCols.push({x,z,r:0.25});}
+    heads.push(part(new THREE.CylinderGeometry(1.13,1.13,1.7,12),'#f2efe2',M(110,18.1,-3140))); // Licht im Leuchtturm
+    g.add(new THREE.Mesh(merge(poles),vcMat));g.add(new THREE.Mesh(merge(heads),lampMat));}
   buildPeople(g,rng(815));
   VEHICLE_IDS.forEach(id=>{vehMesh[id]=buildVehicleMesh(id);bakeKids(vehMesh[id]);g.add(vehMesh[id]);}); // ohne Zufall, damit die Häuser bleiben, wo sie sind
   placeVehicles();
@@ -3250,7 +3325,7 @@ function flyTo(dest){const s=SPOTS_BY[dest];if(s&&!spotOpen(dest))return;
   setTimeout(()=>{let l;
     if(s){buildSpot(dest);l=PLANES[2].land;}else if(dest==='city'){buildCity();l=PLANES[3].land;state.city.visited=true;}
     else if(dest==='see'){l=PLANES[1].land;state.visitedLake=true;}else l=PLANES[0].land;
-    player.inBoat=false;player.pos.set(l.x,0,l.z);player.facing=l.f;player.y=groundY(l.x,l.z);camYaw=l.f+Math.PI;if(s||dest==='city')camPitch=0.1;updateChunks(player.pos.z,true);saveWhere();},900);
+    player.inBoat=false;player.pos.set(l.x,0,l.z);player.facing=l.f;player.y=groundY(l.x,l.z);camYaw=l.f+Math.PI;if(s||dest==='city')camPitch=0.1;updateChunks(player.pos.z,true);saveWhere();updateWorldTime();},900);
   setTimeout(()=>{ov.hidden=true;mode='play';ctxAction='x';updateCtx();
     toast(s?'Willkommen: '+s.name+'! Du bist in '+BL[s.bl].name+'.'+(stamped(dest)?'':' Lies die Infotafel!'):dest==='city'?'Willkommen in Hafenhausen! '+(bikeAway()?'Dein Fahrrad steht noch da, wo du es abgestellt hast.':'Dein Fahrrad steht am Flugplatz.'):dest==='see'?'Willkommen am Heimat-See! Hier leben Fische wie in Deutschland. Verkaufen kannst du sie bei Fischer Hannes am Stand.':'Willkommen zurück am Amazonas!');},1900);}
 
@@ -3455,6 +3530,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:32,day:'27.10.2026',ico:'🌅',t:'Echte Tageszeit',d:'Im Spiel ist jetzt dieselbe Uhrzeit wie bei dir. Abends geht die Sonne unter, nachts siehst du Sterne und den Mond!'},
  {v:31,day:'27.10.2026',ico:'🔒',t:'Sicherer Spielstand',d:'Wenn du eine Sicherheitskopie lädst, prüft das Spiel jetzt jeden Wert ganz genau. So kann eine fremde Datei nichts kaputt machen.'},
  {v:30,day:'23.10.2026',ico:'🐟',t:'Angeln im Hafen',d:'Im Hafen von Hafenhausen kannst du jetzt angeln! Dort beißen Hering, Makrele, Scholle, Hornhecht und Dorsch, und Fischer Hannes kauft sie dir ab.'},
  {v:29,day:'22.10.2026',ico:'🛻',t:'Abschleppdienst',d:'Steht dein Fahrzeug weit weg? Tipp auf die Karte und ruf den Abschleppdienst! Für 10 Ludins bringt der gelbe Abschleppwagen es zu dir.'},
@@ -3666,6 +3742,8 @@ updateFoam(dt,t);updateTraps(t);updateDeShip(dt);updatePeople(dt,t);rapidSound(p
   else{jump.t+=dt/0.9;const k=jump.t;jumper.position.set(jump.x+jump.dx*k*2.2,Math.sin(Math.PI*k)*1.5-0.2,jump.z+jump.dz*k*2.2);jumper.rotation.x=-Math.cos(Math.PI*k)*0.9;
     if(k>=1){jumper.visible=false;splash(jumper.position.x,jumper.position.z);jump.t=-1;}}
   updateCamera(dt);
+  if(stars.visible){stars.position.copy(camera.position);moon.position.copy(camera.position).addScaledVector(moonDir,280);moon.lookAt(camera.position);}
+  updateFlies(t);
   renderer.render(scene,camera);
 }
 $('#loading').remove();
@@ -3673,6 +3751,9 @@ updateChunks(player.pos.z,true);
 $('#creator').hidden=false;buildCreator();refreshHud();faceFreeSide();
 if(askWhoPlays)showPlayers();
 updateTimeChip();if(timeLeft()<=0)lockTime();
+updateWorldTime();
+// Nur für die automatischen Tests (der Browser meldet sich dann als „webdriver“): Spieler an eine Stelle setzen
+if(navigator.webdriver===true)window.__test={warp(x,z){player.pos.set(x,0,z);player.y=groundY(x,z);player.root.position.set(x,player.y,z);updateWorldTime();saveWhere();}};
 player.root.position.set(player.pos.x,player.y,player.pos.z);
 loop();
 })();
