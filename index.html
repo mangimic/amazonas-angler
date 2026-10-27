@@ -561,12 +561,14 @@ state.bucket.forEach(it=>{it.cm=num(it.cm,10000);it.value=num(it.value,1e6);});
 state.ludins+=lostFishLudins;
 // Nachbarn in Hafenhausen: id ('n'+Nummer) → {f = Freundschaft, talk = Tag des letzten Gesprächs, gift = Tag des letzten Geschenks}.
 // Unbekannte ids bleiben gespeichert, wenn sie ein Objekt sind (nie löschen); das Spiel beachtet sie nicht. Aufgaben: höchstens 3.
+const PEOPLE_N=24; // so viele Menschen baut buildPeople (ids n0–n23)
 const NB_ID=/^n\d{1,2}$/,dayOk=v=>typeof v==='string'&&/^\d{4}-\d\d-\d\d$/.test(v)?v:''; // Tag wie todayKey(): JJJJ-MM-TT
 if(!isObj(state.nachbarn))state.nachbarn={};
 for(const id of Object.keys(state.nachbarn)){const v=state.nachbarn[id];
   if(!NB_ID.test(id)){if(!isObj(v))delete state.nachbarn[id];continue;}
   state.nachbarn[id]=isObj(v)?Object.assign(v,{f:num(v.f,999),talk:dayOk(v.talk),gift:dayOk(v.gift)}):{f:0,talk:'',gift:''};}
-state.aufgaben=(Array.isArray(state.aufgaben)?state.aufgaben:[]).filter(a=>isObj(a)&&typeof a.n==='string'&&NB_ID.test(a.n)&&
+state.aufgaben=(Array.isArray(state.aufgaben)?state.aufgaben:[]).filter(a=>isObj(a)&&typeof a.n==='string'&&NB_ID.test(a.n)&&+a.n.slice(1)<PEOPLE_N&& // nur echte Menschen (sonst blockiert eine unsichtbare Aufgabe einen Platz)
+
   typeof a.fish==='string'&&Object.prototype.hasOwnProperty.call(FISH_BY,a.fish)).slice(0,3);
 state.aufgaben.forEach(a=>{a.day=dayOk(a.day);});
 const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
@@ -3276,7 +3278,7 @@ function buildPeople(g,R){const pick=a=>a[Math.floor(R()*a.length)],order=[];
   for(let k=order.length-1;k>0;k--){const q=Math.floor(R()*(k+1));[order[k],order[q]]=[order[q],order[k]];}
   // nicht dort anfangen, wo man selbst ankommt oder steht (Landeplatz, Laden, Haltestellen)
   const keepFree=[{x:CITY_LAND.x+2,z:CITY_LAND.z},SHOP_AT,...Object.values(STOPS).map(s=>({x:s.x+3,z:s.z}))];
-  for(let k=0;k<24;k++){const b=cityBlock(...order[k%16]),x0=b.x0+1,x1=b.x1-1,z0=b.z0+1,z1=b.z1-1;
+  for(let k=0;k<PEOPLE_N;k++){const b=cityBlock(...order[k%16]),x0=b.x0+1,x1=b.x1-1,z0=b.z0+1,z1=b.z1-1;
     let path=[{x:x0,z:z0},{x:x1,z:z0},{x:x1,z:z1},{x:x0,z:z1}];if(R()<0.5)path.reverse();
     let i=0,x=0,z=0;for(let tr=0;tr<20;tr++){i=Math.floor(R()*4);const a=path[(i+3)%4],e=path[i],f=R();x=a.x+(e.x-a.x)*f;z=a.z+(e.z-a.z)*f;
       if(keepFree.every(p=>Math.hypot(p.x-x,p.z-z)>5))break;}
@@ -3326,6 +3328,9 @@ const TIPPS_STADT=[
  'Auf dem Stadtplan siehst du alle deine Aufgaben.'];
 // Fische für Aufgaben: aus dem Meer (Hafen) und dem Heimat-See, keine seltenen Fische (die setzen wir immer zurück)
 const AUFGABEN_FISCHE=FISH.filter(f=>(f.home==='meer'||f.home==='see')&&!(RULES[f.id]&&RULES[f.id].selten)).map(f=>f.id);
+// Fisch für eine neue Aufgabe: keiner, der gerade Schonzeit hat (den dürfte man nicht mitnehmen)
+const schonzeit=id=>!!RULES[id]&&inSeason(RULES[id]);
+const aufgabeFisch=()=>rnd(AUFGABEN_FISCHE.filter(id=>!schonzeit(id)));
 const AUFGABEN_MAX=3,FREUND_STUFEN=['Bekannt','Freund','Bester Freund'];
 const freundStufe=f=>f>=15?2:f>=5?1:0; // unter 5 Bekannt, ab 5 Freund, ab 15 Bester Freund
 function nachbarInfo(k){const p=people[k];if(!p)return null;if(p.info)return p.info;
@@ -3333,9 +3338,10 @@ function nachbarInfo(k){const p=people[k];if(!p)return null;if(p.info)return p.i
   return p.info=Object.assign({kid:p.kid},p.kid?NAMEN_KIND[ki%NAMEN_KIND.length]:NAMEN_ERW[ei%NAMEN_ERW.length]);}
 const nb=id=>state.nachbarn[id]||(state.nachbarn[id]={f:0,talk:'',gift:''});
 const fishAcc=f=>(f.art==='eine'?'eine':f.art==='ein'?'ein':'einen')+' '+f.name;
+const fishDer=f=>f.art==='eine'?'die':f.art==='ein'?'das':'der';
 const fishWo=f=>(f.art==='eine'?'Die':f.art==='ein'?'Das':'Den')+' fängst du '+(f.home==='meer'?'im Hafen':'am Heimat-See')+'.';
-const stufeToast=(a,b)=>b>a?(b===2?' 🎉 Ihr seid jetzt beste Freunde!':' 🎉 Ihr seid jetzt Freunde!'):'';
 const rnd=a=>a[Math.floor(Math.random()*a.length)];
+const stufeToast=(a,b)=>b>a?(b===2?' 🎉 Ihr seid jetzt beste Freunde!':' 🎉 Ihr seid jetzt Freunde!'):'';
 let talkP=null; // mit wem man gerade redet: er bleibt stehen und schaut zu dir
 // Wacher Mensch in weniger als 3 m (der nächste), sonst -1
 function talkNear(){let best=-1,bd=3;
@@ -3357,6 +3363,7 @@ function showTalk(k,say){const p=people[k],info=nachbarInfo(k);if(!p||!info)retu
     save();if(msg)toast(msg.trim());
     say=rnd(GRUSS_ART[info.art]||GRUSS_ART.freundlich).replace('{name}',info.name).replace('{alter}',info.alter);
     if(WT.hour>=18||WT.hour<5)say=say.replace('Guten Tag','Guten Abend');
+    say=swapSchonzeit(p)||say;
     talkP=p;p.wave=0;p.av.arms[1].rotation.z=0.08;}
   openModal();card.className='card';card.innerHTML='';
   const st=freundStufe(n.f);
@@ -3369,11 +3376,15 @@ function showTalk(k,say){const p=people[k],info=nachbarInfo(k);if(!p||!info)retu
   const b2=el('button','b',has?'Hier, bitte!':'Kann ich dir helfen?');b2.onclick=()=>has?handFish(k):showTalk(k,helpText(k));
   const b3=el('button','b alt','Tschüss!');b3.onclick=closeModal;
   [b1,b2,b3].forEach(b=>bt.appendChild(b));card.appendChild(bt);}
+// Offene Aufgabe, deren Fisch inzwischen Schonzeit hat: der Mensch wünscht sich freundlich einen anderen (sofort gespeichert). Sonst ''.
+function swapSchonzeit(p){const a=state.aufgaben.find(x=>x.n===p.id);if(!a||!schonzeit(a.fish))return '';
+  const alt=FISH_BY[a.fish],f=FISH_BY[aufgabeFisch()];a.fish=f.id;save();
+  return 'Oh, '+fishDer(alt)+' '+alt.name+' hat gerade Schonzeit. Dann bring mir lieber '+fishAcc(f)+'!';}
 // „Kann ich dir helfen?“: neue Aufgabe, oder sagen, worauf er noch wartet
-function helpText(k){const p=people[k],a=state.aufgaben.find(x=>x.n===p.id);
+function helpText(k){const p=people[k],sw=swapSchonzeit(p);if(sw)return sw;const a=state.aufgaben.find(x=>x.n===p.id);
   if(a){const f=FISH_BY[a.fish];return 'Ich warte noch auf '+fishAcc(f)+'. '+fishWo(f);}
   if(state.aufgaben.length>=AUFGABEN_MAX)return 'Danke! Aber du hast schon '+AUFGABEN_MAX+' Aufgaben. Mach erst eine fertig.';
-  const f=FISH_BY[rnd(AUFGABEN_FISCHE)];state.aufgaben.push({n:p.id,fish:f.id,day:todayKey()});save();
+  const f=FISH_BY[aufgabeFisch()];state.aufgaben.push({n:p.id,fish:f.id,day:todayKey()});save();
   toast('📝 Neue Aufgabe! Auf dem Stadtplan (🗺️) siehst du alle Aufgaben.');
   return 'Oh ja! Bringst du mir '+fishAcc(f)+'? '+fishWo(f);}
 // „Hier, bitte!“: Fisch abgeben. Belohnung 2 × Preis + 10 Ludins und +3 Freundschaft
@@ -3389,7 +3400,7 @@ function aufgabenList(){const box=el('div','towbox');box.appendChild(el('h3',nul
   const list=state.aufgaben.map(a=>({a,k:people.findIndex(p=>p.id===a.n)})).filter(x=>x.k>=0);
   if(!list.length)box.appendChild(el('p',null,'Noch keine Aufgaben. Frag die Menschen in der Stadt: „Kann ich dir helfen?“'));
   list.forEach(({a,k})=>{const f=FISH_BY[a.fish],has=state.bucket.some(it=>it.id===a.fish)?1:0;
-    box.appendChild(el('p',null,esc(nachbarInfo(k).name)+': bring '+esc(f.name)+' ('+has+'/1)'+(has?' ✅':'')));});
+    box.appendChild(el('p',null,esc(nachbarInfo(k).name)+': bring '+esc(f.name)+' ('+has+'/1)'+(has?' ✅':schonzeit(a.fish)?' – hat gerade Schonzeit, frag noch mal nach':'')));});
   return box;}
 // Darf ein Mensch auf die Stelle (x,z) treten? Nicht in geparkte Fahrzeuge, die Straßenbahn, den Abschleppwagen und nicht dir in den Weg.
 function blockedForPeople(x,z){return hitsParked(x,z,0.5)||hitsList(tram.cols,x,z,0.5)||hitsList(tow.cols,x,z,0.5)||inPlayerWay(x,z);}
@@ -4020,6 +4031,7 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
   nachbar(k){const p=people[k];if(!p)return null;const w=p.path[p.i];return {x:p.g.position.x,z:p.g.position.z,sichtbar:!!p.awake,kid:p.kid,ziel:{x:w.x,z:w.z}};},
   // welcher Fisch würde jetzt hier beißen (n-mal ausgewürfelt, Angel muss ausgeworfen sein) / in die Reuse schwimmen
   fische:n=>Array.from({length:n},()=>chooseFish().id),
+  aufgabe:n=>Array.from({length:n},aufgabeFisch), // welchen Fisch würde ein Mensch sich jetzt wünschen (n-mal ausgewürfelt)
   reuse:(home,n)=>Array.from({length:n},()=>trapFish(home).id),
   // jeden Flussplatz bauen: wie hoch stehen Hannes und die Infotafel? (unter 0 = im Wasser)
   ufer(){const was=curSpot&&curSpot.id,fa=state.flussAt,r=SPOTS.map(s=>{buildSpot(s.id);return {id:s.id,hannes:heightAt(hannes.x,hannes.z),tafel:heightAt(deBoard.x,deBoard.z)};});if(was)buildSpot(was);state.flussAt=fa;return r;}};

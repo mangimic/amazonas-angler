@@ -1951,7 +1951,7 @@ test('Nachbarn: kaputte Werte werden repariert', async () => {
   const { ctx, page, errors } = await newPage();
   await seed(page, { [KEY]: stadtSeed({
     nachbarn: { n0: { f: '<b>', talk: 'x' }, zz: {}, n3: 'kaputt', yy: 5, n1: { f: 7.6, talk: '2026-10-30', gift: '<i>' } },
-    aufgaben: [{ n: 'n1', fish: 'gibtsnicht' }, 'x'] }) });
+    aufgaben: [{ n: 'n1', fish: 'gibtsnicht' }, 'x', { n: 'n30', fish: 'hering' }] }) });
   await startGame(page);
   await playAndLeave(page);
   let s = JSON.parse(await read(page));
@@ -1960,10 +1960,10 @@ test('Nachbarn: kaputte Werte werden repariert', async () => {
   assert.deepEqual(s.nachbarn.n3, { f: 0, talk: '', gift: '' }, 'kein Objekt: wird ersetzt');
   assert.equal('yy' in s.nachbarn, false, 'ungültig und kein Objekt: fällt weg');
   assert.deepEqual(s.nachbarn.n1, { f: 8, talk: '2026-10-30', gift: '' });
-  assert.deepEqual(s.aufgaben, []);
+  assert.deepEqual(s.aufgaben, [], 'n30 gibt es nicht (nur 24 Menschen): die Aufgabe fällt weg');
   // ganz kaputt: Startwerte; mehr als 3 Aufgaben: nur die ersten 3
   const vier = ['hering', 'barsch', 'karpfen', 'scholle'].map((fish, i) => ({ n: 'n' + i, fish, day: '2026-10-30' }));
-  await seed(page, { [KEY]: stadtSeed({ nachbarn: 'x', aufgaben: [{ n: '<b>', fish: 'hering' }, ...vier] }) });
+  await seed(page, { [KEY]: stadtSeed({ nachbarn: 'x', aufgaben: [{ n: '<b>', fish: 'hering' }, { n: 'n24', fish: 'hering', day: '2026-10-30' }, ...vier] }) });
   await startGame(page);
   await playAndLeave(page);
   s = JSON.parse(await read(page));
@@ -2004,6 +2004,44 @@ test('Nachbarn: Bester Freund schenkt einmal die Mütze', async () => {
   await page.click('#opHat button:text-is("Mütze")');
   await page.click('#btnGo'); // in der Werkstatt wird erst beim Losgehen gespeichert
   assert.equal((await weg(page)).avatar.hat, 'muetze');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Fix-Runde 1: Aufgaben nie mit einem Fisch, der gerade Schonzeit hat (Bachforelle 1.10.–28.2.)
+const ERLAUBT_AUFGABE = ['hering', 'makrele', 'scholle', 'hornhecht', 'rotauge', 'rotfeder', 'barsch', 'karausche', 'doebel', 'schleie', 'karpfen', 'forelle', 'zander', 'hecht'];
+test('Nachbarn: Aufgaben nie mit Fischen in der Schonzeit', async () => {
+  for (const [iso, forelle] of [['2026-10-31T10:00:00+01:00', false], ['2026-06-21T10:00:00+02:00', true]]) {
+    const { ctx, page, errors } = await stadtSeite({}, iso, true);
+    const fische = await page.evaluate(() => window.__test.aufgabe(400));
+    assert.ok(fische.every(f => ERLAUBT_AUFGABE.includes(f)), iso);
+    assert.equal(fische.includes('forelle'), forelle, iso + ': Forelle ' + (forelle ? 'erlaubt' : 'hat Schonzeit'));
+    if (forelle) assert.equal(fische.includes('schleie'), false, 'Schleie hat am 21.6. Schonzeit (15.5.–30.6.)');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Nachbarn: offene Aufgabe mit Schonzeit-Fisch wird getauscht', async () => {
+  const { ctx, page, errors } = await stadtSeite({ aufgaben: [{ n: 'n0', fish: 'forelle', day: '2026-09-30' }] });
+  await redeMit(page, 0);
+  assert.match(await page.textContent('#card'), /Oh, die Forelle hat gerade Schonzeit\. Dann bring mir lieber .+!/);
+  assert.equal(await page.locator('#card .btns button').count(), 3, 'kein vierter Knopf');
+  let s = await weg(page);
+  assert.equal(s.aufgaben.length, 1);
+  assert.equal(s.aufgaben[0].n, 'n0');
+  assert.notEqual(s.aufgaben[0].fish, 'forelle');
+  assert.ok(ERLAUBT_AUFGABE.includes(s.aufgaben[0].fish), s.aufgaben[0].fish);
+  // gespeichert: der Stadtplan zeigt den neuen Fisch
+  await page.click('#card button:has-text("Tschüss!")');
+  await page.click('#btnMap');
+  await page.locator('#card h3:has-text("📝 Aufgaben")').waitFor();
+  assert.doesNotMatch(await page.textContent('#card'), /bring Forelle/);
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(300);
+  s = await weg(page);
+  assert.notEqual(s.aufgaben[0].fish, 'forelle', 'der Tausch bleibt nach dem Neuladen');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
