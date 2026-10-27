@@ -34,8 +34,20 @@ before(async () => {
 after(async () => { await browser?.close(); server?.close(); });
 
 // Neues Browserfenster. Three.js kommt aus npm statt aus dem Internet, Schriften werden übersprungen.
-async function newPage(opts) { // opts: z. B. { viewport: … } (kleineres Fenster = mehr Bilder pro Sekunde)
+// Die Uhr im Spiel steht am Anfang immer auf heute, 11 Uhr (Ortszeit dieses Rechners), und läuft dann weiter.
+// So ist im Spiel immer Tag, auch wenn die Tests nachts laufen (Läden zu, Menschen schlafen …).
+// Nur Date wird verschoben. Nicht ctx.clock.setSystemTime: die Playwright-Uhr springt bei langsamen Bildern
+// manchmal viele Sekunden vor (dann ist z. B. der Kunstköder beim Spinnfischen sofort wieder da).
+// start (ISO-Zeit, z. B. '2026-06-21T23:00:00+02:00'): die Uhr beginnt stattdessen dann und läuft weiter (für Angel-Tests zu einer Uhrzeit).
+async function newPage(opts, start) { // opts: z. B. { viewport: … } (kleineres Fenster = mehr Bilder pro Sekunde)
   const ctx = await browser.newContext(opts);
+  const elf = start ? new Date(start) : new Date(); if (!start) elf.setHours(11, 0, 0, 0);
+  await ctx.addInitScript(off => {
+    const Echt = Date;
+    function Uhr(...a) { if (!new.target) return new Echt(Echt.now() + off).toString(); return a.length ? new Echt(...a) : new Echt(Echt.now() + off); }
+    Uhr.prototype = Echt.prototype; Uhr.now = () => Echt.now() + off; Uhr.UTC = Echt.UTC; Uhr.parse = Echt.parse;
+    window.Date = Uhr;
+  }, elf.getTime() - Date.now());
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
@@ -296,6 +308,45 @@ test('Mehrere Spieler: Sicherheitskopie kommt als neuer Spieler dazu', async () 
   assert.equal(JSON.parse(await read(page)).ludins, 777);
   assert.equal(JSON.parse(await read(page, KEY + '-spieler-p1')).ludins, 345, 'der alte Spieler bleibt erhalten');
   assert.equal(JSON.parse(await read(page, KEY + '-spieler')).list.length, 2);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Sicherheit: eine präparierte Sicherheitskopie kann kein HTML einschleusen (SEC-001)', async () => {
+  const { ctx, page, errors } = await newPage();
+  const fremd = '<b class="eingeschleust">x</b>'; // harmloser Marker: taucht er als Element auf, wurde HTML eingeschleust
+  const kopie = JSON.stringify({ app: 'amazonas-angler', state: { ...ALT_V1, v: 2, newsSeen: 999, ludins: 10,
+    book: { piranha: { n: fremd, best: fremd } }, bucket: [{ id: 'piranha', cm: fremd, value: fremd }],
+    traps: [{ x: 9, z: 9, t: 0, fish: [{ id: 'piranha', cm: fremd, value: fremd }] }],
+    avatar: { name: 'Fremd' + fremd, skin: 'url(http://127.0.0.1:9/x.png)', hair: fremd, hairColor: 'red', shirt: 'url(x)', pants: '#3d3a33', hat: 'kappe' } } });
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+  await startGame(page);
+  await page.click('#btnSaveCode');
+  await page.setInputFiles('#backupFile', { name: 'cheat.json', mimeType: 'application/json', buffer: Buffer.from(kopie) });
+  await page.locator('text=Er kommt als neuer Spieler dazu').waitFor();
+  assert.equal(await page.locator('.eingeschleust').count(), 0, 'auch die Frage vor dem Laden zeigt kein HTML');
+  await Promise.all([page.waitForEvent('load'), page.click('text=Ja, laden')]);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  await page.click('#btnGo');
+  const s = await weg(page); // speichern wie beim Schließen
+  assert.deepEqual(s.book.piranha, { n: 0, best: 0 }, 'Fischbuch: nur Zahlen');
+  assert.deepEqual([s.bucket[0].cm, s.bucket[0].value], [0, 0], 'Eimer: nur Zahlen');
+  assert.deepEqual([s.traps[0].fish[0].cm, s.traps[0].fish[0].value], [0, 0], 'Reuse: nur Zahlen');
+  assert.equal(s.avatar.skin, '#eab48c', 'Hautfarbe: nur echte Farben, sonst der Startwert');
+  assert.equal(s.avatar.shirt, '#2f9e5b');
+  assert.equal(s.avatar.hairColor, '#5a3720');
+  assert.equal(s.avatar.hair, 'kurz');
+  assert.equal(s.avatar.hat, 'kappe', 'gültige Werte bleiben genau so');
+  assert.equal(s.avatar.pants, '#3d3a33');
+  assert.equal(s.ludins, 10);
+  for (const knopf of ['#btnBook', '#btnBucket', '#btnRank']) {
+    await page.click(knopf);
+    await page.locator('#card h2').first().waitFor();
+    if (knopf === '#btnRank') { await page.locator('#card .rankrow').first().click(); await page.locator('#card .catches').waitFor(); }
+    assert.equal(await page.locator('.eingeschleust').count(), 0, knopf + ': kein eingeschleustes HTML');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => { const c = document.querySelector('#card .b.alt, #card button:last-child'); if (c) c.click(); });
+  }
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -721,6 +772,21 @@ test('Fischer Hannes am Fluss: Fische verkaufen und Angelsachen kaufen', async (
   s = JSON.parse(await read(page));
   assert.equal(s.ludins, 119);
   assert.equal(s.baits.blinker, 1);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Flussplätze: Hannes und die Infotafel stehen überall an Land (auch an der Saarschleife)', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999 }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  const r = await page.evaluate(() => window.__test.ufer());
+  assert.equal(r.length, flussplaetze().length);
+  for (const p of r) {
+    assert.ok(p.hannes > 0.5, p.id + ': Hannes steht im Wasser (Höhe ' + p.hannes.toFixed(2) + ')');
+    assert.ok(p.tafel > 0.5, p.id + ': Infotafel steht im Wasser (Höhe ' + p.tafel.toFixed(2) + ')');
+  }
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -1220,6 +1286,1244 @@ test('Hafenhausen: in der Straßenbahn wegfliegen geht nicht, speichern setzt an
   const s = await weg(page);
   assert.equal(s.city.riding, '');
   assert.ok(stops.some(p => Math.hypot(s.where.x - p.x, s.where.z - p.z) < 8), 'man steht zu Fuß an einer Haltestelle');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Weltzeit: die Uhr im Spiel steht fest auf iso (deutsche Zeit). Für Tests, die eine bestimmte Tageszeit brauchen.
+async function zeitSeite(iso) {
+  const { ctx, page, errors } = await newPage({ timezoneId: 'Europe/Berlin' });
+  await ctx.clock.setFixedTime(new Date(iso));
+  return { ctx, page, errors };
+}
+const SEE_ORT = { x: 4, z: -951, f: 0, boat: false }; // am Heimat-See, da landet das Flugzeug
+const phase = page => page.evaluate(() => document.body.dataset.phase);
+
+test('Weltzeit: Nachmittag im Juni ist Tag', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-06-21T14:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('body[data-phase="tag"]').waitFor({ state: 'attached', timeout: 5000 });
+  assert.match(await page.textContent('#clockChip'), /14:00/);
+  assert.match(await page.textContent('#clockChip'), /☀️/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Weltzeit: 23 Uhr ist Nacht, mit Sternen', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-06-21T23:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('body[data-phase="nacht"]').waitFor({ state: 'attached', timeout: 5000 });
+  assert.match(await page.textContent('#clockChip'), /🌙 23:00/);
+  assert.equal((await page.evaluate(() => window.__test.welt())).stars, true, 'die Sterne sind zu sehen');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Weltzeit: um 19 Uhr ist am Amazonas Nacht, in Deutschland Tag', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-06-21T19:00:00+02:00');
+  const VX = 10 * Math.sin(1) + 24; // wie im Spiel: riverX(0)+24
+  await seed(page, { [KEY]: stadtSeed({ where: { x: VX + 13 - 3.4, z: 1, f: Math.PI / 2, boat: false } }) }); // am Dorf, neben dem Flugzeug
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('body[data-phase]').waitFor({ state: 'attached', timeout: 5000 });
+  assert.equal(await phase(page), 'nacht', 'am Amazonas geht die Sonne um 18 Uhr unter');
+  // zum Heimat-See fliegen: dort gilt gleich die deutsche Sonne
+  await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#deMap').waitFor();
+  await page.click('[data-dest="see"]');
+  await page.locator('body[data-phase="tag"]').waitFor({ state: 'attached', timeout: 15000 });
+  assert.ok((await weg(page)).where.z < -600, 'man ist am Heimat-See');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Weltzeit: Jahreszeit', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-04-15T12:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
+  for (const [iso, jz] of [['2026-04-15T12:00:00+02:00', 'fruehling'], ['2026-07-15T12:00:00+02:00', 'sommer'],
+    ['2026-10-15T12:00:00+02:00', 'herbst'], ['2026-12-15T12:00:00+01:00', 'winter']]) {
+    await ctx.clock.setFixedTime(new Date(iso));
+    await startGame(page);
+    await page.locator('body[data-season]').waitFor({ state: 'attached', timeout: 5000 });
+    assert.equal(await page.evaluate(() => document.body.dataset.season), jz, iso);
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Jahreszeiten: Farbe von Laub und Wiese (Faktor auf die Farben) und die Blüten im Frühling, nur in Deutschland
+// laubFade/wieseFade: wie stark Grün ausbleicht (true = mehr als 0). Fichten haben das Material der Wiese (Nadelbäume färben sich nicht).
+const SAISON = { fruehling: { laub: '#ffe6ef', wiese: '#ffffff', blueten: true, laubFade: false, wieseFade: false, fichten: true },
+  sommer: { laub: '#ffffff', wiese: '#ffffff', blueten: false, laubFade: false, wieseFade: false, fichten: true },
+  herbst: { laub: '#ffb35c', wiese: '#ffffff', blueten: false, laubFade: true, wieseFade: false, fichten: true },
+  winter: { laub: '#e8eef2', wiese: '#eef3f6', blueten: false, laubFade: true, wieseFade: true, fichten: true } };
+const saisonWerte = w => ({ laub: w.laub, wiese: w.wiese, blueten: w.blueten, laubFade: w.laubFade > 0, wieseFade: w.wieseFade > 0, fichten: w.fichten });
+test('Jahreszeiten: am Heimat-See wechseln Laub und Wiese, am Amazonas bleibt alles grün', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-04-15T12:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
+  for (const [iso, jz] of [['2026-04-15T12:00:00+02:00', 'fruehling'], ['2026-07-15T12:00:00+02:00', 'sommer'],
+    ['2026-10-15T12:00:00+02:00', 'herbst'], ['2026-12-15T12:00:00+01:00', 'winter']]) {
+    await ctx.clock.setFixedTime(new Date(iso));
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.locator('body[data-region="de"][data-season="' + jz + '"]').waitFor({ state: 'attached', timeout: 5000 });
+    const w = await page.evaluate(() => window.__test.welt());
+    assert.deepEqual(saisonWerte(w), SAISON[jz], jz);
+  }
+  // am 15.12. ins Dorf am Amazonas: das Datum bleibt Winter, aber dort gibt es keine Jahreszeiten-Farben
+  const VX = 10 * Math.sin(1) + 24; // wie im Spiel: riverX(0)+24
+  await page.evaluate(x => window.__test.warp(x, 2), VX - 6);
+  await page.locator('body[data-region="amazonas"]').waitFor({ state: 'attached', timeout: 5000 });
+  assert.equal(await page.evaluate(() => document.body.dataset.season), 'winter');
+  const w = await page.evaluate(() => window.__test.welt());
+  assert.deepEqual(saisonWerte(w), SAISON.sommer, 'Amazonas: neutral');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Jahreszeiten: Fichten bleiben im Herbst grün (Flussplatz und Hafenhausen)', async () => {
+  const neckar = flussplaetze().find(s => s.id === 'bw-neckar');
+  for (const where of [landeplatz(neckar), { ...stadtWert('CITY_LAND'), boat: false }]) {
+    const { ctx, page, errors } = await zeitSeite('2026-10-15T12:00:00+02:00');
+    await seed(page, { [KEY]: stadtSeed({ flussAt: 'bw-neckar', where }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.locator('body[data-region="de"][data-season="herbst"]').waitFor({ state: 'attached', timeout: 5000 });
+    const w = await page.evaluate(() => window.__test.welt());
+    assert.equal(w.fichten, true, 'alle Fichten haben das Material der Wiese (z = ' + where.z + ')');
+    assert.equal(w.wiese, '#ffffff', 'Fichten: Farbfaktor weiß');
+    assert.equal(w.wieseFade, 0, 'Fichten: kein Ausbleichen');
+    assert.equal(w.laub, '#ffb35c', 'Laubbäume: Herbst');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+// Position einer Infotafel aus INFOBOARDS lesen: {id:'…',x:VX±a,z:b,…} (x relativ zum Dorf)
+function tafelOrt(id) {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = html.match(new RegExp("\\{id:'" + id + "',x:VX([+-]\\d+(?:\\.\\d+)?),z:(-?\\d+(?:\\.\\d+)?),"));
+  assert.ok(m, 'Infotafel ' + id + ' steht in INFOBOARDS');
+  return { x: 10 * Math.sin(1) + 24 + Number(m[1]), z: Number(m[2]) }; // VX wie im Spiel: riverX(0)+24
+}
+
+test('Jahreszeiten: Infotafel Regenzeit am Amazonas', async () => {
+  const T = tafelOrt('regenzeit');
+  const { ctx, page, errors } = await zeitSeite('2026-12-15T12:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ where: { x: T.x - 2, z: T.z, f: Math.PI / 2, boat: false } }) }); // vor der Tafel (Flussseite)
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('body[data-region="amazonas"][data-season="winter"]').waitFor({ state: 'attached', timeout: 5000 });
+  const knopf = page.locator('#btnCtx:has-text("Infotafel lesen")');
+  await knopf.waitFor({ timeout: 20000 });
+  await knopf.click();
+  await page.locator('#card.info').waitFor();
+  const text = await page.textContent('#card');
+  assert.match(text, /Regenzeit/);
+  assert.match(text, /Trockenzeit/);
+  assert.match(text, /Äquator/);
+  assert.match(text, /Neues Wissen! \+5 Ludins/);
+  assert.deepEqual((await weg(page)).infoRead, ['regenzeit']);
+  assert.ok((await page.evaluate(([x, z]) => window.__test.hoehe(x, z), [T.x, T.z])) > 0.5, 'die Tafel steht an Land');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Sonnenhöhe wie im Spiel (sunElevation in index.html), für Deutschland: Sonnen-Uhrzeit = UTC + 10/15 Stunden
+function sonnenhoehe(d) {
+  const r = Math.PI / 180, doy = Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(d.getUTCFullYear(), 0, 1)) / 864e5) + 1;
+  const de = -23.44 * Math.cos(2 * Math.PI * (doy + 10) / 365) * r, ha = 15 * (d.getUTCHours() + d.getUTCMinutes() / 60 + 10 / 15 - 12) * r, la = 51 * r;
+  return Math.asin(Math.sin(la) * Math.sin(de) + Math.cos(la) * Math.cos(de) * Math.cos(ha)) / r;
+}
+
+test('Weltzeit: bei Sonnenuntergang ist Dämmerung', async () => {
+  // heute, erste Minute nach Sonnenuntergang (Sonne gerade unter dem Horizont): sicher Dämmerung, egal an welchem Tag im Jahr
+  const d = new Date(); d.setUTCHours(12, 0, 0, 0);
+  while (sonnenhoehe(d) > 0) d.setUTCMinutes(d.getUTCMinutes() + 1);
+  const h = sonnenhoehe(d);
+  assert.ok(h > -3 && h <= 0, 'Sonne knapp unter dem Horizont: ' + h);
+  const { ctx, page, errors } = await zeitSeite(d.toISOString());
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('body[data-phase="daemmerung"]').waitFor({ state: 'attached', timeout: 5000 });
+  assert.match(await page.textContent('#clockChip'), /🌅/);
+  assert.equal((await page.evaluate(() => window.__test.welt())).phase, 'daemmerung');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Weltzeit: in der Avatar-Werkstatt ist immer Tag, danach wieder die echte Zeit', async () => {
+  const TAG = '#a6dccd', NACHT = '#22335e';
+  const { ctx, page, errors } = await zeitSeite('2026-10-27T23:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
+  await startGame(page); // das Spiel beginnt in der Werkstatt
+  const welt = () => page.evaluate(() => window.__test.welt());
+  let w = await welt();
+  assert.equal(w.sky, TAG, 'Werkstatt beim Start: Tageshimmel');
+  assert.equal(w.stars, false);
+  await page.click('#btnGo');
+  w = await welt();
+  assert.equal(w.sky, NACHT, 'nach der Werkstatt: Nacht');
+  assert.equal(w.stars, true);
+  await page.click('#btnAvatar');
+  await page.locator('#btnGo').waitFor({ state: 'visible' });
+  w = await welt();
+  assert.equal(w.sky, TAG, 'Werkstatt wieder offen: Tageshimmel');
+  assert.equal(w.phase, 'nacht', 'die Weltzeit bleibt trotzdem Nacht');
+  await page.click('#btnGo');
+  assert.equal((await welt()).sky, NACHT, 'Werkstatt zu: wieder Nacht');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Fische nach Uhrzeit: welcher Fisch wann beißt, steht in index.html bei FISH (zeit:'nacht'|'tag'|'daemmerung')
+function fischZeiten() {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8'), z = {};
+  for (const m of html.matchAll(/id:'(\w+)'[^}]*?zeit:'(\w+)'/g)) z[m[1]] = m[2];
+  return z;
+}
+function zeitFenster() {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const i = html.indexOf('const ZEIT_FENSTER='), j = html.indexOf('};', i);
+  assert.ok(i >= 0, 'ZEIT_FENSTER steht in index.html');
+  return new Function('return ' + html.slice(i + 'const ZEIT_FENSTER='.length, j + 1))();
+}
+const imFenster = (fenster, h) => fenster.some(([a, b]) => h >= a && h < b);
+// Angeln braucht laufende Spielzeit (ein Fisch beißt erst nach einer Weile). Mit setFixedTime steht sie still, darum hier nur
+// die Startzeit festlegen (deutsche Zeit), danach läuft die Uhr normal weiter.
+const startZeitSeite = iso => newPage({ timezoneId: 'Europe/Berlin' }, iso);
+// 3 Fische fangen (und wieder freilassen). Beim ersten Biss fragt der Test das Spiel außerdem 400-mal, welcher Fisch beißen würde.
+async function dreiFaenge(page) {
+  const probe = { angel: [], reuse: [] };
+  for (let i = 0; i < 3; i++) {
+    await page.click('#btnFish');
+    await page.waitForFunction(() => document.querySelector('#fishLbl').textContent === 'ZIEHEN!', null, { timeout: 60000, polling: 200 });
+    if (i === 0) probe.angel = await page.evaluate(() => window.__test.fische(400));
+    await page.keyboard.press('Space');
+    await page.locator('#card h2:has-text("gefangen")').waitFor();
+    await page.click('#card .btns button:has-text("Freilassen"), #card .btns button:has-text("Zurücksetzen")');
+    await page.locator('#modal').waitFor({ state: 'hidden' });
+  }
+  return probe;
+}
+
+test('Fische nach Uhrzeit: um 23 Uhr beißt am See kein Tag-Fisch', async () => {
+  const zeit = fischZeiten();
+  assert.equal(zeit.hecht, 'tag', 'der Hecht jagt tagsüber');
+  const { ctx, page, errors } = await startZeitSeite('2026-06-21T23:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, book: {}, where: { x: 10, z: -940, f: 0, boat: false } }) }); // am Südufer, Blick auf den See
+  await startGame(page);
+  await page.click('#btnGo');
+  const probe = await dreiFaenge(page);
+  const s = JSON.parse(await read(page));
+  const ids = Object.keys(s.book);
+  assert.ok(ids.length >= 1);
+  for (const id of ids) assert.notEqual(zeit[id], 'tag', id + ' beißt nur tagsüber');
+  assert.equal(probe.angel.length, 400);
+  assert.deepEqual(probe.angel.filter(id => zeit[id] === 'tag'), [], 'kein Tag-Fisch an der Angel');
+  const reuse = await page.evaluate(() => window.__test.reuse('see', 400));
+  assert.deepEqual(reuse.filter(id => zeit[id] === 'tag'), [], 'kein Tag-Fisch in der Reuse');
+  assert.ok(probe.angel.includes('zander') || reuse.includes('zander'), 'nachts beißt der Zander');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Fische nach Uhrzeit: um 12 Uhr kein Nacht-Fisch', async () => {
+  const zeit = fischZeiten();
+  const rhein = flussplaetze().find(s => s.id === 'bw-rhein');
+  assert.ok(rhein.fish.some(id => zeit[id] === 'nacht'), 'im Rhein leben auch Nacht-Fische');
+  const { ctx, page, errors } = await startZeitSeite('2026-06-21T12:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ book: {}, flussAt: 'bw-rhein', where: { x: 0, z: -1800 - rhein.hw + 6, f: 0, boat: false } }) }); // vorne auf dem Steg
+  await startGame(page);
+  await page.click('#btnGo');
+  const probe = await dreiFaenge(page);
+  const s = JSON.parse(await read(page));
+  const ids = Object.keys(s.book);
+  assert.ok(ids.length >= 1);
+  for (const id of ids) assert.notEqual(zeit[id], 'nacht', id + ' beißt nur abends und nachts');
+  assert.deepEqual(probe.angel.filter(id => zeit[id] === 'nacht'), [], 'kein Nacht-Fisch an der Angel');
+  assert.ok(probe.angel.every(id => rhein.fish.includes(id)), 'nur Rhein-Fische');
+  const reuse = await page.evaluate(() => window.__test.reuse('amazonas', 400));
+  assert.deepEqual(reuse.filter(id => zeit[id] === 'nacht'), [], 'kein Nacht-Fisch in der Reuse am Amazonas');
+  assert.ok(reuse.includes('pfauen'), 'mittags kann der Pfauenbarsch in die Reuse');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Fische nach Uhrzeit: um 17 Uhr im Dezember ist jeder Fisch möglich', () => {
+  const zeit = fischZeiten(), F = zeitFenster();
+  // die festen Zeiten aus dem Plan: nacht 16–6 Uhr, tag 6–18 Uhr, daemmerung 5–9 und 16–21 Uhr
+  assert.deepEqual(F, { nacht: [[16, 24], [0, 6]], tag: [[6, 18]], daemmerung: [[5, 9], [16, 21]] });
+  assert.ok(Object.keys(zeit).length >= 5, 'einige Fische haben eine Zeit');
+  for (const [id, z] of Object.entries(zeit)) {
+    assert.ok(F[z], id + ': unbekannte Zeit ' + z);
+    assert.ok(imFenster(F[z], 17), id + ' (' + z + ') beißt um 17 Uhr');
+    assert.ok(imFenster(F[z], 17.99), id + ' (' + z + ') beißt um 17:59');
+  }
+});
+
+test('Fischbuch zeigt Zeiten', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], book: { ...ALT_V1.book, antennen: { n: 1, best: 30 } } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBook');
+  await page.locator('#card .bk').first().waitFor({ timeout: 5000 });
+  assert.match(await page.textContent('#card'), /🌙 abends und nachts/);
+  assert.match(await page.textContent('#card .bk:has-text("Antennenwels")'), /🌙 abends und nachts/, 'gefangener Fisch zeigt die Zeit');
+  assert.ok(await page.locator('#card .bk:has(.unknown):has-text("☀️ tagsüber")').count() >= 1, 'auch bei „?“-Fischen steht die Zeit');
+  assert.doesNotMatch(await page.textContent('#card .bk:has-text("Piranha")'), /🌙|☀️|🌅/, 'Fische ohne feste Zeit zeigen keine');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Öffnungszeiten: die Läden sind von 8 bis 22 Uhr offen (SHOP_HOURS). Seed-Ort: neben Rosa bzw. Opa Tiago.
+const VX_TEST = 10 * Math.sin(1) + 24;
+const NEBEN_ROSA = { x: VX_TEST + 1, z: -1, f: 0, boat: false };
+const NEBEN_TIAGO = { x: 33.8, z: 2.6, f: 0, boat: false };
+
+test('Läden: um 23 Uhr hat Rosa zu', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-06-21T23:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ where: NEBEN_ROSA }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Geschlossen")').waitFor({ timeout: 5000 });
+  assert.equal((await page.textContent('#btnCtx')).trim(), '🌙 Geschlossen – öffnet um 8 Uhr');
+  await page.click('#btnCtx');
+  assert.equal(await page.locator('#modal').isVisible(), false, 'der Laden geht nicht auf');
+  assert.equal(await page.locator('#card').isVisible(), false);
+  assert.match(await page.textContent('#toast'), /Geschlossen – öffnet um 8 Uhr/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Läden: um 9 Uhr hat Rosa offen', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-06-21T09:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ where: NEBEN_ROSA }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Rosa")').waitFor({ timeout: 5000 });
+  assert.doesNotMatch(await page.textContent('#btnCtx'), /Geschlossen/);
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Rosas Fischhandel")').waitFor();
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Läden: Opa Tiago macht um 22 Uhr zu und um 8 Uhr auf', async () => {
+  for (const [iso, zu] of [['2026-06-21T21:59:00+02:00', false], ['2026-06-21T22:00:00+02:00', true], ['2026-06-21T07:59:00+02:00', true], ['2026-06-21T08:00:00+02:00', false]]) {
+    const { ctx, page, errors } = await zeitSeite(iso);
+    await seed(page, { [KEY]: stadtSeed({ where: NEBEN_TIAGO }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.locator('#btnCtx').waitFor({ timeout: 5000 });
+    const t = await page.textContent('#btnCtx');
+    assert.equal(/Geschlossen/.test(t), zu, iso + ': ' + t);
+    if (!zu) assert.match(t, /Opa Tiago/);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Läden: die Schilder nennen die Öffnungszeit', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  for (const name of ["'Rosas'", "'Opa Tiagos'", "'Fischer Hannes'"]) {
+    const i = html.indexOf('fillText(' + name);
+    assert.ok(i > 0, name + ' gefunden');
+    assert.match(html.slice(i, i + 700), /SHOP_HOURS_TXT/, name + ': Schild nennt die Öffnungszeit');
+  }
+  assert.match(html, /makeSign\(s\.name,[^;]*SHOP_HOURS_TXT/, 'Fahrzeug-Laden');
+  assert.match(html, /const SHOP_HOURS_TXT=SHOP_HOURS\.auf\+'–'\+SHOP_HOURS\.zu\+' Uhr'/, 'der Text ist „8–22 Uhr“');
+});
+
+test('Eimer: Fische freilassen geht immer', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-06-21T23:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ ludins: 77, bucket: [{ id: 'hering', cm: 25, value: 6 }, { id: 'hecht', cm: 60, value: 50 }] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBucket');
+  await page.locator('#card h2:has-text("Dein Eimer")').waitFor();
+  const h = await page.locator('#btnRelease').evaluate(e => e.getBoundingClientRect().height);
+  assert.ok(h >= 60, 'Knopf mindestens 60 px hoch: ' + h);
+  await page.click('#btnRelease');
+  // erst fragen, nicht gleich alles freilassen
+  await page.locator('#btnReleaseOk').waitFor();
+  assert.equal((await weg(page)).bucket.length, 2, 'ohne „Ja“ bleibt alles im Eimer');
+  const h2 = await page.locator('#btnReleaseOk').evaluate(e => e.getBoundingClientRect().height);
+  assert.ok(h2 >= 60, 'Bestätigen-Knopf mindestens 60 px: ' + h2);
+  await page.click('#btnReleaseOk');
+  const s = await weg(page);
+  assert.deepEqual(s.bucket, []);
+  assert.equal(s.ludins, 77, 'Freilassen bringt keine Ludins');
+  assert.match(await page.textContent('#toast'), /Platsch! Deine Fische schwimmen wieder frei\./);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Eimer: leerer Eimer hat keinen Freilassen-Knopf', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ bucket: [] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBucket');
+  await page.locator('#card h2:has-text("Dein Eimer")').waitFor();
+  assert.equal(await page.locator('#btnRelease').count(), 0);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Verkehrsregeln: wer schnell gegen etwas fährt, bekommt einen Strafzettel (Rad, Roller, Skateboard 5 Ludins, Truck 20 Ludins)
+async function truckGegenHaus(ludins, ms) {
+  const H = stadtWert('TEST_HOUSE'); // Haus direkt südlich der Flugplatz-Straße (wie im Test „Cyber-Truck steckt die Nase nicht in Häuser“)
+  const r2 = v => Math.round(v * 100) / 100;
+  const at = { x: H.x, z: r2(H.z + H.r + 9) }; // auf der Straße, der Truck zeigt auf das Haus
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ludins, city: { visited: true, vehicles: { bike: true, truck: true }, parked: { truck: { ...at, yaw: Math.PI } } },
+    where: { ...at, f: Math.PI, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Einsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
+  await halten(page, 'KeyW', ms);
+  const s = await weg(page);
+  assert.equal(s.city.riding, 'truck');
+  assert.ok(s.where.z < at.z - 2, 'man ist auf das Haus zu gefahren');
+  return { ctx, page, errors, s };
+}
+
+test('Verkehr: Truck schnell gegen Haus kostet 20 Ludins', async () => {
+  const { ctx, page, errors, s } = await truckGegenHaus(100, 2000);
+  assert.equal(s.ludins, 80);
+  assert.match(await page.textContent('#toast'), /🚨 Strafzettel! Du bist gegen .+ gefahren\. −20 Ludins/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Verkehr: Strafe macht Ludins nie negativ', async () => {
+  const { ctx, page, errors, s } = await truckGegenHaus(7, 2000);
+  assert.equal(s.ludins, 0);
+  assert.match(await page.textContent('#toast'), /Strafzettel/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Verkehr: eine Strafe pro Aufprall', async () => {
+  const { ctx, errors, s } = await truckGegenHaus(100, 3000); // 3 s lang gegen das Haus drücken
+  assert.equal(s.ludins, 80, 'nur ein Strafzettel');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Verkehr: Fahrrad gegen geparkten Truck kostet 5', async () => {
+  // auf dem Marktplatz (keine Schienen, der Brunnen ist 10 m weg): das Rad fährt nach −x, der Truck steht quer davor
+  const at = { x: 15, z: -2975 }, f = -Math.PI / 2, T = { x: 6, z: -2975 };
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ludins: 50, city: { visited: true, vehicles: { bike: true, truck: true },
+    parked: { bike: { ...at, yaw: f }, truck: { ...T, yaw: 0 } } }, where: { ...at, f, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Absteigen")').waitFor({ timeout: 5000 });
+  // fahren, bis das Rad am Truck ist (auf langsamen Rechnern dauert die Fahrt länger), dann noch 1 s weiter drücken
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Strafzettel'), null, { timeout: 20000 });
+  await page.waitForTimeout(1000);
+  await page.keyboard.up('KeyW');
+  const s = await weg(page);
+  assert.equal(s.city.riding, 'bike');
+  assert.ok(s.where.x < at.x - 2, 'man ist auf den Truck zu gefahren');
+  assert.ok(s.where.x > T.x + 1.4, 'das Rad fährt nicht durch den Truck (' + s.where.x + ')');
+  assert.equal(s.ludins, 45);
+  assert.match(await page.textContent('#toast'), /Strafzettel/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Menschen nach Uhrzeit: nachts sind nur 4 unterwegs, am Samstagvormittag fast alle (auch die Kinder)
+test('Menschen schlafen nachts', async () => {
+  const L = stadtWert('CITY_LAND');
+  for (const [iso, ok] of [['2026-10-27T23:00:00+01:00', n => n <= 4], ['2026-10-31T10:00:00+01:00', n => n >= 20]]) {
+    const { ctx, page, errors } = await startZeitSeite(iso);
+    await seed(page, { [KEY]: stadtSeed({ city: { visited: true }, where: { x: L.x, z: L.z, f: L.f, boat: false } }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.waitForFunction(() => document.body.dataset.leute !== undefined, null, { timeout: 20000 });
+    const n = Number(await page.evaluate(() => document.body.dataset.leute));
+    assert.ok(ok(n), iso + ': ' + n + ' Menschen unterwegs');
+    if (iso.includes('T23')) { // nachts sind nur die ersten 4 Erwachsenen (nach Bau-Index) wach, keine Kinder (Ruling R14)
+      const alle = await page.evaluate(() => Array.from({ length: 24 }, (_, k) => window.__test.nachbar(k)));
+      const erste4 = alle.map((p, k) => ({ ...p, k })).filter(p => p.kid === false).slice(0, 4).map(p => p.k);
+      assert.ok(alle.every(p => typeof p.kid === 'boolean'), 'nachbar(k).kid sagt, ob es ein Kind ist');
+      assert.deepEqual(alle.map((p, k) => p.sichtbar ? k : -1).filter(k => k >= 0), erste4, 'wach sind genau die ersten 4 Erwachsenen');
+      assert.equal(n, 4);
+    }
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Menschen laufen nicht durch Fahrzeuge', async () => {
+  const S = stadtWert('SHOP_AT');
+  const { ctx, page, errors } = await startZeitSeite('2026-10-31T10:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, vehicles: { bike: true, truck: true } }, where: { x: S.x, z: S.z, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Einsteigen")').waitFor({ timeout: 20000 }); // der Truck steht vor dem Laden
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
+  // einen Menschen suchen, der gerade lange geradeaus läuft, weit weg von den Schienen. 8 m vor ihm parkt der Truck, genau auf seinem Weg.
+  let wahl = null;
+  for (let tries = 0; tries < 20 && !wahl; tries++) {
+    const alle = await page.evaluate(() => Array.from({ length: 24 }, (_, k) => window.__test.nachbar(k)));
+    for (let k = 0; k < alle.length && !wahl; k++) {
+      const p = alle[k], l = Math.hypot(p.ziel.x - p.x, p.ziel.z - p.z);
+      if (!p.sichtbar || l < 16) continue;
+      const d = { x: (p.ziel.x - p.x) / l, z: (p.ziel.z - p.z) / l }, T = { x: p.x + d.x * 8, z: p.z + d.z * 8 };
+      if ([-2, 0, 2].every(o => schienenAbstand({ x: T.x + d.x * o, z: T.z + d.z * o }) > 5)) wahl = { k, T, yaw: Math.atan2(d.x, d.z) };
+    }
+    if (!wahl) await page.waitForTimeout(1000);
+  }
+  assert.ok(wahl, 'ein Mensch läuft geradeaus');
+  await page.evaluate(w => window.__test.warp(w.T.x, w.T.z, w.yaw), wahl);
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  const s = await weg(page);
+  assert.equal(s.city.riding, '', 'ausgestiegen');
+  const T = s.city.parked.truck;
+  assert.ok(Math.hypot(T.x - wahl.T.x, T.z - wahl.T.z) < 0.05, 'der Truck steht auf dem Weg');
+  // 60 s lang alle 0,5 s messen: der Mensch kommt nie näher als 1,9 m an die Truck-Mitte
+  let nah = Infinity;
+  for (let i = 0; i < 120; i++) {
+    const p = await page.evaluate(k => window.__test.nachbar(k), wahl.k);
+    const d = Math.hypot(p.x - T.x, p.z - T.z);
+    nah = Math.min(nah, d);
+    assert.ok(d >= 1.9, 'Mensch ' + wahl.k + ' ist ' + d.toFixed(2) + ' m von der Truck-Mitte weg');
+    await page.waitForTimeout(500);
+  }
+  assert.ok(nah < 5, 'der Mensch ist bis an den Truck gekommen (' + nah.toFixed(2) + ' m)');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Verkehr: Truck steht auf dem Rad und kann trotzdem wegfahren', async () => {
+  // das Rad steht genau dort, wo der Truck nach dem Kauf steht (Startplatz vor dem Laden): beide dürfen nicht festsitzen
+  const S = stadtWert('SHOP_AT'), H = { x: S.x, z: S.z + 4 };
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ludins: 100, city: { visited: true, vehicles: { bike: true, truck: true }, parked: { bike: { ...H, yaw: 0 } } },
+    where: { x: S.x, z: S.z, f: Math.PI / 2, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Einsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
+  await halten(page, 'KeyW', 2000);
+  const s = await weg(page);
+  assert.equal(s.city.riding, 'truck');
+  assert.ok(Math.hypot(s.where.x - H.x, s.where.z - H.z) > 3, 'der Truck ist vom Rad weggefahren (' + s.where.x + ',' + s.where.z + ')');
+  assert.equal(s.ludins, 100, 'beim Wegfahren gibt es keinen Strafzettel');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Nachbarn in Hafenhausen: Namen, reden (+1 pro Tag), Aufgaben (Fisch bringen: 2 × Preis + 10 Ludins, +3 Freundschaft)
+const SAMSTAG = '2026-10-31T10:00:00+01:00'; // Samstagvormittag: fast alle sind unterwegs, auch die Kinder
+function fischPreis(id) {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = html.match(new RegExp("\\{id:'" + id + "'[^}]*price:(\\d+)"));
+  assert.ok(m, 'Preis von ' + id);
+  return Number(m[1]);
+}
+async function stadtSeite(extra, iso = SAMSTAG, fest = false) {
+  const L = stadtWert('CITY_LAND');
+  const { ctx, page, errors } = fest ? await zeitSeite(iso) : await startZeitSeite(iso);
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true }, where: { x: L.x, z: L.z, f: L.f, boat: false }, ...extra }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  return { ctx, page, errors };
+}
+// zu Mensch k gehen (1,5 m vor ihn auf seinen Weg) und „Reden“ antippen. Er läuft, darum schnell klicken (solange die Karte offen ist, bleibt er stehen).
+async function redeMit(page, k) {
+  for (let tries = 0; tries < 6; tries++) {
+    await page.waitForFunction(k => window.__test.nachbar(k).sichtbar, k, { timeout: 20000 });
+    const p = await page.evaluate(k => window.__test.nachbar(k), k);
+    const l = Math.hypot(p.ziel.x - p.x, p.ziel.z - p.z) || 1, d = Math.min(1.5, l);
+    await page.evaluate(([x, z]) => window.__test.warp(x, z), [p.x + (p.ziel.x - p.x) / l * d, p.z + (p.ziel.z - p.z) / l * d]);
+    try {
+      await page.locator('#btnCtx:has-text("💬 Reden mit")').click({ timeout: 2000 });
+      await page.locator('#card h2:has-text("💬")').waitFor({ timeout: 2000 });
+      return;
+    } catch { /* er ist schon weitergelaufen: noch einmal hingehen */ }
+  }
+  assert.fail('Gespräch mit Mensch ' + k + ' geht nicht auf');
+}
+
+test('Nachbarn: reden, Aufgabe, Fisch bringen, Belohnung', async () => {
+  const { ctx, page, errors } = await stadtSeite({ ludins: 100 });
+  await redeMit(page, 0);
+  // Gespräch: Thema oben, 2–3 große Knöpfe; „Hier, bitte!“ nur, wenn ein passender Fisch im Eimer ist
+  const knoepfe = await page.locator('#card .btns button').evaluateAll(bs => bs.map(b => b.getBoundingClientRect().height));
+  assert.ok(knoepfe.length >= 2 && knoepfe.length <= 3, 'zwei oder drei Knöpfe: ' + knoepfe.length);
+  assert.ok(knoepfe.every(h => h >= 60), 'Knöpfe mindestens 60 px: ' + knoepfe);
+  assert.equal(await page.locator('#card button:has-text("Hier, bitte!")').count(), 0);
+  await page.click('#card button:has-text("Kann ich dir helfen?")');
+  const neu = await page.textContent('#toast');
+  assert.match(neu, /📝 Neue Aufgabe!.*Karte/, 'der Hinweis nennt die Karte');
+  assert.doesNotMatch(neu, /🗺️/, '🗺️ ist sonst die Deutschland-Karte');
+  let s = await weg(page);
+  assert.equal(s.aufgaben.length, 1);
+  const A = s.aufgaben[0];
+  assert.equal(A.n, 'n0');
+  assert.match(A.day, /^2026-10-31$/);
+  assert.ok(['hering', 'makrele', 'scholle', 'hornhecht', 'rotauge', 'rotfeder', 'barsch', 'karausche', 'doebel', 'schleie', 'karpfen', 'forelle', 'zander', 'hecht'].includes(A.fish), A.fish);
+  assert.equal(s.nachbarn.n0.f, 1, 'erstes Gespräch heute: +1');
+  // noch einmal fragen: keine zweite Aufgabe von derselben Person
+  await page.click('#card button:has-text("Kann ich dir helfen?")');
+  assert.equal((await weg(page)).aufgaben.length, 1);
+  // Stadtplan: Bereich Aufgaben
+  await page.click('#card button:has-text("Tschüss!")');
+  await page.click('#btnMap');
+  await page.locator('#card h3:has-text("📝 Aufgaben")').waitFor();
+  assert.match(await page.textContent('#card'), /: bring .+ \(0\/1\)/);
+  // den gewünschten Fisch in den Eimer legen und neu laden
+  await seed(page, { [KEY]: JSON.stringify({ ...s, bucket: [{ id: A.fish, cm: 30, value: 9 }] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await redeMit(page, 0);
+  await page.click('#card button:has-text("Hier, bitte!")');
+  s = await weg(page);
+  const lohn = 2 * fischPreis(A.fish) + 10;
+  assert.equal(s.ludins, 100 + lohn, 'Belohnung: 2 × Preis + 10 Ludins');
+  assert.equal(s.nachbarn.n0.f, 4, '1 (Reden) + 3 (Aufgabe)');
+  assert.deepEqual(s.aufgaben, []);
+  assert.deepEqual(s.bucket, []);
+  // bleibt nach dem Neuladen
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  s = await weg(page);
+  assert.equal(s.ludins, 100 + lohn);
+  assert.equal(s.nachbarn.n0.f, 4);
+  assert.deepEqual(s.aufgaben, []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Nachbarn: einmal pro Tag +1', async () => {
+  const { ctx, page, errors } = await stadtSeite({});
+  await redeMit(page, 0);
+  // solange die Karte offen ist, bleibt der Mensch stehen (auch wenn man ihm nicht mehr im Weg steht: man steht jetzt hinter ihm)
+  const a = await page.evaluate(() => window.__test.nachbar(0));
+  const l = Math.hypot(a.ziel.x - a.x, a.ziel.z - a.z) || 1;
+  await page.evaluate(([x, z]) => window.__test.warp(x, z), [a.x - (a.ziel.x - a.x) / l * 2, a.z - (a.ziel.z - a.z) / l * 2]);
+  await page.waitForTimeout(2000);
+  const b = await page.evaluate(() => window.__test.nachbar(0));
+  assert.ok(Math.hypot(b.x - a.x, b.z - a.z) < 0.01, 'er steht still');
+  await page.click('#card button:has-text("Tschüss!")');
+  await redeMit(page, 0);
+  const s = await weg(page);
+  assert.equal(s.nachbarn.n0.f, 1);
+  assert.equal(s.nachbarn.n0.talk, '2026-10-31');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Nachbarn: schlafende Nachbarn reden nicht', async () => {
+  const { ctx, page, errors } = await stadtSeite({}, '2026-10-27T23:00:00+01:00', true);
+  await page.waitForFunction(() => document.body.dataset.leute !== undefined, null, { timeout: 20000 });
+  const alle = await page.evaluate(() => Array.from({ length: 24 }, (_, k) => ({ ...window.__test.nachbar(k), k })));
+  const wach = alle.filter(p => p.sichtbar);
+  // ein schlafender Erwachsener (nicht n8/n9, die sind nachts unterwegs), weit weg von allen, die wach sind
+  const p = alle.find(p => p.k >= 4 && p.kid === false && !p.sichtbar && wach.every(w => Math.hypot(w.x - p.x, w.z - p.z) > 12));
+  assert.ok(p, 'ein schlafender Erwachsener');
+  await page.evaluate(([x, z]) => window.__test.warp(x, z), [p.x + 0.8, p.z]);
+  await page.waitForTimeout(1000);
+  assert.equal(await page.locator('#btnCtx:has-text("Reden")').isVisible(), false, 'kein „Reden“-Knopf bei Mensch ' + p.k);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Nachbarn: kaputte Werte werden repariert', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({
+    nachbarn: { n0: { f: '<b>', talk: 'x' }, zz: {}, n3: 'kaputt', yy: 5, n1: { f: 7.6, talk: '2026-10-30', gift: '<i>' } },
+    aufgaben: [{ n: 'n1', fish: 'gibtsnicht' }, 'x', { n: 'n30', fish: 'hering' }] }) });
+  await startGame(page);
+  await playAndLeave(page);
+  let s = JSON.parse(await read(page));
+  assert.deepEqual(s.nachbarn.n0, { f: 0, talk: '', gift: '' });
+  assert.deepEqual(s.nachbarn.zz, {}, 'unbekannte ids bleiben gespeichert (nie löschen), das Spiel beachtet sie nicht');
+  assert.deepEqual(s.nachbarn.n3, { f: 0, talk: '', gift: '' }, 'kein Objekt: wird ersetzt');
+  assert.equal(s.nachbarn.yy, 5, 'unbekannte id, kein Objekt: bleibt auch gespeichert (nie löschen), das Spiel beachtet sie nicht');
+  assert.deepEqual(s.nachbarn.n1, { f: 8, talk: '2026-10-30', gift: '' });
+  assert.deepEqual(s.aufgaben, [], 'n30 gibt es nicht (nur 24 Menschen): die Aufgabe fällt weg');
+  // ganz kaputt: Startwerte; mehr als 3 Aufgaben: nur die ersten 3
+  const vier = ['hering', 'barsch', 'karpfen', 'scholle'].map((fish, i) => ({ n: 'n' + i, fish, day: '2026-10-30' }));
+  await seed(page, { [KEY]: stadtSeed({ nachbarn: 'x', aufgaben: [{ n: '<b>', fish: 'hering' }, { n: 'n24', fish: 'hering', day: '2026-10-30' }, ...vier] }) });
+  await startGame(page);
+  await playAndLeave(page);
+  s = JSON.parse(await read(page));
+  assert.deepEqual(s.nachbarn, {});
+  assert.deepEqual(s.aufgaben, vier.slice(0, 3));
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Alter Spielstand: nachbarn und aufgaben bekommen Startwerte', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify(ALT_V1) });
+  await startGame(page);
+  await playAndLeave(page);
+  const s = JSON.parse(await read(page));
+  assert.deepEqual(s.nachbarn, {});
+  assert.deepEqual(s.aufgaben, []);
+  assert.equal(s.clothes.muetze, false);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Nachbarn: Bester Freund schenkt einmal die Mütze', async () => {
+  const { ctx, page, errors } = await stadtSeite({ ludins: 0, nachbarn: { n0: { f: 20, talk: '', gift: '' } } });
+  await page.click('#btnAvatar');
+  assert.equal(await page.locator('#opHat button:text-is("Mütze")').count(), 0, 'ohne Mütze keine Mütze in der Werkstatt');
+  await page.click('#btnGo');
+  await page.evaluate(() => { Math.random = () => 0.1; }); // das Geschenk (Wahrscheinlichkeit 0,3) kommt sicher
+  await redeMit(page, 0);
+  assert.match(await page.textContent('#card'), /❤️❤️❤️/, 'drei Herzen: Bester Freund');
+  const s = await weg(page);
+  assert.equal(s.clothes.muetze, true);
+  assert.equal(s.nachbarn.n0.gift, '2026-10-31');
+  assert.equal(s.nachbarn.n0.f, 21);
+  assert.ok(s.baits.frucht === 3 || (s.ludins >= 10 && s.ludins <= 30), 'dazu Früchte oder Ludins');
+  await page.click('#card button:has-text("Tschüss!")');
+  await page.click('#btnAvatar');
+  await page.click('#opHat button:text-is("Mütze")');
+  await page.click('#btnGo'); // in der Werkstatt wird erst beim Losgehen gespeichert
+  assert.equal((await weg(page)).avatar.hat, 'muetze');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Fix-Runde 1: Aufgaben nie mit einem Fisch, der gerade Schonzeit hat (Bachforelle 1.10.–28.2.)
+const ERLAUBT_AUFGABE = ['hering', 'makrele', 'scholle', 'hornhecht', 'rotauge', 'rotfeder', 'barsch', 'karausche', 'doebel', 'schleie', 'karpfen', 'forelle', 'zander', 'hecht'];
+test('Nachbarn: Aufgaben nie mit Fischen in der Schonzeit', async () => {
+  for (const [iso, forelle] of [['2026-10-31T10:00:00+01:00', false], ['2026-06-21T10:00:00+02:00', true]]) {
+    const { ctx, page, errors } = await stadtSeite({}, iso, true);
+    const fische = await page.evaluate(() => window.__test.aufgabe(400));
+    assert.ok(fische.every(f => ERLAUBT_AUFGABE.includes(f)), iso);
+    assert.equal(fische.includes('forelle'), forelle, iso + ': Forelle ' + (forelle ? 'erlaubt' : 'hat Schonzeit'));
+    if (forelle) assert.equal(fische.includes('schleie'), false, 'Schleie hat am 21.6. Schonzeit (15.5.–30.6.)');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Nachbarn: offene Aufgabe mit Schonzeit-Fisch wird getauscht', async () => {
+  const { ctx, page, errors } = await stadtSeite({ aufgaben: [{ n: 'n0', fish: 'forelle', day: '2026-09-30' }] });
+  await redeMit(page, 0);
+  assert.match(await page.textContent('#card'), /Oh, die Forelle hat gerade Schonzeit\. Dann bring mir lieber .+!/);
+  assert.equal(await page.locator('#card .btns button').count(), 3, 'kein vierter Knopf');
+  let s = await weg(page);
+  assert.equal(s.aufgaben.length, 1);
+  assert.equal(s.aufgaben[0].n, 'n0');
+  assert.notEqual(s.aufgaben[0].fish, 'forelle');
+  assert.ok(ERLAUBT_AUFGABE.includes(s.aufgaben[0].fish), s.aufgaben[0].fish);
+  // gespeichert: der Stadtplan zeigt den neuen Fisch
+  await page.click('#card button:has-text("Tschüss!")');
+  await page.click('#btnMap');
+  await page.locator('#card h3:has-text("📝 Aufgaben")').waitFor();
+  assert.doesNotMatch(await page.textContent('#card'), /bring Forelle/);
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(300);
+  s = await weg(page);
+  assert.notEqual(s.aufgaben[0].fish, 'forelle', 'der Tausch bleibt nach dem Neuladen');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Museum in Hafenhausen: Fische spenden (Herr Eugen), Ausstellung mit Foto, Tafel und „?“
+const MUSEUM_ISO = '2026-10-31T10:00:00+01:00';
+async function museumSeite(extra, iso = MUSEUM_ISO, fest = false) {
+  const M = stadtWert('MUSEUM_AT');
+  return stadtSeite({ where: { x: M.x, z: M.z, f: 0, boat: false }, ...extra }, iso, fest);
+}
+async function museumAuf(page) {
+  await page.locator('#btnCtx:has-text("🏛️ Ins Museum")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Museum")').waitFor();
+}
+
+test('Museum: Fisch spenden und ansehen', async () => {
+  const { ctx, page, errors } = await museumSeite({ bucket: [{ id: 'hering', cm: 25, value: 6 }] });
+  await museumAuf(page);
+  assert.match(await page.textContent('#card'), /Offen 8–22 Uhr/);
+  const tabs = await page.locator('#card .tabs button').evaluateAll(bs => bs.map(b => [b.textContent, b.getBoundingClientRect().height]));
+  assert.equal(tabs.length, 2, 'zwei Reiter');
+  assert.match(tabs[0][0], /Spenden/);
+  assert.match(tabs[1][0], /Ausstellung/);
+  assert.ok(tabs.every(t => t[1] >= 60), 'Reiter mindestens 60 px: ' + tabs.map(t => t[1]));
+  const row = page.locator('#card .item:has-text("Hering")');
+  assert.equal(await row.count(), 1);
+  assert.ok((await row.locator('button').boundingBox()).height >= 60, 'Knopf mindestens 60 px');
+  await row.locator('button:has-text("Spenden")').click();
+  // Herr Eugen sagt den Fisch-Fakt
+  const info = await page.evaluate(() => window.__test.fischInfo('hering'));
+  const fact = info.fact;
+  const text = await page.textContent('#card');
+  assert.match(text, /Herr Eugen/);
+  assert.ok(text.includes(fact), 'Herr Eugen sagt den Fakt');
+  let s = await weg(page);
+  assert.equal(s.museum.hering.cm, 25);
+  assert.ok(Number.isFinite(s.museum.hering.t) && s.museum.hering.t > 1e12, 'Datum (Zeitstempel) ist gespeichert');
+  assert.deepEqual(s.bucket, []);
+  assert.equal(await page.locator('#card .item').count(), 0, 'nichts mehr zu spenden');
+  // Ausstellung: Foto, Tafel mit Name, Größe, Datum und Fotonachweis; alle anderen „?“
+  await page.click('#card .tabs button:has-text("Ausstellung")');
+  const img = page.locator('#card img[src$="fotos/hering.jpg"]');
+  await img.waitFor({ state: 'visible' });
+  const tafel = await page.textContent('#card .bk:has(img[src$="fotos/hering.jpg"])');
+  assert.match(tafel, /Hering/);
+  assert.match(tafel, /25 cm/);
+  assert.match(tafel, /\d\d\.\d\d\.\d{4}/, 'Datum');
+  assert.match(tafel, /Foto: .+ · .+/, 'Fotonachweis');
+  const n = info.anzahl;
+  assert.match(await page.textContent('#card'), new RegExp('1 von ' + n + '\\b'));
+  assert.equal(await page.locator('#card .bk .unknown').count(), n - 1, 'alle anderen sind „?“');
+  for (const t of ['Amazonas', 'Heimat-See', 'Flüsse', 'Meer']) assert.ok(await page.locator('#card h3.bookhead:has-text("' + t + '")').count() >= 1, t);
+  // nach dem Neuladen ist der Hering noch da
+  await startGame(page);
+  await page.click('#btnGo');
+  s = await weg(page);
+  assert.equal(s.museum.hering.cm, 25);
+  assert.deepEqual(s.bucket, []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Museum: dieselbe Art geht nur einmal', async () => {
+  const { ctx, page, errors } = await museumSeite({
+    museum: { hering: { cm: 30, t: 1761900000000 } },
+    bucket: [{ id: 'hering', cm: 20, value: 5 }, { id: 'makrele', cm: 26, value: 12 }, { id: 'makrele', cm: 33, value: 16 }, { id: 'dorsch', cm: 50, value: 20 }] });
+  await museumAuf(page);
+  const namen = await page.locator('#card .item b').allTextContents();
+  assert.deepEqual(namen, ['Makrele'], 'Hering ist schon da, Dorsch ist selten, Makrele steht nur einmal');
+  await page.locator('#card .item button:has-text("Spenden")').click();
+  assert.equal(await page.locator('#card .item').count(), 0, 'auch die zweite Makrele wird nicht mehr angeboten');
+  const s = await weg(page);
+  assert.equal(s.museum.makrele.cm, 33, 'die größere Makrele geht ins Museum');
+  assert.deepEqual(s.bucket.map(b => b.id + b.cm), ['hering20', 'makrele26', 'dorsch50'], 'nur dieser eine Fisch ist weg');
+  assert.deepEqual(s.museum.hering, { cm: 30, t: 1761900000000 }, 'der alte Hering bleibt');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Museum: um 23 Uhr geschlossen', async () => {
+  const { ctx, page, errors } = await museumSeite({ bucket: [{ id: 'hering', cm: 25, value: 6 }] }, '2026-10-31T23:00:00+01:00', true);
+  await page.locator('#btnCtx:has-text("Geschlossen")').waitFor({ timeout: 5000 });
+  assert.equal((await page.textContent('#btnCtx')).trim(), '🌙 Geschlossen – öffnet um 8 Uhr');
+  await page.click('#btnCtx');
+  assert.equal(await page.locator('#modal').isVisible(), false, 'das Museum geht nicht auf');
+  assert.match(await page.textContent('#toast'), /Geschlossen – öffnet um 8 Uhr/);
+  const s = await weg(page);
+  assert.equal(s.bucket.length, 1);
+  assert.deepEqual(s.museum, {});
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Museum: MUSEUM_AT liegt auf dem Gehweg vor dem Museum, nicht auf den Schienen', async () => {
+  const M = stadtWert('MUSEUM_AT');
+  const { ctx, page, errors } = await museumSeite({});
+  await page.locator('#btnCtx:has-text("🏛️ Ins Museum")').waitFor({ timeout: 5000 });
+  const r = await page.evaluate(([x, z]) => ({ ...window.__test.stadtPunkt(x, z), hoehe: window.__test.hoehe(x, z) }), [M.x, M.z]);
+  const S = stadtWert('SHOP_AT');
+  r.shop = Math.hypot(M.x - S.x, M.z - S.z);
+  r.haus = r.tueren.filter(d => d > 2.5 && d < 3.5).length; // eine Haustür liegt 3 m vor dem Platz (wie beim Fahrzeug-Laden)
+  assert.equal(r.walk, true, 'auf dem Gehweg');
+  assert.equal(r.road, false);
+  assert.ok(r.rail > 5, 'weit weg von den Schienen: ' + r.rail);
+  assert.ok(r.shop > 50, 'nicht beim Fahrzeug-Laden');
+  assert.equal(r.haus, 1, 'genau ein Haus (das Museum) steht vor der Tür');
+  assert.ok(Math.abs(r.hoehe - 1.2) < 0.01, 'ebener Boden');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  assert.match(html, /name:'Museum',w:9/, 'das Schild heißt Museum');
+  assert.equal((html.match(/name:'Bald geöffnet'/g) || []).length, 2, 'zwei Läden sind noch „Bald geöffnet“');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Museum: kaputte Werte werden repariert', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ museum: { hering: { cm: '<b>', t: -5 }, makrele: 'kaputt', zzz: { cm: 7, t: 8 }, scholle: { cm: 99999, t: 1761900000000.7 } } }) });
+  await startGame(page);
+  await playAndLeave(page);
+  const s = JSON.parse(await read(page));
+  assert.deepEqual(s.museum.hering, { cm: 0, t: 0 });
+  assert.deepEqual(s.museum.makrele, { cm: 0, t: 0 }, 'kein Objekt: wird ersetzt');
+  assert.deepEqual(s.museum.zzz, { cm: 7, t: 8 }, 'unbekannte Fische bleiben gespeichert (nie löschen)');
+  assert.deepEqual(s.museum.scholle, { cm: 10000, t: 1761900000001 });
+  assert.deepEqual(errors, []);
+  await ctx.close();
+  const b = await newPage();
+  await seed(b.page, { [KEY]: stadtSeed({ museum: 'x' }) });
+  await startGame(b.page);
+  await playAndLeave(b.page);
+  assert.deepEqual(JSON.parse(await read(b.page)).museum, {});
+  assert.deepEqual(b.errors, []);
+  await b.ctx.close();
+});
+
+test('Alter Spielstand: museum bekommt Startwert {}', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify(ALT_V1) });
+  await startGame(page);
+  await playAndLeave(page);
+  const s = JSON.parse(await read(page));
+  assert.deepEqual(s.museum, {});
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Jeden Tag neu: Tagesfisch, Tagesaufgaben, Flaschenpost. dayHash wie in index.html (FNV-1a, 32 Bit).
+function dayHash(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; }
+// Die drei Orte der Flaschenpost direkt aus index.html lesen: const FLASCHE_SPOTS=[{x:…,z:…,ort:'…'},…]
+function flascheOrte() {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = html.match(/const FLASCHE_SPOTS=\[([^\]]*)\]/);
+  assert.ok(m, 'FLASCHE_SPOTS steht in index.html');
+  const l = [...m[1].matchAll(/\{x:(-?\d+(?:\.\d+)?),z:(-?\d+(?:\.\d+)?),ort:'(\w+)'\}/g)].map(([, x, z, ort]) => ({ x: Number(x), z: Number(z), ort }));
+  assert.deepEqual(l.map(o => o.ort), ['amazonas', 'see', 'stadt']);
+  return l;
+}
+const fischNamen = () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8'), n = {};
+  for (const [, id, name] of html.matchAll(/\{id:'(\w+)',(?:art:'\w+',)?name:'([^']+)'/g)) n[name] = id;
+  return n;
+};
+const spielRegeln = () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const i = html.indexOf('const RULES='), j = html.indexOf('}};', i);
+  return new Function('return ' + html.slice(i + 'const RULES='.length, j + 2))();
+};
+const schonzeitAm = (r, d) => { if (!r || !r.von) return false; const md = (d.getMonth() + 1) * 100 + d.getDate(), a = r.von[0] * 100 + r.von[1], b = r.bis[0] * 100 + r.bis[1]; return a <= b ? md >= a && md <= b : md >= a || md <= b; };
+
+test('Tagesfisch: zählt doppelt', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-10-31T10:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ ludins: 0, where: NEBEN_ROSA }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBook');
+  const kopf = (await page.textContent('#card .tagesfisch')).trim();
+  const m = kopf.match(/^⭐ Tagesfisch heute: (.+)$/);
+  assert.ok(m, 'Kopfzeile im Fischbuch: ' + kopf);
+  const id = fischNamen()[m[1]];
+  assert.ok(id, 'Tagesfisch ' + m[1] + ' steht in FISH');
+  const anderer = id === 'piranha' ? 'skalar' : 'piranha';
+  await seed(page, { [KEY]: stadtSeed({ ludins: 0, where: NEBEN_ROSA, bucket: [{ id: anderer, cm: 20, value: 10 }, { id, cm: 30, value: 10 }] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Rosa")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Rosas Fischhandel")').waitFor();
+  const reihe = page.locator('#card .item:has-text("⭐ Tagesfisch ×2")');
+  assert.equal(await reihe.count(), 1, 'nur der Tagesfisch zählt doppelt');
+  assert.match(await reihe.textContent(), /20 Ludins/);
+  assert.match(await page.textContent('#card'), /Alles verkaufen \(\+30 Ludins\)/);
+  await reihe.locator('button:has-text("Verkaufen")').click();
+  let s = await weg(page);
+  assert.equal(s.ludins, 20, 'Tagesfisch mit Wert 10 bringt 20 Ludins');
+  assert.deepEqual(s.bucket.map(b => b.id), [anderer]);
+  await page.click('#card .item button:has-text("Verkaufen")');
+  s = await weg(page);
+  assert.equal(s.ludins, 30, 'ein anderer Fisch zählt normal');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Tagesfisch: jeden Tag fest, nie Bootsfisch, seltener Fisch oder Schonzeit', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-10-31T10:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ where: NEBEN_ROSA }) });
+  await startGame(page);
+  const tage = Array.from({ length: 366 }, (_, i) => { const d = new Date(2026, 0, 1 + i, 12); return [d, d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0')]; });
+  const ids = await page.evaluate(keys => keys.map(k => window.__test.tagesfisch(k)), tage.map(t => t[1]));
+  const noch = await page.evaluate(keys => keys.map(k => window.__test.tagesfisch(k)), tage.map(t => t[1]));
+  assert.deepEqual(noch, ids, 'gleicher Tag = gleicher Fisch');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8'), RULES = spielRegeln();
+  const boot = [...html.matchAll(/\{id:'(\w+)'[^\n]*boat:true/g)].map(m => m[1]);
+  assert.deepEqual(boot, ['piraiba', 'arapaima']);
+  tage.forEach(([d, k], i) => {
+    const id = ids[i], r = RULES[id];
+    assert.ok(!boot.includes(id), k + ': ' + id + ' gibt es nur vom Boot');
+    assert.ok(!(r && r.selten), k + ': ' + id + ' ist ein seltener Fisch');
+    assert.ok(!schonzeitAm(r, d), k + ': ' + id + ' hat Schonzeit');
+  });
+  assert.ok(new Set(ids).size >= 15, 'viele verschiedene Tagesfische im Jahr: ' + new Set(ids).size);
+  assert.ok(ids.includes('forelle'), 'im Sommer kann die Forelle Tagesfisch sein');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Tagesaufgaben: derselbe Mensch wünscht sich am selben Tag denselben Fisch', async () => {
+  // Liste wie AUFGABEN_FISCHE (See- und Meeresfische ohne Dorsch), am 31.10. ohne Forelle (Schonzeit 1.10.–28.2.)
+  const liste = ['rotauge', 'rotfeder', 'barsch', 'karausche', 'doebel', 'schleie', 'karpfen', 'zander', 'hecht', 'hering', 'makrele', 'scholle', 'hornhecht'];
+  const erwartet = liste[dayHash('2026-10-31n0') % liste.length];
+  for (let mal = 0; mal < 2; mal++) {
+    const { ctx, page, errors } = await stadtSeite({});
+    await page.evaluate(() => { Math.random = () => 0.99; }); // der Zufall darf keine Rolle spielen
+    await redeMit(page, 0);
+    await page.click('#card button:has-text("Kann ich dir helfen?")');
+    const s = await weg(page);
+    assert.equal(s.aufgaben.length, 1);
+    assert.equal(s.aufgaben[0].fish, erwartet, 'Fisch aus dayHash(Tag + id)');
+    const a = await page.evaluate(() => window.__test.aufgabe(50)), b = await page.evaluate(() => window.__test.aufgabe(50));
+    assert.deepEqual(a, b, 'kein Zufall');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+// Was in der heutigen Flaschenpost steckt (wie in index.html): 0 = Rätsel, 1 = Tipp, 2 = Ludins
+async function flascheOeffnen(page, key) {
+  const art = dayHash(key + 'f') % 3;
+  await page.locator('#btnCtx:has-text("🍾 Flaschenpost")').waitFor({ timeout: 20000 });
+  const knopf = await page.locator('#btnCtx').boundingBox();
+  assert.ok(knopf.height >= 60, 'Knopf mindestens 60 px');
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("🍾 Flaschenpost")').waitFor();
+  if (art === 0) {
+    const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+    const frage = (await page.textContent('#card .qq')).trim();
+    const m = html.match(new RegExp("q:'" + frage.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + "',a:'([^']+)'"));
+    assert.ok(m, 'Frage aus QUIZ: ' + frage);
+    assert.equal((await weg(page)).tag.flasche, false, 'erst nach der Antwort ist die Flasche leer');
+    await page.click('#card .qa:text-is("' + m[1] + '")');
+    await page.locator('#card .qe:has-text("Richtig")').waitFor();
+    return 10;
+  }
+  if (art === 1) { assert.match(await page.textContent('#card'), /💡/); return 0; }
+  const l = 10 + dayHash(key + 'l') % 21;
+  assert.match(await page.textContent('#card'), new RegExp(l + ' Ludins'));
+  return l;
+}
+
+test('Flaschenpost: einmal pro Tag', async () => {
+  const orte = flascheOrte();
+  let save = null;
+  for (const key of ['2026-10-28', '2026-10-29', '2026-10-31']) {
+    const ort = orte[dayHash(key) % 3];
+    const { ctx, page, errors } = await zeitSeite(key + 'T10:00:00+01:00');
+    const where = { x: ort.x, z: ort.z, f: 0, boat: false };
+    await seed(page, { [KEY]: save ? JSON.stringify({ ...save, where }) : stadtSeed({ ludins: 0, city: { visited: true }, where }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    const vorher = await weg(page);
+    assert.deepEqual(vorher.tag, { day: key, flasche: false }, key + ': neuer Tag, neue Flaschenpost');
+    const plus = await flascheOeffnen(page, key);
+    let s = await weg(page);
+    assert.deepEqual(s.tag, { day: key, flasche: true }, key);
+    assert.equal(s.ludins, vorher.ludins + plus, key + ': +' + plus + ' Ludins');
+    // neu laden: heute keine zweite Flaschenpost
+    await page.click('#card .btns button:has-text("Fertig")');
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.waitForTimeout(1500);
+    assert.equal(await page.locator('#btnCtx:has-text("Flaschenpost")').isVisible(), false, key + ': kein zweites Mal');
+    s = await weg(page);
+    assert.deepEqual(s.tag, { day: key, flasche: true });
+    save = s;
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Flaschenpost: alle Orte liegen an Land, gleich am Wasser', async () => {
+  const { ctx, page, errors } = await stadtSeite({}, '2026-10-31T10:00:00+01:00', true);
+  for (const o of flascheOrte()) {
+    await page.evaluate(([x, z]) => window.__test.warp(x, z), [o.x, o.z]);
+    await page.waitForTimeout(1500); // Welt-Stücke in der Nähe bauen (Bäume sind Hindernisse)
+    const p = await page.evaluate(([x, z]) => {
+      const t = window.__test, w = [];
+      for (let r = 1; r <= 6; r += 0.5) for (let a = 0; a < 32; a++) w.push(t.hoehe(x + Math.sin(a / 32 * 6.283) * r, z + Math.cos(a / 32 * 6.283) * r));
+      return { h: t.hoehe(x, z), frei: t.begehbar(x, z), wasser: Math.min(...w), rail: t.stadtPunkt(x, z).rail };
+    }, [o.x, o.z]);
+    assert.ok(p.h > 0.3, o.ort + ': an Land (' + p.h + ')');
+    assert.ok(p.frei, o.ort + ': man kann hingehen');
+    assert.ok(p.wasser < -0.35, o.ort + ': Wasser höchstens 6 m weit weg (' + p.wasser + ')');
+    if (o.ort === 'stadt') assert.ok(p.rail > 2.2, 'nicht auf den Schienen');
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Alter Spielstand: tag bekommt Startwert, kaputte Werte werden repariert', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-10-31T10:00:00+01:00');
+  await seed(page, { [KEY]: JSON.stringify(ALT_V1) });
+  await startGame(page);
+  await playAndLeave(page);
+  assert.deepEqual(JSON.parse(await read(page)).tag, { day: '2026-10-31', flasche: false }, 'Startwert, dann gleich der heutige Tag');
+  for (const [tag, soll] of [
+    ['x', { day: '2026-10-31', flasche: false }],
+    [{ day: '<b>', flasche: true }, { day: '2026-10-31', flasche: false }],
+    [{ day: '2026-10-31', flasche: 'ja' }, { day: '2026-10-31', flasche: false }],
+    [{ day: '2026-10-31', flasche: true, extra: 1 }, { day: '2026-10-31', flasche: true, extra: 1 }],
+    [{ day: '2026-10-30', flasche: true }, { day: '2026-10-31', flasche: false }]]) {
+    await seed(page, { [KEY]: stadtSeed({ tag }) });
+    await startGame(page);
+    await playAndLeave(page);
+    assert.deepEqual(JSON.parse(await read(page)).tag, soll, JSON.stringify(tag));
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Oben in der Leiste darf nichts unter der kleinen Karte liegen: sonst trifft der Finger die Karte statt den Knopf.
+// Mit der Spielzeit-Anzeige (ohne Einstellung: 15 Minuten) und mit einem langen Namen, im Hoch- und im Querformat.
+test('Leiste oben: kein Knopf liegt unter der kleinen Karte (Hoch- und Querformat)', async () => {
+  for (const name of ['Testkind', 'Abcdefghijklmnopqrst']) {
+    const { ctx, page, errors } = await newPage({ viewport: { width: 768, height: 1024 } });
+    await seed(page, { [KEY]: stadtSeed({ avatar: { ...ALT_V1.avatar, name } }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.locator('#timeChip').waitFor({ state: 'visible' });
+    for (const [width, height] of [[768, 1024], [820, 1180], [1024, 768], [1180, 820]]) {
+      await page.setViewportSize({ width, height });
+      await page.waitForTimeout(200);
+      const r = await page.evaluate(() => {
+        const mm = document.querySelector('#btnMap').getBoundingClientRect();
+        const treffer = ['#btnAvatar', '#btnRank', '#btnBook'].filter(s => {
+          const e = document.querySelector(s), b = e.getBoundingClientRect(), h = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+          return !h || !(h === e || e.contains(h));
+        });
+        const unter = [...document.querySelectorAll('.topbar>*:not(.spacer)')].filter(e => {
+          const b = e.getBoundingClientRect();
+          return b.width > 0 && !(b.right <= mm.left || b.left >= mm.right || b.bottom <= mm.top || b.top >= mm.bottom);
+        }).map(e => e.id || e.className);
+        return { treffer, unter };
+      });
+      const wo = width + '×' + height + ', Name ' + name.length + ' Zeichen';
+      assert.deepEqual(r.treffer, [], wo + ': diese Knöpfe kann man nicht antippen');
+      assert.deepEqual(r.unter, [], wo + ': diese Teile liegen unter der kleinen Karte');
+    }
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+  // Bildschirmfoto im Hochformat (zum Anschauen, wenn TOPBAR_FOTO gesetzt ist)
+  if (process.env.TOPBAR_FOTO) {
+    const { ctx, page } = await newPage({ viewport: { width: 768, height: 1024 } });
+    await seed(page, { [KEY]: stadtSeed({ avatar: { ...ALT_V1.avatar, name: 'Abcdefghijklmnopqrst' } }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: process.env.TOPBAR_FOTO });
+    await ctx.close();
+  }
+});
+
+test('Karte: offene Aufgaben stehen auch auf der großen Karte', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ aufgaben: [{ n: 'n3', fish: 'hering', day: '2026-10-26' }] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnMap');
+  await page.locator('#card h3:has-text("Amazonas")').waitFor();
+  await page.locator('#card h3:has-text("📝 Aufgaben")').waitFor();
+  assert.match(await page.textContent('#card'), /bring Hering \(0\/1\)/);
+  await page.click('#card button:has-text("Fertig")');
+  // ohne offene Aufgaben: kein Bereich Aufgaben
+  await seed(page, { [KEY]: stadtSeed({}) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnMap');
+  await page.locator('#card h3:has-text("Amazonas")').waitFor();
+  assert.equal(await page.locator('#card h3:has-text("Aufgaben")').count(), 0);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Nachbarn: Tipps zu Tagesfisch, Museum und Fisch-Zeiten', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-10-31T10:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({}) });
+  await startGame(page);
+  const namen = Object.fromEntries(Object.entries(fischNamen()).map(([n, id]) => [id, n]));
+  // zwei Tage mit verschiedenem Tagesfisch: der Tipp wird erst beim Zeigen ausgerechnet
+  const a = '2026-10-31', ids = {};
+  for (let d = 1; d <= 9 && !ids.b; d++) {
+    const k = '2026-11-0' + d, id = await page.evaluate(k => window.__test.tagesfisch(k), k);
+    if (id !== await page.evaluate(k => window.__test.tagesfisch(k), a)) ids.b = [k, id];
+  }
+  ids.a = [a, await page.evaluate(k => window.__test.tagesfisch(k), a)];
+  assert.ok(ids.b, 'ein Tag mit anderem Tagesfisch');
+  for (const [k, id] of [ids.a, ids.b]) {
+    if (k !== a) await ctx.clock.setFixedTime(new Date(k + 'T10:00:00+01:00'));
+    const tipps = await page.evaluate(() => window.__test.tipps());
+    assert.ok(tipps.every(t => typeof t === 'string' && t.length > 10), 'alle Tipps sind Text');
+    const t = tipps.find(t => /doppelt/.test(t));
+    assert.ok(t && t.includes(namen[id]), k + ': Tipp zum Tagesfisch ' + namen[id] + ': ' + t);
+    assert.ok(tipps.some(t => /Museum/.test(t) && /Herr Eugen/.test(t)), 'Tipp zum Museum');
+    assert.ok(tipps.some(t => /nachts/.test(t)), 'Tipp zu den Fisch-Zeiten');
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Spielzeit um in der Avatar-Werkstatt: danach wieder Tageshimmel', async () => {
+  const TAG = '#a6dccd', NACHT = '#22335e';
+  const { ctx, page, errors } = await startZeitSeite('2026-10-27T23:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ where: SEE_ORT, visitedLake: true, playTime: { day: '2026-10-27', sec: 15 * 60 - 1, extra: 0 } }),
+    [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) });
+  await startGame(page); // das Spiel beginnt in der Werkstatt
+  const welt = () => page.evaluate(() => window.__test.welt());
+  assert.equal((await welt()).sky, TAG);
+  await page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 10000 });
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); // wie der Uhr-Takt alle 30 s
+  assert.equal((await welt()).sky, NACHT, 'während der Pause: echte Zeit');
+  await page.click('#btnMoreTime');
+  await rechenaufgabe(page);
+  await page.click('#timeup button:has-text("+ 15 Minuten")');
+  assert.equal(await page.isVisible('#btnGo'), true, 'wieder in der Werkstatt');
+  assert.equal((await welt()).sky, TAG, 'Werkstatt: wieder Tageshimmel');
+  await page.click('#btnGo');
+  assert.equal((await welt()).sky, NACHT);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Mehrere Spieler: Museum, Nachbarn und Aufgaben bleiben bei jedem Spieler', async () => {
+  const { ctx, page, errors } = await newPage();
+  const A = { museum: { hering: { cm: 22, t: 1761500000000 } }, nachbarn: { n0: { f: 7, talk: '2026-10-26', gift: '' } }, aufgaben: [{ n: 'n3', fish: 'hering', day: '2026-10-26' }] };
+  const B = { museum: { barsch: { cm: 18, t: 1761400000000 } }, nachbarn: { n5: { f: 16, talk: '2026-10-20', gift: '2026-10-20' } }, aufgaben: [{ n: 'n1', fish: 'makrele', day: '2026-10-25' }] };
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playerId: 'p1', ...A }),
+    [KEY + '-spieler-p2']: JSON.stringify({ v: 2, ludins: 50, newsSeen: 999, playerId: 'p2', avatar: { name: 'Papa' }, ...B }),
+    [KEY + '-spieler']: JSON.stringify({ list: [{ id: 'p1', name: 'Testkind' }, { id: 'p2', name: 'Papa' }] }) });
+  const teile = s => ({ museum: s.museum, nachbarn: s.nachbarn, aufgaben: s.aufgaben });
+  // zu Papa wechseln
+  await startGame(page);
+  await page.locator('#card h2:has-text("Wer spielt?")').waitFor({ timeout: 5000 });
+  await Promise.all([page.waitForEvent('load'), page.click('#card .player:has-text("Papa")')]);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  await playAndLeave(page);
+  let s = JSON.parse(await read(page));
+  assert.equal(s.playerId, 'p2');
+  assert.deepEqual(teile(s), B, 'Papa hat seine eigenen Teile');
+  assert.deepEqual(teile(JSON.parse(await read(page, KEY + '-spieler-p1'))), A, 'Testkind ist sicher aufgehoben');
+  // zurück zu Testkind
+  await startGame(page);
+  await page.locator('#card h2:has-text("Wer spielt?")').waitFor({ timeout: 5000 });
+  await Promise.all([page.waitForEvent('load'), page.click('#card .player:has-text("Testkind")')]);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  await playAndLeave(page);
+  s = JSON.parse(await read(page));
+  assert.equal(s.playerId, 'p1');
+  assert.deepEqual(teile(s), A, 'Testkind hat alles zurück');
+  assert.deepEqual(teile(JSON.parse(await read(page, KEY + '-spieler-p2'))), B, 'Papa ist sicher aufgehoben');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
