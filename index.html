@@ -2615,6 +2615,8 @@ const WEIDE=merge([part(new THREE.CylinderGeometry(0.35,0.45,2.2,6),'#6b5a44',M(
 const VINE=merge([part(new THREE.BoxGeometry(0.45,0.9,1.3),'#5f8f2f'),part(new THREE.BoxGeometry(0.08,1.2,0.08),'#6b5a44',M(0,0,0.6))]);
 const containerMat=new THREE.MeshLambertMaterial();
 const nbz=(x,o)=>riverZ(x)+deP.hw+o,sbz=(x,o)=>riverZ(x)-deP.hw-o; // Punkt am Nordufer / Südufer
+// z am Südufer, aber mindestens m Meter vom Wasser weg (bei großen Kurven wie der Saarschleife)
+const landZ=(x,z,m)=>{const sl=deP.bend*deP.k*Math.cos(x*deP.k);return Math.min(z,riverZ(x)-(deP.hw+m)*Math.sqrt(1+sl*sl));};
 // Bauklötze für die Wahrzeichen (y = Unterkante)
 function bx(g,w,h,d,c,x,y,z,ry){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mat(c));m.position.set(x,y+h/2,z);if(ry)m.rotation.y=ry;g.add(m);return m;}
 function cy(g,rt,rb,h,c,x,y,z,seg){const m=new THREE.Mesh(new THREE.CylinderGeometry(rt,rb,h,seg||10),mat(c));m.position.set(x,y+h/2,z);g.add(m);return m;}
@@ -2773,8 +2775,8 @@ function buildSpot(id){const s=SPOTS_BY[id];if(!s)return false;
   // Flugzeug, Schild, Infotafel
   const pz=DE.z-s.hw-16;Object.assign(PLANES[2],{x:12,z:pz,land:{x:3,z:DE.z-s.hw-13,f:0}});PLANES[2].mesh=makePlane(12,pz,-Math.PI/2,g,deCols);
   makeSign(s.river,BL[s.bl].name,6.5,DE.z-s.hw-9,'#2f7fd8',g,deCols,Math.PI);
-  Object.assign(deBoard,{x:-2.8,z:DE.z-s.hw-6.5,title:s.name});makeBoard(deBoard,-2.8,DE.z,g,deCols);
-  buildHannes(g,-9,DE.z-s.hw-10);
+  Object.assign(deBoard,{x:-2.8,z:landZ(-2.8,DE.z-s.hw-6.5,4),title:s.name});makeBoard(deBoard,-2.8,DE.z,g,deCols);
+  buildHannes(g,-9,landZ(-9,DE.z-s.hw-10,5));
   const noTree=[{x:2,z:DE.z-s.hw-12,r:20}];
   LOOKS[s.look](g,R,noTree);
   // Bäume: Laubbäume, Pappeln und Weiden am Wasser, Fichten oben auf den Bergen
@@ -3755,7 +3757,9 @@ updateTimeChip();if(timeLeft()<=0)lockTime();
 updateWorldTime();
 // Nur für die automatischen Tests (der Browser meldet sich dann als „webdriver“): Spieler an eine Stelle setzen
 if(navigator.webdriver===true)window.__test={warp(x,z){player.pos.set(x,0,z);player.y=groundY(x,z);player.root.position.set(x,player.y,z);updateWorldTime();saveWhere();},
-  welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible})};
+  welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible}),
+  // jeden Flussplatz bauen: wie hoch stehen Hannes und die Infotafel? (unter 0 = im Wasser)
+  ufer(){const was=curSpot&&curSpot.id,fa=state.flussAt,r=SPOTS.map(s=>{buildSpot(s.id);return {id:s.id,hannes:heightAt(hannes.x,hannes.z),tafel:heightAt(deBoard.x,deBoard.z)};});if(was)buildSpot(was);state.flussAt=fa;return r;}};
 player.root.position.set(player.pos.x,player.y,player.pos.z);
 loop();
 })();

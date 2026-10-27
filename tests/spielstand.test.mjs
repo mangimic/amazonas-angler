@@ -775,6 +775,21 @@ test('Fischer Hannes am Fluss: Fische verkaufen und Angelsachen kaufen', async (
   await ctx.close();
 });
 
+test('Flussplätze: Hannes und die Infotafel stehen überall an Land (auch an der Saarschleife)', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999 }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  const r = await page.evaluate(() => window.__test.ufer());
+  assert.equal(r.length, flussplaetze().length);
+  for (const p of r) {
+    assert.ok(p.hannes > 0.5, p.id + ': Hannes steht im Wasser (Höhe ' + p.hannes.toFixed(2) + ')');
+    assert.ok(p.tafel > 0.5, p.id + ': Infotafel steht im Wasser (Höhe ' + p.tafel.toFixed(2) + ')');
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 test('Fischer Hannes am Heimat-See: Fische gleich dort verkaufen', async () => {
   const { ctx, page, errors } = await newPage();
   await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, ludins: 10, visitedLake: true,
