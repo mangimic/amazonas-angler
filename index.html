@@ -1390,11 +1390,12 @@ function hitsWall(x,z,r){for(const s of houseSegs){const dx=s.bx-s.ax,dz=s.bz-s.
 const walkable=(x,z)=>inBounds(x,z)&&(onDock(x,z)||onPlot(x,z)||heightAt(x,z)>0.15)&&!hitsCollider(x,z,0.35)&&!hitsWall(x,z,0.33);
 // Fahren: wie Laufen, aber mit dem Radius des Fahrzeugs (der Truck ist breit)
 // Geparkte eigene Fahrzeuge sind auch Hindernisse (nicht das, auf dem man gerade fährt)
-const rideable=(x,z,r)=>inBounds(x,z)&&heightAt(x,z)>0.15&&!hitsCollider(x,z,r)&&!hitsParked(x,z,r);
+const rideable=(x,z,r,skip)=>inBounds(x,z)&&heightAt(x,z)>0.15&&!hitsCollider(x,z,r)&&!hitsParked(x,z,r,skip);
 // Der Truck ist fast 6 m lang: Mitte, Nase und Heck (je 2 m vor und hinter der Mitte) müssen frei sein.
 // Drehen geht immer, nur der Schritt wird geprüft. Vorne und hinten sind gleich, darum ist der Weg zurück immer frei.
-const truckFits=(x,z,yaw)=>{const sx=Math.sin(yaw)*2,sz=Math.cos(yaw)*2;
-  return rideable(x,z,1.4)&&rideable(x+sx,z+sz,1.2)&&rideable(x-sx,z-sz,1.2);};
+// skip: geparkte Fahrzeuge, die nicht zählen (Bitmaske, siehe parkedMask)
+const truckFits=(x,z,yaw,skip)=>{const sx=Math.sin(yaw)*2,sz=Math.cos(yaw)*2;
+  return rideable(x,z,1.4,skip)&&rideable(x+sx,z+sz,1.2,skip)&&rideable(x-sx,z-sz,1.2,skip);};
 const nearDock=(x,z)=>x>DOCK.x0-1.6&&x<DOCK.x1+1&&z>DOCK.z0-1.8&&z<DOCK.z1+1.8;
 const boatable=(x,z)=>inBounds(x,z)&&heightAt(x,z)<-0.6&&!nearDock(x,z)&&!nearPlot(x,z,1.8)&&!hitsRock(x,z);
 function groundY(x,z){const h=heightAt(x,z);return onDock(x,z)?Math.max(h,DOCK.y):onPlot(x,z)?Math.max(h,PLOT.y):h;}
@@ -1408,10 +1409,10 @@ const FINE={bike:5,roller:5,skate:5,truck:20};
 const CRASH_TXT={mensch:'einen Menschen',fahrzeug:'ein Fahrzeug',wand:'eine Wand'};
 let crashT=0,rideMoved=false;
 // Was steht dem Fahrzeug an der Stelle (x,z) im Weg? {kind,p} oder null (z. B. nur Wasser oder der Rand der Stadt: das kostet nichts)
-function crashWhat(x,z){let pts=[[x,z,0.35]];
+function crashWhat(x,z,skip){let pts=[[x,z,0.35]];
   if(player.ride==='truck'){const sx=Math.sin(player.facing)*2,sz=Math.cos(player.facing)*2;pts=[[x,z,1.4],[x+sx,z+sz,1.2],[x-sx,z-sz,1.2]];}
   for(const [a,b,r] of pts)for(const p of people)if(p.awake&&hitsList([p.col],a,b,r))return {kind:'mensch',p};
-  for(const [a,b,r] of pts)if(hitsParked(a,b,r)||hitsList(tram.cols,a,b,r)||hitsList(tow.cols,a,b,r))return {kind:'fahrzeug'};
+  for(const [a,b,r] of pts)if(hitsParked(a,b,r,skip)||hitsList(tram.cols,a,b,r)||hitsList(tow.cols,a,b,r))return {kind:'fahrzeug'};
   for(const [a,b,r] of pts)if(hitsCollider(a,b,r)||hitsWall(a,b,0.33))return {kind:'wand'};
   return null;}
 function crash(kind,who){const f=Math.min(Math.max(0,state.ludins),FINE[player.ride]||0);
@@ -1441,13 +1442,15 @@ function updatePlayer(dt,t){
     const sp=(V?V.speed:player.inBoat?(state.hasYacht?YACHT.speed:state.hasMotor?18:9):5.5)*mag*dt;
     // Die Yacht ist lang: auch der Bug (vorne) muss im tiefen Wasser bleiben
     const yachtOk=(x,z)=>boatable(x,z)&&boatable(x+Math.sin(player.facing)*YACHT.len,z+Math.cos(player.facing)*YACHT.len);
-    const ok=V?(player.ride==='truck'?(x,z)=>truckFits(x,z,player.facing):(x,z)=>walkable(x,z)&&!hitsParked(x,z,0.35)):player.inBoat?(state.hasYacht?yachtOk:boatable):walkable;
+    // Steht das Fahrzeug schon in einem geparkten (z. B. nach dem Kauf oder Abschleppen), zählt dieses nicht: man kann herausfahren.
+    const under=V?parkedUnderMe():0;
+    const ok=V?(player.ride==='truck'?(x,z)=>truckFits(x,z,player.facing,under):(x,z)=>walkable(x,z)&&!hitsParked(x,z,0.35,under)):player.inBoat?(state.hasYacht?yachtOk:boatable):walkable;
     let dx=mx*sp,dz=mz*sp;
     if(player.inBoat||V){dx=Math.sin(player.facing)*sp;dz=Math.cos(player.facing)*sp;} // Boot und Fahrzeuge fahren dorthin, wohin sie zeigen
     const p=player.pos;
     // Zu Fuß und im Boot rutscht man an Hindernissen entlang. Fahrzeuge (V) halten dort einfach an.
     if(ok(p.x+dx,p.z+dz)){p.x+=dx;p.z+=dz;moving=true;}
-    else if(V&&mag>0.6&&rideMoved&&crashT<=0){const c=crashWhat(p.x+dx,p.z+dz);if(c)crash(c.kind,c.p);} // schnell dagegen gefahren: Strafzettel
+    else if(V&&mag>0.6&&rideMoved&&crashT<=0){const c=crashWhat(p.x+dx,p.z+dz,under);if(c)crash(c.kind,c.p);} // schnell dagegen gefahren: Strafzettel
     else if(!V&&ok(p.x+dx,p.z)){p.x+=dx;moving=true;}
     else if(!V&&ok(p.x,p.z+dz)){p.z+=dz;moving=true;}
   }
@@ -2975,15 +2978,24 @@ function vehicleHome(id){
   return {x:SHOP_AT.x,z:SHOP_AT.z+4,yaw:Math.PI/2};}                        // der Truck steht auf der Straße
 const parkedOk=p=>isObj(p)&&[p.x,p.z,p.yaw].every(Number.isFinite); // nur gültige Einträge zählen
 const vehicleAt=id=>{const p=state.city.parked[id];return parkedOk(p)?p:vehicleHome(id);};
-// Steht ein geparktes eigenes Fahrzeug an der Stelle (x,z)? r = Radius dessen, der dorthin will.
+// Geparkte eigene Fahrzeuge als Hindernisse. Die Plätze stehen in PARKED (ein fester Eintrag pro Fahrzeug, kein neues Objekt pro Prüfung)
+// und werden neu gelesen, wenn sich etwas ändert (placeVehicles) oder ein anderer Spielstand geladen ist.
+const PARKED=VEHICLE_IDS.map(id=>({id,on:false,x:0,z:0,sx:0,sz:0}));let parkedFor=null;
+function refreshParked(){parkedFor=state.city;
+  for(const q of PARKED){q.on=state.city.vehicles[q.id]===true;if(!q.on)continue;const v=vehicleAt(q.id);q.x=v.x;q.z=v.z;q.sx=Math.sin(v.yaw)*2;q.sz=Math.cos(v.yaw)*2;}}
+// Welche geparkten Fahrzeuge berührt ein Kreis mit Radius r bei (x,z)? Antwort als Bitmaske (Bit i = PARKED[i]).
 // Rad, Roller, Skateboard: ein Kreis (0,5 m). Der Truck: Mitte (1,4 m), Nase und Heck (1,2 m, je 2 m vor und hinter der Mitte) wie bei truckFits.
 // Nicht dabei: das Fahrzeug, auf dem man fährt, und eins, das gerade auf dem Abschleppwagen liegt.
-function hitsParked(x,z,r){if(!cityBuilt||z>CITY.zone)return false;
-  for(const id of VEHICLE_IDS){if(state.city.vehicles[id]!==true||player.ride===id||towBusy(id))continue;const v=vehicleAt(id);
-    if(id!=='truck'){if((v.x-x)**2+(v.z-z)**2<(0.5+r)**2)return true;continue;}
-    const sx=Math.sin(v.yaw)*2,sz=Math.cos(v.yaw)*2;
-    if((v.x-x)**2+(v.z-z)**2<(1.4+r)**2||(v.x+sx-x)**2+(v.z+sz-z)**2<(1.2+r)**2||(v.x-sx-x)**2+(v.z-sz-z)**2<(1.2+r)**2)return true;}
-  return false;}
+function parkedMask(x,z,r){if(!cityBuilt||z>CITY.zone)return 0;if(parkedFor!==state.city)refreshParked();let m=0;
+  for(let i=0;i<PARKED.length;i++){const q=PARKED[i];if(!q.on||player.ride===q.id||towBusy(q.id))continue;
+    if(q.id!=='truck'?(q.x-x)**2+(q.z-z)**2<(0.5+r)**2:
+      (q.x-x)**2+(q.z-z)**2<(1.4+r)**2||(q.x+q.sx-x)**2+(q.z+q.sz-z)**2<(1.2+r)**2||(q.x-q.sx-x)**2+(q.z-q.sz-z)**2<(1.2+r)**2)m|=1<<i;}
+  return m;}
+// skip: diese Fahrzeuge (Bitmaske) nicht beachten, z. B. eins, in dem man schon steht (dann darf man herausfahren)
+const hitsParked=(x,z,r,skip)=>(parkedMask(x,z,r)&~(skip||0))!==0;
+// Welche geparkten Fahrzeuge berührt das gefahrene Fahrzeug schon jetzt? (Truck: alle 3 Kreise)
+function parkedUnderMe(){const p=player.pos;if(player.ride!=='truck')return parkedMask(p.x,p.z,0.35);
+  const sx=Math.sin(player.facing)*2,sz=Math.cos(player.facing)*2;return parkedMask(p.x,p.z,1.4)|parkedMask(p.x+sx,p.z+sz,1.2)|parkedMask(p.x-sx,p.z-sz,1.2);}
 const bikeAway=()=>{const v=vehicleAt('bike'),h=vehicleHome('bike');return Math.hypot(v.x-h.x,v.z-h.z)>3;}; // steht das Rad nicht mehr am Flugplatz?
 // Einfache Fahrzeuge aus Kästen und Zylindern. Vorne ist +z (wie beim Avatar).
 function buildVehicleMesh(id){const g=new THREE.Group();
@@ -3011,7 +3023,7 @@ function buildVehicleMesh(id){const g=new THREE.Group();
     for(const x of[-1,1])for(const z of[-1.85,1.85])wheel(0.45,0.3,x,0.45,z,'#1e1e1e');}
   return g;}
 // Fahrzeuge an ihren Platz stellen. Nur die eigenen sieht man. Das, auf dem man fährt, fährt mit (updatePlayer).
-function placeVehicles(){VEHICLE_IDS.forEach(id=>{const m=vehMesh[id];if(!m)return;m.visible=state.city.vehicles[id]===true;
+function placeVehicles(){refreshParked();VEHICLE_IDS.forEach(id=>{const m=vehMesh[id];if(!m)return;m.visible=state.city.vehicles[id]===true;
   if(player.ride===id)return;const v=vehicleAt(id);m.position.set(v.x,heightAt(v.x,v.z),v.z);m.rotation.y=v.yaw;});}
 // Abschleppdienst (Stadtplan): bringt ein eigenes Fahrzeug für TOW.price Ludins zu dir. Der gelbe Abschleppwagen fährt
 // auf einer freien Strecke heran, setzt das Fahrzeug seitlich neben sich ab (zwischen dir und ihm) und fährt weiter.
@@ -3027,10 +3039,13 @@ const towBusy=id=>tow.id===id&&(tow.phase==='in'||tow.phase==='drop'); // das Fa
 const towWay=(x,z,yaw)=>truckFits(x,z,yaw)&&Math.hypot(x-player.pos.x,z-player.pos.z)>4;
 // Wohin mit dem Fahrzeug? P liegt 4,5 m neben dir, der Abschleppwagen fährt 2,6 m dahinter vorbei (u = Fahrtrichtung).
 // Gesucht wird eine Stelle, an der P frei ist (nicht auf den Schienen) und die Strecke davor (≥ 8 m) und danach (≥ 10 m) frei ist.
+// Darf das abgeschleppte Fahrzeug id hier abgesetzt werden? Frei, und nicht in einem anderen geparkten Fahrzeug.
+function towSpotOk(id,x,z,yaw){const me=1<<VEHICLE_IDS.indexOf(id);
+  return id==='truck'?truckFits(x,z,yaw,me):walkable(x,z)&&!hitsParked(x,z,0.5,me);}
 function towPlan(id){let best=null;const me=player.pos;
   for(let i=0;i<16;i++){const a=i/16*Math.PI*2,w={x:Math.sin(a),z:Math.cos(a)},P={x:me.x+w.x*TOW.me,z:me.z+w.z*TOW.me};
     for(const sg of[1,-1]){const u={x:w.z*sg,z:-w.x*sg},yaw=Math.atan2(u.x,u.z);
-      if(!parkFree(id,P.x,P.z,yaw)||!(id==='truck'?truckFits(P.x,P.z,yaw):walkable(P.x,P.z)))continue;
+      if(!parkFree(id,P.x,P.z,yaw)||!towSpotOk(id,P.x,P.z,yaw))continue;
       const C={x:P.x+w.x*TOW.side,z:P.z+w.z*TOW.side},free=(t)=>towWay(C.x+u.x*t,C.z+u.z*t,yaw);
       let t0=0;while(t0<25&&free(-(t0+1)))t0++;let t1=0;while(t1<25&&free(t1+1))t1++;
       const ok=free(0)&&t0>=8&&t1>=10,straight=Math.abs(u.x)<0.01||Math.abs(u.z)<0.01; // lieber gerade an der Straße entlang
@@ -3040,7 +3055,7 @@ function towPlan(id){let best=null;const me=player.pos;
 function callTow(id){
   if(!atCity()||player.ride||player.inBoat||!state.city.vehicles[id]||tow.phase)return;
   if(state.ludins<TOW.price){toast('Der Abschleppdienst kostet '+TOW.price+' Ludins.');return;}
-  const pl=towPlan(id);if(!pl||pl.score<1000&&!(id==='truck'?truckFits(pl.P.x,pl.P.z,pl.yaw):walkable(pl.P.x,pl.P.z))){toast('Hier ist kein Platz für dein Fahrzeug. Geh auf eine Straße oder einen Platz.');return;}
+  const pl=towPlan(id);if(!pl||pl.score<1000&&!towSpotOk(id,pl.P.x,pl.P.z,pl.yaw)){toast('Hier ist kein Platz für dein Fahrzeug. Geh auf eine Straße oder einen Platz.');return;}
   state.ludins-=TOW.price;state.city.parked[id]={x:r2(pl.P.x),z:r2(pl.P.z),yaw:r2(pl.yaw)};save();refreshHud(true);
   if(!tow.g){const t=buildTowTruck();tow.g=t.g;tow.light=t.light;cityGroup.add(tow.g);
     for(let i=0;i<3;i++){const c={x:1e6,z:1e6,r:1.3};tow.cols.push(c);cityCols.push(c);}}
@@ -3252,11 +3267,12 @@ function buildPeople(g,R){const pick=a=>a[Math.floor(R()*a.length)],order=[];
     [av.group,...av.legs,...av.arms].forEach(bakeKids); // Körper, Beine und Arme: je 1 Mesh statt ~30 Teile
     if(kid)av.group.scale.setScalar(0.72);av.group.position.set(x,heightAt(x,z),z);g.add(av.group);
     const col={x,z,r:0.5};peopleCols.push(col);
-    people.push({id:'n'+k,kid,awake:true,g:av.group,path,i,t:R()*6,speed:1.2,av,wave:0,wait:0,col});}} // id: fester Name im Spielstand (Nachbarn), nie ändern
+    people.push({id:'n'+k,kid,awake:true,night:false,g:av.group,path,i,t:R()*6,speed:1.2,av,wave:0,wait:0,col});} // id: fester Name im Spielstand (Nachbarn), nie ändern
+  people.filter(p=>!p.kid).slice(0,4).forEach(p=>p.night=true);} // nachts unterwegs: die ersten 4 Erwachsenen (nach Bau-Index, ohne Zufall)
 let waveIn=6,peopleTick=0;
-// Tagesplan: nachts (22–6 Uhr) sind nur n0–n3 unterwegs. Kinder: werktags 13–19 Uhr, am Wochenende 9–19 Uhr. Erwachsene 6–22 Uhr.
+// Tagesplan: nachts (22–6 Uhr) sind nur die ersten 4 Erwachsenen unterwegs (p.night), keine Kinder. Kinder: werktags 13–19 Uhr, am Wochenende 9–19 Uhr. Erwachsene 6–22 Uhr.
 function personAwake(p,d){const h=d.getHours()+d.getMinutes()/60,day=d.getDay(),we=day===0||day===6;
-  if(h>=22||h<6)return Number(p.id.slice(1))<4;
+  if(h>=22||h<6)return p.night;
   return p.kid?h>=(we?9:13)&&h<19:true;}
 // Darf ein Mensch auf die Stelle (x,z) treten? Nicht in geparkte Fahrzeuge, die Straßenbahn, den Abschleppwagen und nicht dir in den Weg.
 function blockedForPeople(x,z){return hitsParked(x,z,0.5)||hitsList(tram.cols,x,z,0.5)||hitsList(tow.cols,x,z,0.5)||inPlayerWay(x,z);}
@@ -3271,7 +3287,7 @@ function updatePeople(dt,t){if(!people.length||!atCity())return;
   peopleTick-=dt;if(peopleTick<=0){peopleTick=1;const d=new Date();let n=0;
     for(const p of people){const a=personAwake(p,d);if(a)n++;if(a===p.awake)continue;p.awake=a;
       if(a){p.col.x=p.g.position.x;p.col.z=p.g.position.z;}else{p.col.x=p.col.z=1e6;p.g.visible=false;p.wave=0;p.wait=0;}}
-    document.body.dataset.leute=n;}
+    document.body.dataset.leute=n;} // leute = wie viele Menschen gerade wach sind (Schlafende sieht man nicht)
   // alle 6–12 Sekunden winkt jemand in der Nähe
   waveIn-=dt;if(waveIn<=0){waveIn=6+Math.random()*6;const near=people.filter(p=>p.awake&&p.wave<=0&&Math.hypot(p.g.position.x-px,p.g.position.z-pz)<40);
     if(near.length)near[Math.floor(Math.random()*near.length)].wave=1.5;}
@@ -3880,8 +3896,8 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
   welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible,region:WT.region,laub:'#'+laubMat.color.getHexString(),wiese:'#'+wieseMat.color.getHexString(),laubFade:laubMat.userData.fade.value,wieseFade:wieseMat.userData.fade.value,
     fichten:(()=>{const f=[];scene.traverse(o=>{if(o.isInstancedMesh&&o.geometry===FICHTE)f.push(o.material===wieseMat);});return f.length>0&&f.every(Boolean);})(),blueten:bloomOn&&blooms.size>0&&[...blooms].every(p=>p.visible)}),
   hoehe:(x,z)=>heightAt(x,z),
-  // Mensch k in Hafenhausen: wo er steht, ob er wach ist, und wohin er gerade läuft (nächste Ecke)
-  nachbar(k){const p=people[k];if(!p)return null;const w=p.path[p.i];return {x:p.g.position.x,z:p.g.position.z,sichtbar:!!p.awake,ziel:{x:w.x,z:w.z}};},
+  // Mensch k in Hafenhausen: wo er steht, sichtbar = wach (Schlafende sieht man nicht), ob er ein Kind ist, und wohin er gerade läuft (nächste Ecke)
+  nachbar(k){const p=people[k];if(!p)return null;const w=p.path[p.i];return {x:p.g.position.x,z:p.g.position.z,sichtbar:!!p.awake,kid:p.kid,ziel:{x:w.x,z:w.z}};},
   // welcher Fisch würde jetzt hier beißen (n-mal ausgewürfelt, Angel muss ausgeworfen sein) / in die Reuse schwimmen
   fische:n=>Array.from({length:n},()=>chooseFish().id),
   reuse:(home,n)=>Array.from({length:n},()=>trapFish(home).id),

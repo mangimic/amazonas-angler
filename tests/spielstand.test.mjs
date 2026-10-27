@@ -1758,6 +1758,13 @@ test('Menschen schlafen nachts', async () => {
     await page.waitForFunction(() => document.body.dataset.leute !== undefined, null, { timeout: 20000 });
     const n = Number(await page.evaluate(() => document.body.dataset.leute));
     assert.ok(ok(n), iso + ': ' + n + ' Menschen unterwegs');
+    if (iso.includes('T23')) { // nachts sind nur die ersten 4 Erwachsenen (nach Bau-Index) wach, keine Kinder (Ruling R14)
+      const alle = await page.evaluate(() => Array.from({ length: 24 }, (_, k) => window.__test.nachbar(k)));
+      const erste4 = alle.map((p, k) => ({ ...p, k })).filter(p => p.kid === false).slice(0, 4).map(p => p.k);
+      assert.ok(alle.every(p => typeof p.kid === 'boolean'), 'nachbar(k).kid sagt, ob es ein Kind ist');
+      assert.deepEqual(alle.map((p, k) => p.sichtbar ? k : -1).filter(k => k >= 0), erste4, 'wach sind genau die ersten 4 Erwachsenen');
+      assert.equal(n, 4);
+    }
     assert.deepEqual(errors, []);
     await ctx.close();
   }
@@ -1802,6 +1809,26 @@ test('Menschen laufen nicht durch Fahrzeuge', async () => {
     await page.waitForTimeout(500);
   }
   assert.ok(nah < 5, 'der Mensch ist bis an den Truck gekommen (' + nah.toFixed(2) + ' m)');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Verkehr: Truck steht auf dem Rad und kann trotzdem wegfahren', async () => {
+  // das Rad steht genau dort, wo der Truck nach dem Kauf steht (Startplatz vor dem Laden): beide dürfen nicht festsitzen
+  const S = stadtWert('SHOP_AT'), H = { x: S.x, z: S.z + 4 };
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ludins: 100, city: { visited: true, vehicles: { bike: true, truck: true }, parked: { bike: { ...H, yaw: 0 } } },
+    where: { x: S.x, z: S.z, f: Math.PI / 2, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Einsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
+  await halten(page, 'KeyW', 2000);
+  const s = await weg(page);
+  assert.equal(s.city.riding, 'truck');
+  assert.ok(Math.hypot(s.where.x - H.x, s.where.z - H.z) > 3, 'der Truck ist vom Rad weggefahren (' + s.where.x + ',' + s.where.z + ')');
+  assert.equal(s.ludins, 100, 'beim Wegfahren gibt es keinen Strafzettel');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
