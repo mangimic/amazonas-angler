@@ -2045,3 +2045,146 @@ test('Nachbarn: offene Aufgabe mit Schonzeit-Fisch wird getauscht', async () => 
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+// Museum in Hafenhausen: Fische spenden (Herr Eugen), Ausstellung mit Foto, Tafel und „?“
+const MUSEUM_ISO = '2026-10-31T10:00:00+01:00';
+async function museumSeite(extra, iso = MUSEUM_ISO, fest = false) {
+  const M = stadtWert('MUSEUM_AT');
+  return stadtSeite({ where: { x: M.x, z: M.z, f: 0, boat: false }, ...extra }, iso, fest);
+}
+async function museumAuf(page) {
+  await page.locator('#btnCtx:has-text("🏛️ Ins Museum")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Museum")').waitFor();
+}
+
+test('Museum: Fisch spenden und ansehen', async () => {
+  const { ctx, page, errors } = await museumSeite({ bucket: [{ id: 'hering', cm: 25, value: 6 }] });
+  await museumAuf(page);
+  assert.match(await page.textContent('#card'), /Offen 8–22 Uhr/);
+  const tabs = await page.locator('#card .tabs button').evaluateAll(bs => bs.map(b => [b.textContent, b.getBoundingClientRect().height]));
+  assert.equal(tabs.length, 2, 'zwei Reiter');
+  assert.match(tabs[0][0], /Spenden/);
+  assert.match(tabs[1][0], /Ausstellung/);
+  assert.ok(tabs.every(t => t[1] >= 60), 'Reiter mindestens 60 px: ' + tabs.map(t => t[1]));
+  const row = page.locator('#card .item:has-text("Hering")');
+  assert.equal(await row.count(), 1);
+  assert.ok((await row.locator('button').boundingBox()).height >= 60, 'Knopf mindestens 60 px');
+  await row.locator('button:has-text("Spenden")').click();
+  // Herr Eugen sagt den Fisch-Fakt
+  const info = await page.evaluate(() => window.__test.fischInfo('hering'));
+  const fact = info.fact;
+  const text = await page.textContent('#card');
+  assert.match(text, /Herr Eugen/);
+  assert.ok(text.includes(fact), 'Herr Eugen sagt den Fakt');
+  let s = await weg(page);
+  assert.equal(s.museum.hering.cm, 25);
+  assert.ok(Number.isFinite(s.museum.hering.t) && s.museum.hering.t > 1e12, 'Datum (Zeitstempel) ist gespeichert');
+  assert.deepEqual(s.bucket, []);
+  assert.equal(await page.locator('#card .item').count(), 0, 'nichts mehr zu spenden');
+  // Ausstellung: Foto, Tafel mit Name, Größe, Datum und Fotonachweis; alle anderen „?“
+  await page.click('#card .tabs button:has-text("Ausstellung")');
+  const img = page.locator('#card img[src$="fotos/hering.jpg"]');
+  await img.waitFor({ state: 'visible' });
+  const tafel = await page.textContent('#card .bk:has(img[src$="fotos/hering.jpg"])');
+  assert.match(tafel, /Hering/);
+  assert.match(tafel, /25 cm/);
+  assert.match(tafel, /\d\d\.\d\d\.\d{4}/, 'Datum');
+  assert.match(tafel, /Foto: .+ · .+/, 'Fotonachweis');
+  const n = info.anzahl;
+  assert.match(await page.textContent('#card'), new RegExp('1 von ' + n + '\\b'));
+  assert.equal(await page.locator('#card .bk .unknown').count(), n - 1, 'alle anderen sind „?“');
+  for (const t of ['Amazonas', 'Heimat-See', 'Flüsse', 'Meer']) assert.ok(await page.locator('#card h3.bookhead:has-text("' + t + '")').count() >= 1, t);
+  // nach dem Neuladen ist der Hering noch da
+  await startGame(page);
+  await page.click('#btnGo');
+  s = await weg(page);
+  assert.equal(s.museum.hering.cm, 25);
+  assert.deepEqual(s.bucket, []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Museum: dieselbe Art geht nur einmal', async () => {
+  const { ctx, page, errors } = await museumSeite({
+    museum: { hering: { cm: 30, t: 1761900000000 } },
+    bucket: [{ id: 'hering', cm: 20, value: 5 }, { id: 'makrele', cm: 26, value: 12 }, { id: 'makrele', cm: 33, value: 16 }, { id: 'dorsch', cm: 50, value: 20 }] });
+  await museumAuf(page);
+  const namen = await page.locator('#card .item b').allTextContents();
+  assert.deepEqual(namen, ['Makrele'], 'Hering ist schon da, Dorsch ist selten, Makrele steht nur einmal');
+  await page.locator('#card .item button:has-text("Spenden")').click();
+  assert.equal(await page.locator('#card .item').count(), 0, 'auch die zweite Makrele wird nicht mehr angeboten');
+  const s = await weg(page);
+  assert.equal(s.museum.makrele.cm, 33, 'die größere Makrele geht ins Museum');
+  assert.deepEqual(s.bucket.map(b => b.id + b.cm), ['hering20', 'makrele26', 'dorsch50'], 'nur dieser eine Fisch ist weg');
+  assert.deepEqual(s.museum.hering, { cm: 30, t: 1761900000000 }, 'der alte Hering bleibt');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Museum: um 23 Uhr geschlossen', async () => {
+  const { ctx, page, errors } = await museumSeite({ bucket: [{ id: 'hering', cm: 25, value: 6 }] }, '2026-10-31T23:00:00+01:00', true);
+  await page.locator('#btnCtx:has-text("Geschlossen")').waitFor({ timeout: 5000 });
+  assert.equal((await page.textContent('#btnCtx')).trim(), '🌙 Geschlossen – öffnet um 8 Uhr');
+  await page.click('#btnCtx');
+  assert.equal(await page.locator('#modal').isVisible(), false, 'das Museum geht nicht auf');
+  assert.match(await page.textContent('#toast'), /Geschlossen – öffnet um 8 Uhr/);
+  const s = await weg(page);
+  assert.equal(s.bucket.length, 1);
+  assert.deepEqual(s.museum, {});
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Museum: MUSEUM_AT liegt auf dem Gehweg vor dem Museum, nicht auf den Schienen', async () => {
+  const M = stadtWert('MUSEUM_AT');
+  const { ctx, page, errors } = await museumSeite({});
+  await page.locator('#btnCtx:has-text("🏛️ Ins Museum")').waitFor({ timeout: 5000 });
+  const r = await page.evaluate(([x, z]) => ({ ...window.__test.stadtPunkt(x, z), hoehe: window.__test.hoehe(x, z) }), [M.x, M.z]);
+  const S = stadtWert('SHOP_AT');
+  r.shop = Math.hypot(M.x - S.x, M.z - S.z);
+  r.haus = r.tueren.filter(d => d > 2.5 && d < 3.5).length; // eine Haustür liegt 3 m vor dem Platz (wie beim Fahrzeug-Laden)
+  assert.equal(r.walk, true, 'auf dem Gehweg');
+  assert.equal(r.road, false);
+  assert.ok(r.rail > 5, 'weit weg von den Schienen: ' + r.rail);
+  assert.ok(r.shop > 50, 'nicht beim Fahrzeug-Laden');
+  assert.equal(r.haus, 1, 'genau ein Haus (das Museum) steht vor der Tür');
+  assert.ok(Math.abs(r.hoehe - 1.2) < 0.01, 'ebener Boden');
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  assert.match(html, /name:'Museum',w:9/, 'das Schild heißt Museum');
+  assert.equal((html.match(/name:'Bald geöffnet'/g) || []).length, 2, 'zwei Läden sind noch „Bald geöffnet“');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Museum: kaputte Werte werden repariert', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ museum: { hering: { cm: '<b>', t: -5 }, makrele: 'kaputt', zzz: { cm: 7, t: 8 }, scholle: { cm: 99999, t: 1761900000000.7 } } }) });
+  await startGame(page);
+  await playAndLeave(page);
+  const s = JSON.parse(await read(page));
+  assert.deepEqual(s.museum.hering, { cm: 0, t: 0 });
+  assert.deepEqual(s.museum.makrele, { cm: 0, t: 0 }, 'kein Objekt: wird ersetzt');
+  assert.deepEqual(s.museum.zzz, { cm: 7, t: 8 }, 'unbekannte Fische bleiben gespeichert (nie löschen)');
+  assert.deepEqual(s.museum.scholle, { cm: 10000, t: 1761900000001 });
+  assert.deepEqual(errors, []);
+  await ctx.close();
+  const b = await newPage();
+  await seed(b.page, { [KEY]: stadtSeed({ museum: 'x' }) });
+  await startGame(b.page);
+  await playAndLeave(b.page);
+  assert.deepEqual(JSON.parse(await read(b.page)).museum, {});
+  assert.deepEqual(b.errors, []);
+  await b.ctx.close();
+});
+
+test('Alter Spielstand: museum bekommt Startwert {}', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify(ALT_V1) });
+  await startGame(page);
+  await playAndLeave(page);
+  const s = JSON.parse(await read(page));
+  assert.deepEqual(s.museum, {});
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

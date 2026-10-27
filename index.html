@@ -193,6 +193,8 @@ button.bk:active{border-color:var(--ink)}
 .rosa .face.hannes{background:#f0c8a8;border-top:10px solid #6b7d3a}
 .rosa .face .beard{position:absolute;left:7px;right:7px;bottom:-5px;height:22px;background:#f3f3f3;border:3px solid var(--ink);border-top:none;border-radius:0 0 22px 22px}
 .tabs.four button{font-size:16px;padding:6px 2px}
+.tabs.mu button{min-height:60px}
+.bk small.credit{font-size:11px;color:var(--muted);line-height:1.1}
 .havecount{font-weight:800;color:var(--ink)}
 .empty{color:var(--muted);text-align:center;padding:14px;font-weight:700}
 .sum{font-variant-numeric:tabular-nums}
@@ -488,7 +490,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false,muetze:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],fluss:{},flussAt:'',nachbarn:{},aufgaben:[],
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false,muetze:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],fluss:{},flussAt:'',nachbarn:{},aufgaben:[],museum:{},
   city:{visited:false,vehicles:{bike:true,roller:false,skate:false,truck:false},parked:{},riding:''},
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
@@ -571,6 +573,11 @@ state.aufgaben=(Array.isArray(state.aufgaben)?state.aufgaben:[]).filter(a=>isObj
 
   typeof a.fish==='string'&&Object.prototype.hasOwnProperty.call(FISH_BY,a.fish)).slice(0,3);
 state.aufgaben.forEach(a=>{a.day=dayOk(a.day);});
+// Museum in Hafenhausen: fishId → {cm = Größe, t = Zeitstempel der Spende}. Unbekannte ids bleiben gespeichert (nie löschen), das Spiel beachtet sie nicht.
+// t ist ein Zeitstempel in ms (über 1e12), darum ist die Grenze hier höher als beim Standard von num().
+if(!isObj(state.museum))state.museum={};
+for(const f of FISH){if(!Object.prototype.hasOwnProperty.call(state.museum,f.id))continue;const v=state.museum[f.id];
+  state.museum[f.id]=isObj(v)?Object.assign(v,{cm:num(v.cm,10000),t:num(v.t,1e14)}):{cm:0,t:0};}
 const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
 // Sicherheitskopie: der Stand vom letzten Spielstart. Geht der Hauptstand kaputt, lädt das Spiel diese Kopie.
 if(loadedFrom==='main')lsSet(BACKUP_KEY,savedRaw);
@@ -663,6 +670,7 @@ function cityHeight(x,z){const q=CITY.z-112.5-z,s=Math.abs(x-CITY.x);
 // Feste Stellen in der Stadt (reine Zahlen, die Tests lesen sie aus dieser Datei)
 const CITY_LAND={x:-125,z:-3010,f:1.5708}; // Landeplatz am Flugplatz, man schaut in die Stadt
 const SHOP_AT={x:-103,z:-2991.7}; // auf dem Gehweg vor der Tür vom Fahrzeug-Laden
+const MUSEUM_AT={x:-6.2,z:-2955}; // auf dem Gehweg vor der Tür vom Museum (Haus in Block 1/2, die Tür ist bei x=-9.2)
 const TEST_HOUSE={x:-78,z:-2997.2,r:4.3}; // das erste Wohnhaus südlich der Flugplatz-Straße (der Test fährt mit dem Rad dagegen)
 const FOUNTAIN={x:0,z:-2985,r:3.6}; // Brunnen in der Mitte vom Marktplatz (Hindernis mit Radius r)
 // Haltestellen der Straßenbahn, auf dem Ring um die Innenstadt (CITY_RING), Reihenfolge: Flugplatz → Markt → Hafen → Park
@@ -2011,6 +2019,54 @@ function showVehicleShop(){
       owned:()=>state.city.vehicles[id],buy:()=>{state.city.vehicles[id]=true;placeVehicles();}};}),showVehicleShop));
   const bt=el('div','btns');const c=el('button','b alt','Tschüss');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);}
 
+// Museum in Hafenhausen: Herr Eugen nimmt von jeder Fischart einen Fisch aus dem Eimer. Die Ausstellung zeigt die Fotos.
+// Spielstand: state.museum[fishId] = {cm, t}. Seltene Fische (RULES mit selten) werden nie gespendet, die lässt man frei.
+let museumTab='spenden';
+const museumHas=id=>Object.prototype.hasOwnProperty.call(state.museum,id);
+const museumCount=()=>FISH.filter(f=>museumHas(f.id)).length;
+// Eimer-Fische, deren Art noch nicht im Museum ist (jede Art nur einmal, der größte Fisch dieser Art). Selten = nicht dabei.
+function museumDonors(){const best={};
+  state.bucket.forEach((it,i)=>{const f=FISH_BY[it.id];if(!f||museumHas(f.id)||(RULES[f.id]&&RULES[f.id].selten))return;
+    if(!best[f.id]||it.cm>state.bucket[best[f.id].i].cm)best[f.id]={i,f};});
+  return FISH.filter(f=>best[f.id]).map(f=>best[f.id]);}
+const dayText=t=>{const d=new Date(t);return pad2(d.getDate())+'.'+pad2(d.getMonth()+1)+'.'+d.getFullYear();};
+function showMuseum(say){
+  openModal();card.className='card';card.innerHTML='';
+  const head=el('div','rosa');head.appendChild(el('div','shopicon','🏛️'));
+  head.appendChild(el('div',null,'<h2>Museum</h2><p class="small">Offen '+SHOP_HOURS_TXT+'</p><p>Guten Tag, '+esc(state.avatar.name||'du')+'! Ich bin Herr Eugen. Schenk dem Museum einen Fisch, dann stellen wir ihn aus.</p>'));
+  card.appendChild(head);
+  const tabs=el('div','tabs mu');[['spenden','🎁 Spenden'],['ausstellung','🖼️ Ausstellung']].forEach(([id,lb])=>{const b=el('button',null,lb);b.setAttribute('aria-pressed',museumTab===id);
+    b.onclick=()=>{museumTab=id;showMuseum();};tabs.appendChild(b);});card.appendChild(tabs);
+  if(museumTab==='spenden'){
+    if(say)card.appendChild(el('p','small','<b>Herr Eugen:</b> '+esc(say)));
+    const l=el('div','list'),donors=museumDonors();
+    if(!donors.length)l.appendChild(el('div','empty',state.bucket.length?'Kein Fisch in deinem Eimer ist neu für das Museum.':'Dein Eimer ist leer. Fang erst ein paar Fische!'));
+    donors.forEach(({i,f})=>{const it=state.bucket[i],row=el('div','item');row.appendChild(fishThumb(f));
+      row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm</span>'));
+      const b=el('button','b','Spenden');b.onclick=()=>{const k=state.bucket.indexOf(it);if(k<0||museumHas(f.id))return;
+        state.bucket.splice(k,1);state.museum[f.id]={cm:it.cm,t:Date.now()};save();sfxCatch();refreshHud(true);
+        showMuseum('Danke für '+fishAcc(f)+'! '+f.fact);};
+      row.appendChild(b);l.appendChild(row);});
+    card.appendChild(l);
+    card.appendChild(el('p','small','Gespendete Fische kann man nicht mehr verkaufen. Seltene Fische lässt man frei.'));
+  }else{
+    card.appendChild(el('p',null,'Im Museum sind '+museumCount()+' von '+FISH.length+' Fischarten.'));
+    [['amazonas','Amazonas'],['see','Heimat-See'],['fluss','Flüsse'],['meer','Meer']].forEach(([home,title])=>{
+      const list=FISH.filter(f=>fishHome(f)===home),got=list.filter(f=>museumHas(f.id)).length;
+      card.appendChild(el('h3','bookhead',title+' <span>'+got+' von '+list.length+'</span>'));
+      const g=el('div','book');
+      list.forEach(f=>{const m=museumHas(f.id)&&state.museum[f.id],c=el('div','bk');
+        c.appendChild(m?fishImg(f,'bkimg'):el('div','bkimg nofoto unknown','?'));
+        if(m){c.appendChild(el('b',null,esc(f.name)));
+          c.appendChild(el('span',null,(m.cm?m.cm+' cm · ':'')+(m.t?dayText(m.t):'')));
+          const ft=FOTOS[f.id];if(ft)c.appendChild(el('small','credit','Foto: '+esc(ft.von)+' · '+esc(ft.lizenz)));}
+        else{c.appendChild(el('b',null,'???'));c.appendChild(el('span',null,'Noch nicht gespendet'));}
+        g.appendChild(c);});
+      card.appendChild(g);});
+  }
+  const c=el('button','b alt','Tschüss, Herr Eugen');c.onclick=closeModal;const bt=el('div','btns');bt.appendChild(c);card.appendChild(bt);
+}
+
 /* ---- Kontext-Knopf ---- */
 let ctxAction=null,ctxClosed=false,exitSpot=null;
 function findExit(rs,a0,c){ // rs = Abstände, a0 = in welche Richtung man zuerst schaut, c = um welche Stelle (sonst um den Spieler)
@@ -2058,6 +2114,7 @@ $('#btnHorn').onclick=()=>{audio();horn();};
 function cityCtx(){const st=tramStopNear();if(st&&tramAtStop()===st)return 'tram'; // die Bahn ist da: das geht vor dem eigenen Fahrzeug
   const v=vehicleNear();if(v)return 'mount:'+v;
   if(Math.hypot(player.pos.x-SHOP_AT.x,player.pos.z-SHOP_AT.z)<4)return 'vshop';
+  if(Math.hypot(player.pos.x-MUSEUM_AT.x,player.pos.z-MUSEUM_AT.z)<4)return 'museum';
   const k=talkNear();return k>=0?'talk:'+k:null;} // reden: kein Laden, darum keine Öffnungszeiten
 function updateCtx(){
   let a=null;const p=player.pos;
@@ -2080,7 +2137,7 @@ function updateCtx(){
   const closed=!!a&&SHOP_CTX.includes(a)&&!shopOpen();
   if(a!==ctxAction||closed!==ctxClosed){ctxAction=a;ctxClosed=closed;const b=$('#btnCtx');b.hidden=!a;
     const vm=a&&a.startsWith('mount:')&&VEHICLES[a.slice(6)],tk=a&&a.startsWith('talk:')&&nachbarInfo(+a.slice(5));
-    b.textContent=closed?SHOP_CLOSED_TXT:vm?vm.ico+' '+vm.on:tk?'💬 Reden mit '+tk.name:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='tram'?'🚋 Einsteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
+    b.textContent=closed?SHOP_CLOSED_TXT:vm?vm.ico+' '+vm.on:tk?'💬 Reden mit '+tk.name:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='museum'?'🏛️ Ins Museum':a==='tram'?'🚋 Einsteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
 $('#btnCtx').onclick=()=>{audio();
   if(SHOP_CTX.includes(ctxAction)&&!shopOpen()){toast(SHOP_CLOSED_TXT);return;} // Laden zu: nichts öffnet sich
@@ -2097,6 +2154,7 @@ $('#btnCtx').onclick=()=>{audio();
     if(p&&p.awake&&!player.ride&&Math.hypot(p.g.position.x-player.pos.x,p.g.position.z-player.pos.z)<4){stopFishing();showTalk(k);}return;}
   else if(ctxAction==='dismount')dismount(); // klappt es nicht, sagt dismount selbst warum
   else if(ctxAction==='vshop'){stopFishing();showVehicleShop();}
+  else if(ctxAction==='museum'){stopFishing();showMuseum();}
   else if(ctxAction==='tram')boardTram();
   else if(ctxAction==='tramoff'){const st=tramAtStop();if(player.ride==='tram'&&st&&st!==tramBoard)tramOff(st);}
   else if(ctxAction==='board'){stopFishing();player.inBoat=true;state.usedBoat=true;save();player.pos.copy(boat.pos);player.facing=boat.yaw;toast('Leinen los! Im tiefen Fluss leben die Riesenfische.');}
@@ -3224,14 +3282,14 @@ function buildCity(){if(cityBuilt)return;
     cityHouses.push({x,z,w,d,ry});cityCols.push({x,z,r:w/2+0.3});windows(x,z,ry,w,d,h,shop);return ry;};
   const shopSlots=new Set();
   [{blk:[0,1],side:'+z',along:-103,name:'Fahrzeuge',w:10,d:7,h:6,wall:'#cfe0ea',roof:'#5d6b72',aw:'#2f7fd8'},
-   {blk:[1,2],side:'+x',name:'Bald geöffnet',w:9,d:7,h:7,wall:'#f4d6d0',roof:'#a24a32',aw:'#e2412b'},
+   {blk:[1,2],side:'+x',name:'Museum',w:9,d:7,h:7,wall:'#f4d6d0',roof:'#a24a32',aw:'#7a4fa0'},
    {blk:[2,2],side:'-x',name:'Bald geöffnet',w:9,d:7,h:7,wall:'#d9e4c8',roof:'#8a3b2a',aw:'#2f9e5b'},
    {blk:[2,1],side:'-x',name:'Bald geöffnet',w:9,d:7,h:7,wall:'#f2e3c6',roof:'#b5553a',aw:'#f6a623'}].forEach(s=>{
     const b=cityBlock(s.blk[0],s.blk[1]),r=s.w/2+0.3,along=s.along!=null?s.along:s.side[1]==='x'?(b.z0+b.z1)/2:b.x0+13;
     const [x,z]=slotPos(b,s.side,along,r),ry=addHouse(x,z,s.side,s.w,s.d,s.h,s.wall,s.roof,true);shopSlots.add(s.blk+s.side);
     for(let i=0;i<6;i++){const lx=-(s.w-1)/2+(i+0.5)*(s.w-1)/6,[ax,az]=rotXZ(x,z,ry,lx,-s.d/2-0.7);dbox((s.w-1)/6,0.15,1.4,i%2?'#ffffff':s.aw,ax,3.4,az,ry);} // Markise
     for(const lx of[-s.w/4-0.6,s.w/4+0.6]){const [wx,wz]=rotXZ(x,z,ry,lx,-s.d/2-0.06);wbox(2.2,1.6,0.1,wx,1.5,wz,ry);} // Schaufenster
-    const [sx,sz]=rotXZ(x,z,ry,-(s.w/2+0.5),-(s.d/2+1.5));makeSign(s.name,s.name==='Fahrzeuge'?'Laden · '+SHOP_HOURS_TXT:'Laden',sx,sz,s.name==='Fahrzeuge'?'#2f7fd8':'#c2401f',g,cityCols,ry+Math.PI);});
+    const [sx,sz]=rotXZ(x,z,ry,-(s.w/2+0.5),-(s.d/2+1.5));makeSign(s.name,s.name==='Fahrzeuge'?'Laden · '+SHOP_HOURS_TXT:s.name==='Museum'?'Fische ansehen · '+SHOP_HOURS_TXT:'Laden',sx,sz,s.name==='Fahrzeuge'?'#2f7fd8':s.name==='Museum'?'#7a4fa0':'#c2401f',g,cityCols,ry+Math.PI);});
   // Häuser: in jedem Block 4–6 Stück, die Tür schaut zur Straße
   for(let i=0;i<4;i++)for(let j=0;j<4;j++){if(i===3&&j===3)continue;const b=cityBlock(i,j);
     const slots=[['-z',b.x0+13],['-z',b.x1-13],['+z',b.x0+13],['+z',b.x1-13],['-x',(b.z0+b.z1)/2],['+x',(b.z0+b.z1)/2]];
@@ -3669,7 +3727,7 @@ function mapMarkers(){const m=[
   {x:ROSA.x,z:ROSA.z,ico:'🐟',name:'Rosa'},{x:TIAGO_AT.x,z:TIAGO_AT.z,ico:'🎣',name:'Opa Tiago'},
   {x:(PLOT.x0+PLOT.x1)/2,z:(PLOT.z0+PLOT.z1)/2,ico:'🏠',name:state.builtOnce?'Dein Haus':'Bauplatz'}];
   PLANES.forEach(p=>{if((p.id!=='de'||deP)&&(p.id!=='city'||cityBuilt))m.push({x:p.x,z:p.z,ico:'✈️',name:'Flugzeug'});});
-  if(cityBuilt){for(const id in STOPS)m.push({x:STOPS[id].x,z:STOPS[id].z,ico:'🚋',name:'Haltestelle'});m.push({x:SHOP_AT.x,z:SHOP_AT.z,ico:'🛒',name:'Fahrzeug-Laden'});
+  if(cityBuilt){for(const id in STOPS)m.push({x:STOPS[id].x,z:STOPS[id].z,ico:'🚋',name:'Haltestelle'});m.push({x:SHOP_AT.x,z:SHOP_AT.z,ico:'🛒',name:'Fahrzeug-Laden'});m.push({x:MUSEUM_AT.x,z:MUSEUM_AT.z,ico:'🏛️',name:'Museum'});
     m.push({x:hannesHafen.x,z:hannesHafen.z,ico:'🐟',name:'Fischer Hannes'});
     VEHICLE_IDS.forEach(id=>{if(!state.city.vehicles[id]||player.ride===id)return;const v=vehicleAt(id);m.push({x:v.x,z:v.z,ico:VEHICLES[id].ico,name:'Dein '+VEHICLES[id].name});});}
   if(deP)m.push({x:hannes.x,z:hannes.z,ico:'🐟',name:'Fischer Hannes'});
@@ -3795,6 +3853,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:38,day:'27.10.2026',ico:'🏛️',t:'Museum',d:'In Hafenhausen gibt es ein Museum. Schenk Herrn Eugen von jeder Fischart einen Fisch, dann steht er in der Ausstellung!'},
  {v:37,day:'27.10.2026',ico:'💬',t:'Nachbarn',d:'In Hafenhausen haben alle Menschen jetzt Namen. Rede mit ihnen, hilf ihnen und werde Freund!'},
  {v:36,day:'27.10.2026',ico:'🚦',t:'Verkehrsregeln',d:'Menschen laufen jetzt um Fahrzeuge herum. Wer zu schnell irgendwo dagegenfährt, bekommt einen Strafzettel.'},
  {v:35,day:'27.10.2026',ico:'🕗',t:'Öffnungszeiten',d:'Rosa, Opa Tiago, Fischer Hannes und der Fahrzeug-Laden sind von 8 bis 22 Uhr offen. Nachts kannst du im Eimer deine Fische freilassen: Platsch!'},
@@ -4027,6 +4086,9 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
   welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible,region:WT.region,laub:'#'+laubMat.color.getHexString(),wiese:'#'+wieseMat.color.getHexString(),laubFade:laubMat.userData.fade.value,wieseFade:wieseMat.userData.fade.value,
     fichten:(()=>{const f=[];scene.traverse(o=>{if(o.isInstancedMesh&&o.geometry===FICHTE)f.push(o.material===wieseMat);});return f.length>0&&f.every(Boolean);})(),blueten:bloomOn&&blooms.size>0&&[...blooms].every(p=>p.visible)}),
   hoehe:(x,z)=>heightAt(x,z),
+  // Hafenhausen: ist (x,z) auf dem Gehweg / der Straße, wie weit von den Schienen, und wie weit von jeder Haustür (Haus-Mitte + halbe Tiefe in Türrichtung)?
+  stadtPunkt:(x,z)=>({walk:onWalk(x,z),road:onRoad(x,z),rail:railDist(x,z),tueren:cityHouses.map(h=>{const [tx,tz]=rotXZ(h.x,h.z,h.ry,0,-h.d/2);return Math.hypot(tx-x,tz-z);})}),
+  fischInfo:id=>({fact:FISH_BY[id].fact,anzahl:FISH.length}),
   // Mensch k in Hafenhausen: wo er steht, sichtbar = wach (Schlafende sieht man nicht), ob er ein Kind ist, und wohin er gerade läuft (nächste Ecke)
   nachbar(k){const p=people[k];if(!p)return null;const w=p.path[p.i];return {x:p.g.position.x,z:p.g.position.z,sichtbar:!!p.awake,kid:p.kid,ziel:{x:w.x,z:w.z}};},
   // welcher Fisch würde jetzt hier beißen (n-mal ausgewürfelt, Angel muss ausgeworfen sein) / in die Reuse schwimmen
