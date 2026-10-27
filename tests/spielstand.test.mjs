@@ -1677,3 +1677,131 @@ test('Eimer: leerer Eimer hat keinen Freilassen-Knopf', async () => {
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+// Verkehrsregeln: wer schnell gegen etwas fährt, bekommt einen Strafzettel (Rad, Roller, Skateboard 5 Ludins, Truck 20 Ludins)
+async function truckGegenHaus(ludins, ms) {
+  const H = stadtWert('TEST_HOUSE'); // Haus direkt südlich der Flugplatz-Straße (wie im Test „Cyber-Truck steckt die Nase nicht in Häuser“)
+  const r2 = v => Math.round(v * 100) / 100;
+  const at = { x: H.x, z: r2(H.z + H.r + 9) }; // auf der Straße, der Truck zeigt auf das Haus
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ludins, city: { visited: true, vehicles: { bike: true, truck: true }, parked: { truck: { ...at, yaw: Math.PI } } },
+    where: { ...at, f: Math.PI, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Einsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
+  await halten(page, 'KeyW', ms);
+  const s = await weg(page);
+  assert.equal(s.city.riding, 'truck');
+  assert.ok(s.where.z < at.z - 2, 'man ist auf das Haus zu gefahren');
+  return { ctx, page, errors, s };
+}
+
+test('Verkehr: Truck schnell gegen Haus kostet 20 Ludins', async () => {
+  const { ctx, page, errors, s } = await truckGegenHaus(100, 2000);
+  assert.equal(s.ludins, 80);
+  assert.match(await page.textContent('#toast'), /🚨 Strafzettel! Du bist gegen .+ gefahren\. −20 Ludins/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Verkehr: Strafe macht Ludins nie negativ', async () => {
+  const { ctx, page, errors, s } = await truckGegenHaus(7, 2000);
+  assert.equal(s.ludins, 0);
+  assert.match(await page.textContent('#toast'), /Strafzettel/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Verkehr: eine Strafe pro Aufprall', async () => {
+  const { ctx, errors, s } = await truckGegenHaus(100, 3000); // 3 s lang gegen das Haus drücken
+  assert.equal(s.ludins, 80, 'nur ein Strafzettel');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Verkehr: Fahrrad gegen geparkten Truck kostet 5', async () => {
+  // auf dem Marktplatz (keine Schienen, der Brunnen ist 10 m weg): das Rad fährt nach −x, der Truck steht quer davor
+  const at = { x: 15, z: -2975 }, f = -Math.PI / 2, T = { x: 6, z: -2975 };
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ludins: 50, city: { visited: true, vehicles: { bike: true, truck: true },
+    parked: { bike: { ...at, yaw: f }, truck: { ...T, yaw: 0 } } }, where: { ...at, f, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Absteigen")').waitFor({ timeout: 5000 });
+  // fahren, bis das Rad am Truck ist (auf langsamen Rechnern dauert die Fahrt länger), dann noch 1 s weiter drücken
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Strafzettel'), null, { timeout: 20000 });
+  await page.waitForTimeout(1000);
+  await page.keyboard.up('KeyW');
+  const s = await weg(page);
+  assert.equal(s.city.riding, 'bike');
+  assert.ok(s.where.x < at.x - 2, 'man ist auf den Truck zu gefahren');
+  assert.ok(s.where.x > T.x + 1.4, 'das Rad fährt nicht durch den Truck (' + s.where.x + ')');
+  assert.equal(s.ludins, 45);
+  assert.match(await page.textContent('#toast'), /Strafzettel/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Menschen nach Uhrzeit: nachts sind nur 4 unterwegs, am Samstagvormittag fast alle (auch die Kinder)
+test('Menschen schlafen nachts', async () => {
+  const L = stadtWert('CITY_LAND');
+  for (const [iso, ok] of [['2026-10-27T23:00:00+01:00', n => n <= 4], ['2026-10-31T10:00:00+01:00', n => n >= 20]]) {
+    const { ctx, page, errors } = await startZeitSeite(iso);
+    await seed(page, { [KEY]: stadtSeed({ city: { visited: true }, where: { x: L.x, z: L.z, f: L.f, boat: false } }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.waitForFunction(() => document.body.dataset.leute !== undefined, null, { timeout: 20000 });
+    const n = Number(await page.evaluate(() => document.body.dataset.leute));
+    assert.ok(ok(n), iso + ': ' + n + ' Menschen unterwegs');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Menschen laufen nicht durch Fahrzeuge', async () => {
+  const S = stadtWert('SHOP_AT');
+  const { ctx, page, errors } = await startZeitSeite('2026-10-31T10:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, vehicles: { bike: true, truck: true } }, where: { x: S.x, z: S.z, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Einsteigen")').waitFor({ timeout: 20000 }); // der Truck steht vor dem Laden
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
+  // einen Menschen suchen, der gerade lange geradeaus läuft, weit weg von den Schienen. 8 m vor ihm parkt der Truck, genau auf seinem Weg.
+  let wahl = null;
+  for (let tries = 0; tries < 20 && !wahl; tries++) {
+    const alle = await page.evaluate(() => Array.from({ length: 24 }, (_, k) => window.__test.nachbar(k)));
+    for (let k = 0; k < alle.length && !wahl; k++) {
+      const p = alle[k], l = Math.hypot(p.ziel.x - p.x, p.ziel.z - p.z);
+      if (!p.sichtbar || l < 16) continue;
+      const d = { x: (p.ziel.x - p.x) / l, z: (p.ziel.z - p.z) / l }, T = { x: p.x + d.x * 8, z: p.z + d.z * 8 };
+      if ([-2, 0, 2].every(o => schienenAbstand({ x: T.x + d.x * o, z: T.z + d.z * o }) > 5)) wahl = { k, T, yaw: Math.atan2(d.x, d.z) };
+    }
+    if (!wahl) await page.waitForTimeout(1000);
+  }
+  assert.ok(wahl, 'ein Mensch läuft geradeaus');
+  await page.evaluate(w => window.__test.warp(w.T.x, w.T.z, w.yaw), wahl);
+  await page.locator('#btnCtx:has-text("Aussteigen")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  const s = await weg(page);
+  assert.equal(s.city.riding, '', 'ausgestiegen');
+  const T = s.city.parked.truck;
+  assert.ok(Math.hypot(T.x - wahl.T.x, T.z - wahl.T.z) < 0.05, 'der Truck steht auf dem Weg');
+  // 60 s lang alle 0,5 s messen: der Mensch kommt nie näher als 1,9 m an die Truck-Mitte
+  let nah = Infinity;
+  for (let i = 0; i < 120; i++) {
+    const p = await page.evaluate(k => window.__test.nachbar(k), wahl.k);
+    const d = Math.hypot(p.x - T.x, p.z - T.z);
+    nah = Math.min(nah, d);
+    assert.ok(d >= 1.9, 'Mensch ' + wahl.k + ' ist ' + d.toFixed(2) + ' m von der Truck-Mitte weg');
+    await page.waitForTimeout(500);
+  }
+  assert.ok(nah < 5, 'der Mensch ist bis an den Truck gekommen (' + nah.toFixed(2) + ' m)');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

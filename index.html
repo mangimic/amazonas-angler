@@ -1389,7 +1389,8 @@ function hitsWall(x,z,r){for(const s of houseSegs){const dx=s.bx-s.ax,dz=s.bz-s.
     const k=Math.max(0,Math.min(1,((x-s.ax)*dx+(z-s.az)*dz)/l));if((s.ax+dx*k-x)**2+(s.az+dz*k-z)**2<r*r)return true;}return false;}
 const walkable=(x,z)=>inBounds(x,z)&&(onDock(x,z)||onPlot(x,z)||heightAt(x,z)>0.15)&&!hitsCollider(x,z,0.35)&&!hitsWall(x,z,0.33);
 // Fahren: wie Laufen, aber mit dem Radius des Fahrzeugs (der Truck ist breit)
-const rideable=(x,z,r)=>inBounds(x,z)&&heightAt(x,z)>0.15&&!hitsCollider(x,z,r);
+// Geparkte eigene Fahrzeuge sind auch Hindernisse (nicht das, auf dem man gerade fährt)
+const rideable=(x,z,r)=>inBounds(x,z)&&heightAt(x,z)>0.15&&!hitsCollider(x,z,r)&&!hitsParked(x,z,r);
 // Der Truck ist fast 6 m lang: Mitte, Nase und Heck (je 2 m vor und hinter der Mitte) müssen frei sein.
 // Drehen geht immer, nur der Schritt wird geprüft. Vorne und hinten sind gleich, darum ist der Weg zurück immer frei.
 const truckFits=(x,z,yaw)=>{const sx=Math.sin(yaw)*2,sz=Math.cos(yaw)*2;
@@ -1400,6 +1401,25 @@ function groundY(x,z){const h=heightAt(x,z);return onDock(x,z)?Math.max(h,DOCK.y
 function angleLerp(a,b,t){let d=((b-a+Math.PI)%(Math.PI*2)+Math.PI*2)%(Math.PI*2)-Math.PI;return a+d*t;}
 
 let rideStuck=0,rideHint=0; // wie lange das Fahrzeug schon hängt, und Pause zwischen zwei Tipps
+// Verkehrsregeln: wer schnell (mehr als 60 % Lenk-Ausschlag) gegen einen Menschen, ein Fahrzeug oder eine Wand fährt,
+// bekommt einen Strafzettel. Höchstens alle 4 s einer (crashT), und nur, wenn man vorher wirklich gefahren ist (rideMoved).
+// Niemand wird verletzt: das Fahrzeug hält vorher an, der Mensch schaut nur erschrocken und schimpft ein bisschen.
+const FINE={bike:5,roller:5,skate:5,truck:20};
+const CRASH_TXT={mensch:'einen Menschen',fahrzeug:'ein Fahrzeug',wand:'eine Wand'};
+let crashT=0,rideMoved=false;
+// Was steht dem Fahrzeug an der Stelle (x,z) im Weg? {kind,p} oder null (z. B. nur Wasser oder der Rand der Stadt: das kostet nichts)
+function crashWhat(x,z){let pts=[[x,z,0.35]];
+  if(player.ride==='truck'){const sx=Math.sin(player.facing)*2,sz=Math.cos(player.facing)*2;pts=[[x,z,1.4],[x+sx,z+sz,1.2],[x-sx,z-sz,1.2]];}
+  for(const [a,b,r] of pts)for(const p of people)if(p.awake&&hitsList([p.col],a,b,r))return {kind:'mensch',p};
+  for(const [a,b,r] of pts)if(hitsParked(a,b,r)||hitsList(tram.cols,a,b,r)||hitsList(tow.cols,a,b,r))return {kind:'fahrzeug'};
+  for(const [a,b,r] of pts)if(hitsCollider(a,b,r)||hitsWall(a,b,0.33))return {kind:'wand'};
+  return null;}
+function crash(kind,who){const f=Math.min(Math.max(0,state.ludins),FINE[player.ride]||0);
+  crashT=4;rideHint=Math.max(rideHint,4); // der Strafzettel bleibt erst einmal stehen (kein Tipp darüber)
+  tone(180,0.12,'sine',0.08); // „Bonk“
+  if(f>0){state.ludins-=f;save();refreshHud(true);}
+  if(kind==='mensch'&&who)who.wave=1.5; // der Mensch dreht sich zu dir um (updatePeople)
+  toast((kind==='mensch'?'„Hey, pass doch auf!“ ':'')+'🚨 Strafzettel! Du bist gegen '+CRASH_TXT[kind]+' gefahren.'+(f>0?' −'+f+' Ludins':''));}
 function updatePlayer(dt,t){
   if(player.ride==='tram'){ // in der Straßenbahn fährt man mit: Wischen bewegt nichts, Kamera und Karte folgen der Bahn
     const p=tramPos(tram.s);player.pos.set(p.x,0,p.z);player.facing=p.yaw;player.y=groundY(p.x,p.z);player.speed=0;
@@ -1421,16 +1441,18 @@ function updatePlayer(dt,t){
     const sp=(V?V.speed:player.inBoat?(state.hasYacht?YACHT.speed:state.hasMotor?18:9):5.5)*mag*dt;
     // Die Yacht ist lang: auch der Bug (vorne) muss im tiefen Wasser bleiben
     const yachtOk=(x,z)=>boatable(x,z)&&boatable(x+Math.sin(player.facing)*YACHT.len,z+Math.cos(player.facing)*YACHT.len);
-    const ok=V?(player.ride==='truck'?(x,z)=>truckFits(x,z,player.facing):walkable):player.inBoat?(state.hasYacht?yachtOk:boatable):walkable;
+    const ok=V?(player.ride==='truck'?(x,z)=>truckFits(x,z,player.facing):(x,z)=>walkable(x,z)&&!hitsParked(x,z,0.35)):player.inBoat?(state.hasYacht?yachtOk:boatable):walkable;
     let dx=mx*sp,dz=mz*sp;
     if(player.inBoat||V){dx=Math.sin(player.facing)*sp;dz=Math.cos(player.facing)*sp;} // Boot und Fahrzeuge fahren dorthin, wohin sie zeigen
     const p=player.pos;
     // Zu Fuß und im Boot rutscht man an Hindernissen entlang. Fahrzeuge (V) halten dort einfach an.
     if(ok(p.x+dx,p.z+dz)){p.x+=dx;p.z+=dz;moving=true;}
+    else if(V&&mag>0.6&&rideMoved&&crashT<=0){const c=crashWhat(p.x+dx,p.z+dz);if(c)crash(c.kind,c.p);} // schnell dagegen gefahren: Strafzettel
     else if(!V&&ok(p.x+dx,p.z)){p.x+=dx;moving=true;}
     else if(!V&&ok(p.x,p.z+dz)){p.z+=dz;moving=true;}
   }
   // Fahrzeug steht, obwohl man lenkt: nach 1,5 s ein Tipp (höchstens alle 8 s)
+  crashT=Math.max(0,crashT-dt);rideMoved=!!V&&moving; // nur wer gerade fährt, kann irgendwo dagegenfahren (anfahren an einer Wand kostet nichts)
   rideHint=Math.max(0,rideHint-dt);rideStuck=V&&mag>0.12&&!moving?rideStuck+dt:0;
   if(rideStuck>1.5&&rideHint<=0){rideHint=8;toast('Hier geht es nicht weiter. Lenk in eine andere Richtung.');}
   if(player.inBoat){const rp=rapidAt(player.pos.x,player.pos.z);
@@ -2013,7 +2035,7 @@ function dismount(quiet){const id=player.ride;if(!VEHICLES[id])return false;
 // In der Stadt zu Fuß: aufsteigen (nächstes eigenes Fahrzeug) oder zum Fahrzeug-Laden. Sonst null.
 // Hupe im Truck: zwei Töne, Menschen in 10 m Nähe winken 1,5 s lang
 function horn(){if(player.ride!=='truck')return;tone(523,0.15,'square',0.08);tone(659,0.15,'square',0.08,0.15);
-  for(const p of people)if(Math.hypot(p.g.position.x-player.pos.x,p.g.position.z-player.pos.z)<10)p.wave=1.5;}
+  for(const p of people)if(p.awake&&Math.hypot(p.g.position.x-player.pos.x,p.g.position.z-player.pos.z)<10)p.wave=1.5;}
 $('#btnHorn').onclick=()=>{audio();horn();};
 function cityCtx(){const st=tramStopNear();if(st&&tramAtStop()===st)return 'tram'; // die Bahn ist da: das geht vor dem eigenen Fahrzeug
   const v=vehicleNear();if(v)return 'mount:'+v;
@@ -2953,6 +2975,15 @@ function vehicleHome(id){
   return {x:SHOP_AT.x,z:SHOP_AT.z+4,yaw:Math.PI/2};}                        // der Truck steht auf der Straße
 const parkedOk=p=>isObj(p)&&[p.x,p.z,p.yaw].every(Number.isFinite); // nur gültige Einträge zählen
 const vehicleAt=id=>{const p=state.city.parked[id];return parkedOk(p)?p:vehicleHome(id);};
+// Steht ein geparktes eigenes Fahrzeug an der Stelle (x,z)? r = Radius dessen, der dorthin will.
+// Rad, Roller, Skateboard: ein Kreis (0,5 m). Der Truck: Mitte (1,4 m), Nase und Heck (1,2 m, je 2 m vor und hinter der Mitte) wie bei truckFits.
+// Nicht dabei: das Fahrzeug, auf dem man fährt, und eins, das gerade auf dem Abschleppwagen liegt.
+function hitsParked(x,z,r){if(!cityBuilt||z>CITY.zone)return false;
+  for(const id of VEHICLE_IDS){if(state.city.vehicles[id]!==true||player.ride===id||towBusy(id))continue;const v=vehicleAt(id);
+    if(id!=='truck'){if((v.x-x)**2+(v.z-z)**2<(0.5+r)**2)return true;continue;}
+    const sx=Math.sin(v.yaw)*2,sz=Math.cos(v.yaw)*2;
+    if((v.x-x)**2+(v.z-z)**2<(1.4+r)**2||(v.x+sx-x)**2+(v.z+sz-z)**2<(1.2+r)**2||(v.x-sx-x)**2+(v.z-sz-z)**2<(1.2+r)**2)return true;}
+  return false;}
 const bikeAway=()=>{const v=vehicleAt('bike'),h=vehicleHome('bike');return Math.hypot(v.x-h.x,v.z-h.z)>3;}; // steht das Rad nicht mehr am Flugplatz?
 // Einfache Fahrzeuge aus Kästen und Zylindern. Vorne ist +z (wie beim Avatar).
 function buildVehicleMesh(id){const g=new THREE.Group();
@@ -3221,8 +3252,14 @@ function buildPeople(g,R){const pick=a=>a[Math.floor(R()*a.length)],order=[];
     [av.group,...av.legs,...av.arms].forEach(bakeKids); // Körper, Beine und Arme: je 1 Mesh statt ~30 Teile
     if(kid)av.group.scale.setScalar(0.72);av.group.position.set(x,heightAt(x,z),z);g.add(av.group);
     const col={x,z,r:0.5};peopleCols.push(col);
-    people.push({g:av.group,path,i,t:R()*6,speed:1.2,av,wave:0,wait:0,col});}}
-let waveIn=6;
+    people.push({id:'n'+k,kid,awake:true,g:av.group,path,i,t:R()*6,speed:1.2,av,wave:0,wait:0,col});}} // id: fester Name im Spielstand (Nachbarn), nie ändern
+let waveIn=6,peopleTick=0;
+// Tagesplan: nachts (22–6 Uhr) sind nur n0–n3 unterwegs. Kinder: werktags 13–19 Uhr, am Wochenende 9–19 Uhr. Erwachsene 6–22 Uhr.
+function personAwake(p,d){const h=d.getHours()+d.getMinutes()/60,day=d.getDay(),we=day===0||day===6;
+  if(h>=22||h<6)return Number(p.id.slice(1))<4;
+  return p.kid?h>=(we?9:13)&&h<19:true;}
+// Darf ein Mensch auf die Stelle (x,z) treten? Nicht in geparkte Fahrzeuge, die Straßenbahn, den Abschleppwagen und nicht dir in den Weg.
+function blockedForPeople(x,z){return hitsParked(x,z,0.5)||hitsList(tram.cols,x,z,0.5)||hitsList(tow.cols,x,z,0.5)||inPlayerWay(x,z);}
 // Steht der Spieler an der Stelle (x,z) im Weg? Der Cyber-Truck ist lang: dann zählen Mitte, Nase und Heck (wie bei truckFits).
 function inPlayerWay(x,z){const p=player.pos,r=0.55;
   if(player.ride!=='truck')return Math.hypot(x-p.x,z-p.z)<0.95;
@@ -3230,19 +3267,25 @@ function inPlayerWay(x,z){const p=player.pos,r=0.55;
   return Math.hypot(x-p.x,z-p.z)<1.4+r||Math.hypot(x-p.x-sx,z-p.z-sz)<1.2+r||Math.hypot(x-p.x+sx,z-p.z+sz)<1.2+r;}
 function updatePeople(dt,t){if(!people.length||!atCity())return;
   const px=player.pos.x,pz=player.pos.z;
+  // einmal pro Sekunde: wer ist wach? Schlafende sieht man nicht, und sie sind kein Hindernis (ihr Kreis liegt weit weg).
+  peopleTick-=dt;if(peopleTick<=0){peopleTick=1;const d=new Date();let n=0;
+    for(const p of people){const a=personAwake(p,d);if(a)n++;if(a===p.awake)continue;p.awake=a;
+      if(a){p.col.x=p.g.position.x;p.col.z=p.g.position.z;}else{p.col.x=p.col.z=1e6;p.g.visible=false;p.wave=0;p.wait=0;}}
+    document.body.dataset.leute=n;}
   // alle 6–12 Sekunden winkt jemand in der Nähe
-  waveIn-=dt;if(waveIn<=0){waveIn=6+Math.random()*6;const near=people.filter(p=>p.wave<=0&&Math.hypot(p.g.position.x-px,p.g.position.z-pz)<40);
+  waveIn-=dt;if(waveIn<=0){waveIn=6+Math.random()*6;const near=people.filter(p=>p.awake&&p.wave<=0&&Math.hypot(p.g.position.x-px,p.g.position.z-pz)<40);
     if(near.length)near[Math.floor(Math.random()*near.length)].wave=1.5;}
-  for(const p of people){const o=p.g.position,dist=Math.hypot(o.x-px,o.z-pz);p.g.visible=dist<120;if(dist>=80)continue;
+  for(const p of people){if(!p.awake){p.g.visible=false;continue;}
+    const o=p.g.position,dist=Math.hypot(o.x-px,o.z-pz);p.g.visible=dist<120;if(dist>=80)continue;
     const av=p.av;let moving=false;
     if(p.wave>0){p.wave-=dt;p.g.rotation.y=angleLerp(p.g.rotation.y,Math.atan2(px-o.x,pz-o.z),1-Math.exp(-dt*6));
       av.arms[1].rotation.z=-0.3-Math.abs(Math.sin(t*6))*0.9;if(p.wave<=0)av.arms[1].rotation.z=0.08;}
     else{const w=p.path[p.i],dx=w.x-o.x,dz=w.z-o.z,l=Math.hypot(dx,dz),step=p.speed*dt;
       if(l<=step){o.x=w.x;o.z=w.z;p.i=(p.i+1)%p.path.length;}
       else{const nx=o.x+dx/l*step,nz=o.z+dz/l*step;
-        // steht der Spieler im Weg, wartet der Mensch kurz und dreht dann um. Niemand wird geschoben.
-        // (wer schon am Truck steht, z. B. weil er sich gedreht hat, darf weiterlaufen und kommt so heraus)
-        if(inPlayerWay(nx,nz)&&!inPlayerWay(o.x,o.z)){p.wait+=dt;if(p.wait>1.5){p.wait=0;p.path.reverse();p.i=(p.path.length-p.i)%p.path.length;}}
+        // steht der Spieler, ein Fahrzeug oder die Bahn im Weg, wartet der Mensch kurz und dreht dann um. Niemand wird geschoben.
+        // (wer schon drinsteht, z. B. weil sich der Truck gedreht hat, darf weiterlaufen und kommt so heraus)
+        if(blockedForPeople(nx,nz)&&!blockedForPeople(o.x,o.z)){p.wait+=dt;if(p.wait>1.5){p.wait=0;p.path.reverse();p.i=(p.path.length-p.i)%p.path.length;}}
         else{p.wait=0;o.x=nx;o.z=nz;moving=true;p.g.rotation.y=angleLerp(p.g.rotation.y,Math.atan2(dx,dz),1-Math.exp(-dt*8));}}}
     p.t+=dt*(moving?7:0);const sw=moving?Math.sin(p.t)*0.55:0;
     av.legs[0].rotation.x+=(sw-av.legs[0].rotation.x)*0.3;av.legs[1].rotation.x+=(-sw-av.legs[1].rotation.x)*0.3;
@@ -3606,6 +3649,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:36,day:'27.10.2026',ico:'🚦',t:'Verkehrsregeln',d:'Menschen laufen jetzt um Fahrzeuge herum. Wer zu schnell irgendwo dagegenfährt, bekommt einen Strafzettel.'},
  {v:35,day:'27.10.2026',ico:'🕗',t:'Öffnungszeiten',d:'Rosa, Opa Tiago, Fischer Hannes und der Fahrzeug-Laden sind von 8 bis 22 Uhr offen. Nachts kannst du im Eimer deine Fische freilassen: Platsch!'},
  {v:34,day:'27.10.2026',ico:'🦉',t:'Fische nach Uhrzeit',d:'Manche Fische beißen nur abends und nachts, zum Beispiel Aal, Wels und Zitteraal. Hecht und Pfauenbarsch jagen tagsüber. Im Fischbuch steht, wann sie beißen.'},
  {v:33,day:'27.10.2026',ico:'🍂',t:'Jahreszeiten',d:'In Deutschland gibt es jetzt Jahreszeiten wie bei dir: Im Frühling blühen die Bäume, im Herbst wird das Laub bunt und im Winter ist die Wiese weiß. Am Amazonas erklärt dir eine neue Infotafel die Regenzeit.'},
@@ -3832,10 +3876,12 @@ if(askWhoPlays)showPlayers();
 updateTimeChip();if(timeLeft()<=0)lockTime();
 updateWorldTime();
 // Nur für die automatischen Tests (der Browser meldet sich dann als „webdriver“): Spieler an eine Stelle setzen
-if(navigator.webdriver===true)window.__test={warp(x,z){player.pos.set(x,0,z);player.y=groundY(x,z);player.root.position.set(x,player.y,z);updateWorldTime();saveWhere();},
+if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);if(Number.isFinite(f))player.facing=f;player.y=groundY(x,z);player.root.position.set(x,player.y,z);updateWorldTime();saveWhere();},
   welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible,region:WT.region,laub:'#'+laubMat.color.getHexString(),wiese:'#'+wieseMat.color.getHexString(),laubFade:laubMat.userData.fade.value,wieseFade:wieseMat.userData.fade.value,
     fichten:(()=>{const f=[];scene.traverse(o=>{if(o.isInstancedMesh&&o.geometry===FICHTE)f.push(o.material===wieseMat);});return f.length>0&&f.every(Boolean);})(),blueten:bloomOn&&blooms.size>0&&[...blooms].every(p=>p.visible)}),
   hoehe:(x,z)=>heightAt(x,z),
+  // Mensch k in Hafenhausen: wo er steht, ob er wach ist, und wohin er gerade läuft (nächste Ecke)
+  nachbar(k){const p=people[k];if(!p)return null;const w=p.path[p.i];return {x:p.g.position.x,z:p.g.position.z,sichtbar:!!p.awake,ziel:{x:w.x,z:w.z}};},
   // welcher Fisch würde jetzt hier beißen (n-mal ausgewürfelt, Angel muss ausgeworfen sein) / in die Reuse schwimmen
   fische:n=>Array.from({length:n},()=>chooseFish().id),
   reuse:(home,n)=>Array.from({length:n},()=>trapFish(home).id),
