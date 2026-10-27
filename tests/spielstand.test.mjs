@@ -38,9 +38,10 @@ after(async () => { await browser?.close(); server?.close(); });
 // So ist im Spiel immer Tag, auch wenn die Tests nachts laufen (Läden zu, Menschen schlafen …).
 // Nur Date wird verschoben. Nicht ctx.clock.setSystemTime: die Playwright-Uhr springt bei langsamen Bildern
 // manchmal viele Sekunden vor (dann ist z. B. der Kunstköder beim Spinnfischen sofort wieder da).
-async function newPage(opts) { // opts: z. B. { viewport: … } (kleineres Fenster = mehr Bilder pro Sekunde)
+// start (ISO-Zeit, z. B. '2026-06-21T23:00:00+02:00'): die Uhr beginnt stattdessen dann und läuft weiter (für Angel-Tests zu einer Uhrzeit).
+async function newPage(opts, start) { // opts: z. B. { viewport: … } (kleineres Fenster = mehr Bilder pro Sekunde)
   const ctx = await browser.newContext(opts);
-  const elf = new Date(); elf.setHours(11, 0, 0, 0);
+  const elf = start ? new Date(start) : new Date(); if (!start) elf.setHours(11, 0, 0, 0);
   await ctx.addInitScript(off => {
     const Echt = Date;
     function Uhr(...a) { if (!new.target) return new Echt(Echt.now() + off).toString(); return a.length ? new Echt(...a) : new Echt(Echt.now() + off); }
@@ -1477,6 +1478,107 @@ test('Weltzeit: in der Avatar-Werkstatt ist immer Tag, danach wieder die echte Z
   assert.equal(w.phase, 'nacht', 'die Weltzeit bleibt trotzdem Nacht');
   await page.click('#btnGo');
   assert.equal((await welt()).sky, NACHT, 'Werkstatt zu: wieder Nacht');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Fische nach Uhrzeit: welcher Fisch wann beißt, steht in index.html bei FISH (zeit:'nacht'|'tag'|'daemmerung')
+function fischZeiten() {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8'), z = {};
+  for (const m of html.matchAll(/id:'(\w+)'[^}]*?zeit:'(\w+)'/g)) z[m[1]] = m[2];
+  return z;
+}
+function zeitFenster() {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const i = html.indexOf('const ZEIT_FENSTER='), j = html.indexOf('};', i);
+  assert.ok(i >= 0, 'ZEIT_FENSTER steht in index.html');
+  return new Function('return ' + html.slice(i + 'const ZEIT_FENSTER='.length, j + 1))();
+}
+const imFenster = (fenster, h) => fenster.some(([a, b]) => h >= a && h < b);
+// Angeln braucht laufende Spielzeit (ein Fisch beißt erst nach einer Weile). Mit setFixedTime steht sie still, darum hier nur
+// die Startzeit festlegen (deutsche Zeit), danach läuft die Uhr normal weiter.
+const startZeitSeite = iso => newPage({ timezoneId: 'Europe/Berlin' }, iso);
+// 3 Fische fangen (und wieder freilassen). Beim ersten Biss fragt der Test das Spiel außerdem 400-mal, welcher Fisch beißen würde.
+async function dreiFaenge(page) {
+  const probe = { angel: [], reuse: [] };
+  for (let i = 0; i < 3; i++) {
+    await page.click('#btnFish');
+    await page.waitForFunction(() => document.querySelector('#fishLbl').textContent === 'ZIEHEN!', null, { timeout: 60000, polling: 200 });
+    if (i === 0) probe.angel = await page.evaluate(() => window.__test.fische(400));
+    await page.keyboard.press('Space');
+    await page.locator('#card h2:has-text("gefangen")').waitFor();
+    await page.click('#card .btns button:has-text("Freilassen"), #card .btns button:has-text("Zurücksetzen")');
+    await page.locator('#modal').waitFor({ state: 'hidden' });
+  }
+  return probe;
+}
+
+test('Fische nach Uhrzeit: um 23 Uhr beißt am See kein Tag-Fisch', async () => {
+  const zeit = fischZeiten();
+  assert.equal(zeit.hecht, 'tag', 'der Hecht jagt tagsüber');
+  const { ctx, page, errors } = await startZeitSeite('2026-06-21T23:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, book: {}, where: { x: 10, z: -940, f: 0, boat: false } }) }); // am Südufer, Blick auf den See
+  await startGame(page);
+  await page.click('#btnGo');
+  const probe = await dreiFaenge(page);
+  const s = JSON.parse(await read(page));
+  const ids = Object.keys(s.book);
+  assert.ok(ids.length >= 1);
+  for (const id of ids) assert.notEqual(zeit[id], 'tag', id + ' beißt nur tagsüber');
+  assert.equal(probe.angel.length, 400);
+  assert.deepEqual(probe.angel.filter(id => zeit[id] === 'tag'), [], 'kein Tag-Fisch an der Angel');
+  const reuse = await page.evaluate(() => window.__test.reuse('see', 400));
+  assert.deepEqual(reuse.filter(id => zeit[id] === 'tag'), [], 'kein Tag-Fisch in der Reuse');
+  assert.ok(probe.angel.includes('zander') || reuse.includes('zander'), 'nachts beißt der Zander');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Fische nach Uhrzeit: um 12 Uhr kein Nacht-Fisch', async () => {
+  const zeit = fischZeiten();
+  const rhein = flussplaetze().find(s => s.id === 'bw-rhein');
+  assert.ok(rhein.fish.some(id => zeit[id] === 'nacht'), 'im Rhein leben auch Nacht-Fische');
+  const { ctx, page, errors } = await startZeitSeite('2026-06-21T12:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ book: {}, flussAt: 'bw-rhein', where: { x: 0, z: -1800 - rhein.hw + 6, f: 0, boat: false } }) }); // vorne auf dem Steg
+  await startGame(page);
+  await page.click('#btnGo');
+  const probe = await dreiFaenge(page);
+  const s = JSON.parse(await read(page));
+  const ids = Object.keys(s.book);
+  assert.ok(ids.length >= 1);
+  for (const id of ids) assert.notEqual(zeit[id], 'nacht', id + ' beißt nur abends und nachts');
+  assert.deepEqual(probe.angel.filter(id => zeit[id] === 'nacht'), [], 'kein Nacht-Fisch an der Angel');
+  assert.ok(probe.angel.every(id => rhein.fish.includes(id)), 'nur Rhein-Fische');
+  const reuse = await page.evaluate(() => window.__test.reuse('amazonas', 400));
+  assert.deepEqual(reuse.filter(id => zeit[id] === 'nacht'), [], 'kein Nacht-Fisch in der Reuse am Amazonas');
+  assert.ok(reuse.includes('pfauen'), 'mittags kann der Pfauenbarsch in die Reuse');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Fische nach Uhrzeit: um 17 Uhr im Dezember ist jeder Fisch möglich', () => {
+  const zeit = fischZeiten(), F = zeitFenster();
+  // die festen Zeiten aus dem Plan: nacht 16–6 Uhr, tag 6–18 Uhr, daemmerung 5–9 und 16–21 Uhr
+  assert.deepEqual(F, { nacht: [[16, 24], [0, 6]], tag: [[6, 18]], daemmerung: [[5, 9], [16, 21]] });
+  assert.ok(Object.keys(zeit).length >= 5, 'einige Fische haben eine Zeit');
+  for (const [id, z] of Object.entries(zeit)) {
+    assert.ok(F[z], id + ': unbekannte Zeit ' + z);
+    assert.ok(imFenster(F[z], 17), id + ' (' + z + ') beißt um 17 Uhr');
+    assert.ok(imFenster(F[z], 17.99), id + ' (' + z + ') beißt um 17:59');
+  }
+});
+
+test('Fischbuch zeigt Zeiten', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], book: { ...ALT_V1.book, antennen: { n: 1, best: 30 } } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBook');
+  await page.locator('#card .bk').first().waitFor({ timeout: 5000 });
+  assert.match(await page.textContent('#card'), /🌙 abends und nachts/);
+  assert.match(await page.textContent('#card .bk:has-text("Antennenwels")'), /🌙 abends und nachts/, 'gefangener Fisch zeigt die Zeit');
+  assert.ok(await page.locator('#card .bk:has(.unknown):has-text("☀️ tagsüber")').count() >= 1, 'auch bei „?“-Fischen steht die Zeit');
+  assert.doesNotMatch(await page.textContent('#card .bk:has-text("Piranha")'), /🌙|☀️|🌅/, 'Fische ohne feste Zeit zeigen keine');
   assert.deepEqual(errors, []);
   await ctx.close();
 });

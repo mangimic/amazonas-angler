@@ -167,6 +167,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .bk .unknown{background:#2c4537;color:#cfe6d6;font:800 40px var(--display)}
 .bk b{font:800 15px/1.1 var(--display)}
 .bk span{font-size:12px;color:var(--muted)}
+.bk small.zeit{font-size:12px;font-weight:700;color:#6a5a2e}
 button.bk{font:inherit;color:inherit;border:3px solid transparent;cursor:pointer}
 button.bk:active{border-color:var(--ink)}
 .pic{width:min(320px,100%);margin:0;display:flex;flex-direction:column;gap:4px;align-items:center}
@@ -314,13 +315,13 @@ const FISH=[
  {id:'pacu',name:'Pacu',fact:'Hat Zähne, die fast wie Menschenzähne aussehen.',w:24,price:9,cm:[30,60]},
  {id:'piranha',name:'Piranha',fact:'Hat scharfe Zähne, ist aber meistens ziemlich schüchtern.',w:24,price:11,cm:[20,33]},
  {id:'skalar',name:'Skalar',fact:'So flach wie ein Blatt und mit ganz langen Flossen.',w:18,price:13,cm:[10,15]},
- {id:'antennen',name:'Antennenwels',fact:'Tastet mit langen Barteln im Schlamm nach Futter.',w:18,price:15,cm:[20,40]},
+ {id:'antennen',name:'Antennenwels',fact:'Tastet mit langen Barteln im Schlamm nach Futter.',w:18,price:15,cm:[20,40],zeit:'nacht'},
  {id:'tambaqui',name:'Tambaqui',fact:'Frisst Früchte und Nüsse, die von den Bäumen ins Wasser fallen.',w:14,price:20,cm:[40,90]},
- {id:'pfauen',name:'Pfauenbarsch',fact:'Hat einen Augenfleck am Schwanz, wie ein Pfau.',w:12,price:26,cm:[30,70]},
+ {id:'pfauen',name:'Pfauenbarsch',fact:'Hat einen Augenfleck am Schwanz, wie ein Pfau.',w:12,price:26,cm:[30,70],zeit:'tag'},
  {id:'diskus',name:'Diskusfisch',fact:'Rund wie ein Teller und bunt gestreift.',w:8,price:40,cm:[12,20]},
  {id:'rochen',name:'Süßwasserrochen',fact:'Liegt ganz flach im Sand am Flussboden.',w:6,price:55,cm:[40,80]},
  {id:'arowana',name:'Arowana',fact:'Springt aus dem Wasser und schnappt Käfer von den Ästen.',w:5,price:70,cm:[60,100]},
- {id:'zitter',name:'Zitteraal',fact:'Kann Strom machen! Und eigentlich ist er gar kein Aal.',w:4,price:90,cm:[100,200]},
+ {id:'zitter',name:'Zitteraal',fact:'Kann Strom machen! Und eigentlich ist er gar kein Aal.',w:4,price:90,cm:[100,200],zeit:'nacht'},
  {id:'dorado',name:'Goldener Dorado',akk:'Goldenen Dorado',fact:'Glänzt golden in der Sonne und ist sehr stark.',w:3,price:120,cm:[50,90]},
  {id:'piraiba',name:'Piraíba-Wels',fact:'Ein Riesenwels! Er lebt nur mitten im tiefen Fluss.',w:2.5,price:180,cm:[150,300],boat:true},
  {id:'arapaima',name:'Arapaima',fact:'Einer der größten Süßwasserfische der Welt. Lebt nur im tiefen Fluss.',w:1.6,price:250,cm:[180,300],boat:true},
@@ -333,8 +334,8 @@ const FISH=[
  {id:'schleie',art:'eine',name:'Schleie',home:'see',fact:'Grün-golden und sehr glitschig. Sie hat winzige Schuppen und rote Augen.',w:12,price:18,cm:[20,50]},
  {id:'karpfen',name:'Karpfen',home:'see',fact:'Hat vier Barteln am Maul und wühlt damit im Schlamm nach Futter.',w:12,price:25,cm:[30,80]},
  {id:'forelle',art:'eine',name:'Forelle',home:'see',fact:'Mag kaltes, sauberes Wasser. Man erkennt sie an ihren roten Punkten.',w:9,price:30,cm:[20,50]},
- {id:'zander',name:'Zander',home:'see',fact:'Hat große, glänzende Augen und sieht im trüben Wasser und in der Dämmerung sehr gut.',w:5,price:50,cm:[40,80]},
- {id:'hecht',name:'Hecht',home:'see',fact:'Lauert gut versteckt zwischen Wasserpflanzen und schießt dann blitzschnell los.',w:4,price:60,cm:[40,110]},
+ {id:'zander',name:'Zander',home:'see',fact:'Hat große, glänzende Augen und sieht im trüben Wasser und in der Dämmerung sehr gut.',w:5,price:50,cm:[40,80],zeit:'nacht'},
+ {id:'hecht',name:'Hecht',home:'see',fact:'Lauert gut versteckt zwischen Wasserpflanzen und schießt dann blitzschnell los.',w:4,price:60,cm:[40,110],zeit:'tag'},
  // Fische aus den Flüssen in Deutschland. home:'fluss' = beißen nur dort (welche wo, steht bei SPOTS). Viele See-Fische leben auch in Flüssen.
  {id:'barbe',art:'eine',name:'Barbe',home:'fluss',fact:'Hat vier Barteln am Maul. Damit sucht sie am Grund nach Futter. Barben lieben schnell fließendes Wasser mit Kies.',w:16,price:22,cm:[30,70]},
  {id:'nase',art:'eine',name:'Nase',home:'fluss',fact:'Ihre Schnauze steht vor wie eine Nase. Mit der harten Unterlippe schabt sie Algen von den Steinen.',w:12,price:18,cm:[25,45]},
@@ -342,9 +343,9 @@ const FISH=[
  {id:'brachse',art:'eine',name:'Brachse',home:'fluss',fact:'Hoch und flach wie ein Teller. Sie sucht im Schlamm nach Würmern und Mückenlarven.',w:20,price:10,cm:[30,60]},
  {id:'aland',name:'Aland',home:'fluss',fact:'Hat silbrig-goldene Seiten und rötliche Flossen. Eine gezüchtete orange Form heißt Goldorfe.',w:14,price:16,cm:[30,60]},
  {id:'rapfen',name:'Rapfen',home:'fluss',fact:'Jagt kleine Fische an der Wasseroberfläche. Dabei spritzt es laut!',w:7,price:40,cm:[40,80]},
- {id:'quappe',art:'eine',name:'Quappe',home:'fluss',fact:'Der einzige Dorsch, der im Süßwasser lebt. Sie ist nachts unterwegs und legt im Winter ihre Eier.',w:6,price:30,cm:[30,60]},
- {id:'aal',name:'Aal',home:'fluss',fact:'Schwimmt zum Eierlegen über 5.000 Kilometer weit bis ins Sargassomeer. Der Aal ist selten geworden.',w:6,price:45,cm:[40,90]},
- {id:'wels',name:'Wels',home:'fluss',fact:'Der größte Süßwasserfisch Europas! Er hat sechs Barteln, zwei davon sind ganz lang.',w:3,price:90,cm:[60,200]},
+ {id:'quappe',art:'eine',name:'Quappe',home:'fluss',fact:'Der einzige Dorsch, der im Süßwasser lebt. Sie ist nachts unterwegs und legt im Winter ihre Eier.',w:6,price:30,cm:[30,60],zeit:'nacht'},
+ {id:'aal',name:'Aal',home:'fluss',fact:'Schwimmt zum Eierlegen über 5.000 Kilometer weit bis ins Sargassomeer. Der Aal ist selten geworden.',w:6,price:45,cm:[40,90],zeit:'nacht'},
+ {id:'wels',name:'Wels',home:'fluss',fact:'Der größte Süßwasserfisch Europas! Er hat sechs Barteln, zwei davon sind ganz lang.',w:3,price:90,cm:[60,200],zeit:'nacht'},
  {id:'lachs',name:'Lachs',home:'fluss',fact:'Wächst im Meer auf und schwimmt dann den Fluss hinauf, zurück zu dem Ort, wo er geschlüpft ist.',w:2.5,price:80,cm:[50,100]},
  {id:'huchen',name:'Huchen',home:'fluss',fact:'Lebt nur in der Donau und ihren Nebenflüssen. Er heißt auch Donaulachs und kann über einen Meter lang werden.',w:1.5,price:150,cm:[60,120]},
  {id:'stoer',name:'Stör',home:'fluss',fact:'Hat Knochenplatten wie eine Ritterrüstung. Störe gab es schon zur Zeit der Dinosaurier!',w:1.5,price:150,cm:[80,200]},
@@ -406,6 +407,13 @@ const FOTOS={
  hornhecht:{src:'fotos/hornhecht.jpg',von:'euparkeria',lizenz:'CC BY-SA 4.0',link:'https://commons.wikimedia.org/wiki/File:Belone_belone_-_Sardegna.JPG'}
 };
 const FISH_BY={};FISH.forEach(f=>FISH_BY[f.id]=f);
+// Fische nach Uhrzeit (Uhr am Gerät, WT.hour): zeit:'nacht' = 16–6 Uhr, 'tag' = 6–18 Uhr, 'daemmerung' = 5–9 und 16–21 Uhr.
+// Nach der Schule (16–18 Uhr) kann so jeder Fisch beißen. Fische ohne zeit beißen immer. zeit nur, wo es in der Natur stimmt (Belege im Task-3-Report).
+const ZEIT_FENSTER={nacht:[[16,24],[0,6]],tag:[[6,18]],daemmerung:[[5,9],[16,21]]};
+const ZEIT_TEXT={nacht:'🌙 abends und nachts',tag:'☀️ tagsüber',daemmerung:'🌅 morgens und abends'};
+const fishActive=(f,hour)=>{const w=ZEIT_FENSTER[f.zeit];return !w||w.some(([a,b])=>hour>=a&&hour<b);};
+// Nur Fische, die jetzt wach sind. Bleibt keiner übrig, gilt die ganze Liste (damit immer ein Fisch beißen kann).
+const awakePool=pool=>{const p=pool.filter(f=>fishActive(f,WT.hour));return p.length?p:pool;};
 // Angeln: je besser, desto schneller beißen die Fische und desto öfter kommen seltene
 const RODS=[
  {name:'Bambus-Angel',col:'#c9a45a',bite:[2.2,3.8],win:1.5,rare:1},
@@ -1550,7 +1558,7 @@ function updateFishing(dt,t){
 }
 function chooseFish(){
   const here=atCity()?'meer':atDE()?'fluss':atLake()?'see':'amazonas';
-  const pool=here==='fluss'&&curSpot?curSpot.fish.map(id=>FISH_BY[id]).filter(Boolean):FISH.filter(f=>fishHome(f)===here&&(!f.boat||player.inBoat));
+  const pool=awakePool(here==='fluss'&&curSpot?curSpot.fish.map(id=>FISH_BY[id]).filter(Boolean):FISH.filter(f=>fishHome(f)===here&&(!f.boat||player.inBoat)));
   const sc=schoolAt(fishing.target.x,fishing.target.z);
   const bt=BAITS[fishing.bait]||BAITS.wurm;
   const me=METHODS[fishing.method]||METHODS.pose;
@@ -1844,6 +1852,7 @@ function showBook(){
       if(b)c.onclick=()=>showFishPage(f);
       if(b)c.appendChild(el('b',null,esc(f.name))),c.appendChild(el('span',null,b.n+'× gefangen · größter: '+b.best+' cm'));
       else c.appendChild(el('b',null,'???')),c.appendChild(el('span',null,f.boat?'Nur vom Boot aus':home==='see'?'Lebt im Heimat-See':home==='fluss'?'Lebt in Flüssen in Deutschland':home==='meer'?'Lebt im Meer, beißt im Hafen':'Noch nicht gefangen'));
+      if(f.zeit)c.appendChild(el('small','zeit',ZEIT_TEXT[f.zeit])); // wann er beißt, auch bei „?“-Fischen
       g.appendChild(c);});
     card.appendChild(g);});
   const c=el('button','b','Fertig');c.onclick=closeModal;const bt=el('div','btns');bt.appendChild(c);card.appendChild(bt);
@@ -1853,7 +1862,7 @@ function showFishPage(f){
   openModal();card.className='card catch';card.innerHTML='';
   card.appendChild(el('h2',null,esc(f.name)));
   card.appendChild(fishPic(f));
-  card.appendChild(el('div','stats','<span class="stat">'+b.n+'× gefangen</span><span class="stat">Größter: '+b.best+' cm</span>'));
+  card.appendChild(el('div','stats','<span class="stat">'+b.n+'× gefangen</span><span class="stat">Größter: '+b.best+' cm</span>'+(f.zeit?'<span class="stat">'+ZEIT_TEXT[f.zeit]+'</span>':'')));
   card.appendChild(el('p',null,esc(f.fact)));
   const z=el('button','b','Zurück zum Fischbuch');z.onclick=showBook;const bt=el('div','btns');bt.appendChild(z);card.appendChild(bt);
 }
@@ -3402,7 +3411,7 @@ function placeTrap(){const w=trapSpot();if(!w||state.reusen<1)return;
   state.reusen--;state.traps.push(t);save();makeTrapMesh(t);splash(t.x,t.z);sfxSplash();
   toast('Platsch! Deine Reuse liegt im Wasser. Komm in '+REUSE.every/60000+' Minuten wieder. Wird die Boje grün, ist ein Fisch drin.');}
 // Ein Fisch aus der Reuse: nur kleine und mittlere Fische, die am Ort leben (keine Riesenfische vom Boot)
-function trapFish(home){const pool=FISH.filter(f=>fishHome(f)===home&&!f.boat);
+function trapFish(home){const pool=awakePool(FISH.filter(f=>fishHome(f)===home&&!f.boat)); // Uhrzeit: jetzt beim Nachschauen
   let sum=0;pool.forEach(f=>sum+=f.w);let r=Math.random()*sum;for(const f of pool){r-=f.w;if(r<=0)return f;}return pool[0];}
 function showTrap(t){
   openModal();card.className='card';card.innerHTML='';
@@ -3574,6 +3583,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:34,day:'27.10.2026',ico:'🦉',t:'Fische nach Uhrzeit',d:'Manche Fische beißen nur abends und nachts, zum Beispiel Aal, Wels und Zitteraal. Hecht und Pfauenbarsch jagen tagsüber. Im Fischbuch steht, wann sie beißen.'},
  {v:33,day:'27.10.2026',ico:'🍂',t:'Jahreszeiten',d:'In Deutschland gibt es jetzt Jahreszeiten wie bei dir: Im Frühling blühen die Bäume, im Herbst wird das Laub bunt und im Winter ist die Wiese weiß. Am Amazonas erklärt dir eine neue Infotafel die Regenzeit.'},
  {v:32,day:'27.10.2026',ico:'🌅',t:'Echte Tageszeit',d:'Im Spiel ist jetzt dieselbe Uhrzeit wie bei dir. Abends geht die Sonne unter, nachts siehst du Sterne und den Mond!'},
  {v:31,day:'27.10.2026',ico:'🔒',t:'Sicherer Spielstand',d:'Wenn du eine Sicherheitskopie lädst, prüft das Spiel jetzt jeden Wert ganz genau. So kann eine fremde Datei nichts kaputt machen.'},
@@ -3802,6 +3812,9 @@ if(navigator.webdriver===true)window.__test={warp(x,z){player.pos.set(x,0,z);pla
   welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible,region:WT.region,laub:'#'+laubMat.color.getHexString(),wiese:'#'+wieseMat.color.getHexString(),laubFade:laubMat.userData.fade.value,wieseFade:wieseMat.userData.fade.value,
     fichten:(()=>{const f=[];scene.traverse(o=>{if(o.isInstancedMesh&&o.geometry===FICHTE)f.push(o.material===wieseMat);});return f.length>0&&f.every(Boolean);})(),blueten:bloomOn&&blooms.size>0&&[...blooms].every(p=>p.visible)}),
   hoehe:(x,z)=>heightAt(x,z),
+  // welcher Fisch würde jetzt hier beißen (n-mal ausgewürfelt, Angel muss ausgeworfen sein) / in die Reuse schwimmen
+  fische:n=>Array.from({length:n},()=>chooseFish().id),
+  reuse:(home,n)=>Array.from({length:n},()=>trapFish(home).id),
   // jeden Flussplatz bauen: wie hoch stehen Hannes und die Infotafel? (unter 0 = im Wasser)
   ufer(){const was=curSpot&&curSpot.id,fa=state.flussAt,r=SPOTS.map(s=>{buildSpot(s.id);return {id:s.id,hannes:heightAt(hannes.x,hannes.z),tafel:heightAt(deBoard.x,deBoard.z)};});if(was)buildSpot(was);state.flussAt=fa;return r;}};
 player.root.position.set(player.pos.x,player.y,player.pos.z);
