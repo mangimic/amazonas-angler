@@ -799,7 +799,8 @@ function applySky(e,h,doy,region){const c=skyColor(e,new THREE.Color()),k=smooth
   lampMat.color.copy(night?GLOW:LAMP_DAY);lampMat.emissive.copy(GLOW).multiplyScalar(night?0.95:0);}
 function updateWorldTime(){const d=new Date(),region=regionNow(),h=solarHour(d,region),doy=dayOfYear(d),elev=sunElevation(LAT[region],h,doy);
   Object.assign(WT,{phase:phaseOf(elev),elev,season:season(d),hour:d.getHours()+d.getMinutes()/60,region,key:todayKey(d)});
-  document.body.dataset.phase=WT.phase;document.body.dataset.season=WT.season;
+  document.body.dataset.phase=WT.phase;document.body.dataset.season=WT.season;document.body.dataset.region=WT.region;
+  applySeason(WT.season);
   $('#clockChip').textContent=(WT.phase==='tag'?'☀️':WT.phase==='daemmerung'?'🌅':'🌙')+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
   if(mode==='creator')applySky(45,12,doy,region); // in der Avatar-Werkstatt immer Tageslicht, damit man die Farben gut sieht
   else applySky(elev,h,doy,region);}
@@ -825,6 +826,36 @@ function merge(parts){
   return g;
 }
 const vcMat=new THREE.MeshLambertMaterial({vertexColors:true});
+/* ---- Jahreszeiten: nur in Deutschland (Heimat-See, Flussplätze, Hafenhausen). Der Amazonas bleibt immer grün. ----
+   laubMat (Bäume, Büsche, Schilf) und wieseMat (Boden) sind Kopien von vcMat nur für die deutschen Gebiete.
+   material.color ist ein Faktor auf die Farben der Ecken. Weil ein Faktor Grün nicht heller machen kann,
+   bleicht uniform „fade“ nur grüne Stellen zu Weiß aus (Stämme, Wege, Sand und Straßen bleiben, wie sie sind). */
+function seasonMat(){const m=vcMat.clone(),fade={value:0};m.userData.fade=fade;
+  m.onBeforeCompile=s=>{s.uniforms.fade=fade;s.fragmentShader='uniform float fade;\n'+s.fragmentShader.replace('#include <color_fragment>',
+    '#ifdef USE_COLOR\n float gr=clamp((vColor.g-max(vColor.r,vColor.b))*6.0,0.0,1.0);\n diffuseColor.rgb*=mix(vColor,vec3(1.0),fade*gr);\n#endif');};
+  return m;}
+const laubMat=seasonMat(),wieseMat=seasonMat();
+// Laub: Faktor und wie stark das Grün ausbleicht. Wiese: nur im Winter weiß (Schnee-Ton).
+const SEASON_LOOK={fruehling:{laub:'#ffe6ef',lf:0,wiese:'#ffffff',wf:0},sommer:{laub:'#ffffff',lf:0,wiese:'#ffffff',wf:0},
+  herbst:{laub:'#ffb35c',lf:0.55,wiese:'#ffffff',wf:0},winter:{laub:'#e8eef2',lf:0.55,wiese:'#eef3f6',wf:0.85}};
+// Frühling: rosa und weiße Blütentupfer auf den Laubbäumen (treeC). Ein Points je Baumgruppe, jedes höchstens 300 Punkte.
+const blooms=new Set();let bloomOn=false;
+const bloomMat=new THREE.PointsMaterial({size:1,vertexColors:true,alphaTest:0.5,map:(function(){const cv=document.createElement('canvas');cv.width=cv.height=32;
+  const x=cv.getContext('2d');x.fillStyle='#fff';x.beginPath();x.arc(16,16,14,0,Math.PI*2);x.fill();return new THREE.CanvasTexture(cv);})()});
+// Baumgruppe = die Bäume in einem Feld von 80 m (höchstens 30 Bäume, je 10 Tupfer). Gibt die Liste der Points zurück.
+function makeBloom(mats,parent){const out=[],cells={},v=new THREE.Vector3(),r=rng(555),PINK=new THREE.Color('#ffb7d0'),WHITE=new THREE.Color('#fff6fa');
+  mats.forEach(m=>{v.setFromMatrixPosition(m);const k=Math.floor(v.x/80)+','+Math.floor(v.z/80);(cells[k]||(cells[k]=[])).push(m);});
+  Object.values(cells).forEach(list=>{for(let i=0;i<list.length;i+=30){const p=[],c=[];
+    for(const m of list.slice(i,i+30))for(let k=0;k<10;k++){const a=r()*Math.PI*2,y=r()*1.3-0.3,s=Math.sqrt(1-y*y); // obere Hälfte der Krone
+      v.set(Math.cos(a)*s*2.5,3.6+y*1.8,Math.sin(a)*s*2.5).applyMatrix4(m);p.push(v.x,v.y,v.z);const col=r()<0.6?PINK:WHITE;c.push(col.r,col.g,col.b);}
+    const g=new THREE.BufferGeometry();g.setAttribute('position',new THREE.Float32BufferAttribute(p,3));g.setAttribute('color',new THREE.Float32BufferAttribute(c,3));
+    const pts=new THREE.Points(g,bloomMat);pts.visible=bloomOn;parent.add(pts);blooms.add(pts);out.push(pts);}});
+  return out;}
+function dropBloom(list){(list||[]).forEach(pts=>{blooms.delete(pts);if(pts.parent)pts.parent.remove(pts);pts.geometry.dispose();});}
+// Nur Farben ändern: keine neuen Meshes, nichts wird neu zusammengefasst. Am Amazonas alles neutral (#ffffff).
+function applySeason(season){const L=WT.region==='de'&&SEASON_LOOK[season]||SEASON_LOOK.sommer;
+  laubMat.color.set(L.laub);laubMat.userData.fade.value=L.lf;wieseMat.color.set(L.wiese);wieseMat.userData.fade.value=L.wf;
+  bloomOn=WT.region==='de'&&season==='fruehling';blooms.forEach(p=>p.visible=bloomOn);}
 // Viele feste Teile zu wenigen Meshes zusammenfassen: das sieht gleich aus, braucht aber viel weniger Zeichen-Aufrufe.
 // Nur einfarbige Lambert-Teile ohne Bild (Schilder mit Schrift bleiben einzeln). Die Normalen bleiben, wie sie sind.
 const bakeable=o=>{const m=o.material;return o.isMesh&&!o.isInstancedMesh&&o.visible&&!o.userData.tex&&m&&m.isMeshLambertMaterial&&!m.map&&!m.vertexColors&&!m.transparent&&m.side===THREE.FrontSide;};
@@ -987,7 +1018,8 @@ const INFOBOARDS=[
  {id:'riesen',x:bankX(1506)+1,z:1506,ico:'🐋',title:'Riesenfische'},
  {id:'regeln',x:LAKE.x+4,z:LAKE.z-LAKE.b-7.5,ico:'📏',title:'Regeln am See'},
  {id:'seefische',x:LAKE.x-11,z:LAKE.z-LAKE.b-6,ico:'🐟',title:'Fische im See'},
- {id:'ruecksicht',x:LAKE.x+11,z:LAKE.z-LAKE.b-5,ico:'💚',title:'Angeln mit Rücksicht'}];
+ {id:'ruecksicht',x:LAKE.x+11,z:LAKE.z-LAKE.b-5,ico:'💚',title:'Angeln mit Rücksicht'},
+ {id:'regenzeit',x:VX-3.5,z:7.5,ico:'🌧️',title:'Regenzeit und Trockenzeit'}];
 // Eine Infotafel bauen. (tx,tz) = wohin sie schaut: man liest sie, wenn man davor steht und dorthin blickt
 function makeBoard(b,tx,tz,parent,cols){
   const cv=document.createElement('canvas');cv.width=512;cv.height=320;const c=cv.getContext('2d');
@@ -1742,7 +1774,11 @@ const INFO_TEXT={
  seefische:{fish:['hecht','karpfen','schleie','barsch'],p:['Im Schilf legen viele Fische ihre Eier. Der Hecht lauert dort gut versteckt.',
    'Karpfen und Schleie suchen am Grund nach Futter. Dafür nimmst du die <b>Grundrute</b>.','Raubfische wie Hecht, Zander und Barsch fängst du gut mit der <b>Spinnrute</b>.']},
  ruecksicht:{fish:[],p:['🤲 Fasse Fische nur mit nassen Händen an. So bleibt ihre Schleimhaut heil.','🗑️ Nimm Müll und alte Angelschnur immer mit. Vögel können sich darin verfangen.',
-   '🤫 Sei leise am Ufer. Im Schilf brüten Vögel, und Fische spüren jeden Schritt.','🎣 Nimm nur so viele Fische mit, wie du wirklich brauchst.']}};
+   '🤫 Sei leise am Ufer. Im Schilf brüten Vögel, und Fische spüren jeden Schritt.','🎣 Nimm nur so viele Fische mit, wie du wirklich brauchst.']},
+ regenzeit:{fish:[],p:['Der Amazonas liegt nah am <b>Äquator</b>. Das ist die Linie, die mitten um die Erde läuft. Hier gibt es keine 4 Jahreszeiten wie bei uns. Es ist das ganze Jahr warm, und die Tage sind immer ungefähr gleich lang.',
+   'Statt Frühling, Sommer, Herbst und Winter gibt es eine <b>Regenzeit</b> und eine <b>Trockenzeit</b>. Bei der Stadt Manaus regnet es vor allem etwa von Dezember bis Mai. In der Trockenzeit regnet es weniger.',
+   'In der Regenzeit fließt viel Wasser in den Fluss. Er steigt um viele Meter, höher als ein Haus! Dann steht der Wald unter Wasser.',
+   '🍂 Die Jahreszeiten siehst du in Deutschland: am Heimat-See, an den Flüssen und in Hafenhausen. Dort ist es so wie gerade bei dir zu Hause.']}};
 const INFO_LUDINS=5;
 function showInfo(b){
   if(b===deBoard){if(curSpot)showSpotInfo(curSpot);return;}
@@ -2380,7 +2416,7 @@ const REED=merge([part(new THREE.CylinderGeometry(0.03,0.04,1.8,4),'#7d8f3a',M(0
     const n=hash(Math.round(cx*3),Math.round(cz*3));
     c.set(cy<-0.4?'#4f5a3a':cy<0.4?(n<.5?'#b9a77a':'#a9976c'):GR[Math.floor(n*4)]);
     for(let q=0;q<3;q++){cols[(i+q)*3]=c.r;cols[(i+q)*3+1]=c.g;cols[(i+q)*3+2]=c.b;}}
-  g.setAttribute('color',new THREE.BufferAttribute(cols,3));scene.add(new THREE.Mesh(g,vcMat));
+  g.setAttribute('color',new THREE.BufferAttribute(cols,3));scene.add(new THREE.Mesh(g,wieseMat));
   const sets=[[],[],[]];
   for(let i=0;i<4000&&sets[0].length+sets[1].length+sets[2].length<170;i++){
     const x=LAKE.x+(R()*2-1)*(LAKE.w-4),z=LAKE.z+(R()*2-1)*(LAKE.l-4),h=lakeHeight(x,z);
@@ -2388,11 +2424,12 @@ const REED=merge([part(new THREE.CylinderGeometry(0.03,0.04,1.8,4),'#7d8f3a',M(0
     if(colliders.some(o=>(o.x-x)**2+(o.z-z)**2<10))continue;
     const t=R()<0.45?0:R()<0.6?1:2,sc=0.8+R()*0.5;
     sets[t].push(M(x,h-0.2,z,0,R()*6.28,0,sc,sc*(0.9+R()*0.3),sc));colliders.push({x,z,r:0.55*sc});}
-  [FICHTE,BIRKE,treeC].forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,vcMat,sets[i].length);sets[i].forEach((m,q)=>im.setMatrixAt(q,m));scene.add(im);});
+  [FICHTE,BIRKE,treeC].forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,laubMat,sets[i].length);sets[i].forEach((m,q)=>im.setMatrixAt(q,m));scene.add(im);});
+  makeBloom(sets[2],scene); // Blüten im Frühling
   // Schilf am Ufer
   const reeds=[];for(let i=0;i<3000&&reeds.length<420;i++){const a=R()*Math.PI*2,r=0.84+R()*0.12,x=LAKE.x+Math.cos(a)*LAKE.a*r,z=LAKE.z+Math.sin(a)*LAKE.b*r;
     if(Math.abs(x-LAKE.x)<5&&z<LAKE.z)continue;reeds.push(M(x,lakeHeight(x,z)-0.2,z,(R()-0.5)*0.2,R()*6,(R()-0.5)*0.2,1,0.8+R()*0.6,1));}
-  const rm=new THREE.InstancedMesh(REED,vcMat,reeds.length);reeds.forEach((m,q)=>rm.setMatrixAt(q,m));scene.add(rm);
+  const rm=new THREE.InstancedMesh(REED,laubMat,reeds.length);reeds.forEach((m,q)=>rm.setMatrixAt(q,m));scene.add(rm);
   // Seerosen mit weißen Blüten
   const lily=merge([part(new THREE.CylinderGeometry(0.6,0.6,0.04,12),'#4f8a3a'),part(new THREE.SphereGeometry(0.16,7,5),'#ffffff',M(0.15,0.08,0.1))]);
   const lilies=[];for(let i=0;i<400&&lilies.length<36;i++){const a=R()*Math.PI*2,r=0.55+R()*0.25,x=LAKE.x+Math.cos(a)*LAKE.a*r,z=LAKE.z+Math.sin(a)*LAKE.b*r;
@@ -2608,7 +2645,7 @@ const START_SPOTS=['bw-neckar','bw-rhein','bw-donau']; // Baden-Württemberg: hi
 const STAMP_FISH=3,STAMP_LUDINS=25;
 
 /* ---- Der Flussplatz in 3D: Tal, Bäume, Steg, Flugzeug, Infotafel, Wahrzeichen, Schiffe ---- */
-let deGroup=null,curSpot=null,deShip=null;
+let deGroup=null,curSpot=null,deShip=null,spotBloom=null;
 const deBoard={id:'de',x:0,z:0,ico:'🌊',title:''};
 const PAPPEL=merge([part(new THREE.CylinderGeometry(0.2,0.3,3,6),'#6b5a44',M(0,1.5,0)),part(new THREE.IcosahedronGeometry(1.3,0),'#4f7f2f',M(0,6,0,0,0,0,1,3,1))]);
 const WEIDE=merge([part(new THREE.CylinderGeometry(0.35,0.45,2.2,6),'#6b5a44',M(0,1.1,0)),part(new THREE.IcosahedronGeometry(2.2,0),'#8aab5a',M(0,3.4,0,0,0,0,1.2,0.8,1.2))]);
@@ -2767,7 +2804,7 @@ function buildSpot(id){const s=SPOTS_BY[id];if(!s)return false;
     const n=hash(Math.round(cx*3),Math.round(cz*3)),steep=N.getY(i)<0.75;
     c.set(cyy<-0.4?'#4f5a3a':cyy<0.4?(n<.5?'#b9a77a':'#a9976c'):rocky&&steep&&cyy>3?(n<.5?'#a8987a':'#988a6e'):cyy>6?(n<.5?'#3f7a34':'#477f37'):GR[Math.floor(n*4)]);
     for(let q=0;q<3;q++){cols[(i+q)*3]=c.r;cols[(i+q)*3+1]=c.g;cols[(i+q)*3+2]=c.b;}}
-  geo.setAttribute('color',new THREE.BufferAttribute(cols,3));g.add(new THREE.Mesh(geo,vcMat));
+  geo.setAttribute('color',new THREE.BufferAttribute(cols,3));g.add(new THREE.Mesh(geo,wieseMat));
   // Steg
   const len=DDOCK.z1-DDOCK.z0;
   for(let i=0;i<Math.floor(len/0.55);i++)bx(g,2.7,0.12,0.5,i%3?'#9a7148':'#8a6340',0,DDOCK.y-0.12,DDOCK.z0+0.3+i*0.55);
@@ -2786,17 +2823,18 @@ function buildSpot(id){const s=SPOTS_BY[id];if(!s)return false;
     if(noTree.some(o=>(o.x-x)**2+(o.z-z)**2<o.r*o.r)||hitsList(deCols,x,z,1.5))continue;
     const d=Math.abs(z-riverZ(x))-s.hw,t=h>6?(R()<0.7?3:0):d<10?(R()<0.5?1:2):(R()<0.75?0:4),sc=0.8+R()*0.5;
     sets[t].push(M(x,h-0.2,z,0,R()*6.28,0,sc,sc*(0.9+R()*0.3),sc));if(z<riverZ(x))deCols.push({x,z,r:0.55*sc});}
-  geos.forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,vcMat,sets[i].length);im.userData.shared=true;sets[i].forEach((m,q)=>im.setMatrixAt(q,m));g.add(im);});
+  geos.forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,laubMat,sets[i].length);im.userData.shared=true;sets[i].forEach((m,q)=>im.setMatrixAt(q,m));g.add(im);});
+  dropBloom(spotBloom);spotBloom=makeBloom(sets[0],g); // Blüten im Frühling (die alten vom letzten Platz kommen weg)
   const bushes=[],fm=new THREE.InstancedMesh(flowerGeo,flowerMat,220),fc=new THREE.Color();let nf=0;
   for(let i=0;i<4000&&(bushes.length<140||nf<220);i++){const x=(R()*2-1)*(DE.w-4),z=DE.z+(R()*2-1)*(DE.l-4),h=heightAt(x,z);
     if(h<0.5||noTree.some(o=>(o.x-x)**2+(o.z-z)**2<o.r*o.r*0.5)||hitsList(deCols,x,z,1))continue;
     if(R()<0.4&&bushes.length<140){const sc=0.5+R()*0.8;bushes.push(M(x,h,z,0,R()*6,0,sc,sc*0.7,sc));}else if(nf<220){fm.setMatrixAt(nf,M(x,h+0.25,z));fm.setColorAt(nf,fc.set(FLOWER_COLS[Math.floor(R()*5)]));nf++;}}
   fm.count=nf;fm.userData.shared=true;g.add(fm);
-  const bm=new THREE.InstancedMesh(bushGeo,vcMat,bushes.length);bm.userData.shared=true;bushes.forEach((m,q)=>bm.setMatrixAt(q,m));g.add(bm);
+  const bm=new THREE.InstancedMesh(bushGeo,laubMat,bushes.length);bm.userData.shared=true;bushes.forEach((m,q)=>bm.setMatrixAt(q,m));g.add(bm);
   // Schilf am Ufer
   const reeds=[];for(let i=0;i<2000&&reeds.length<260;i++){const x=(R()*2-1)*(DE.w-4),side=R()<0.5?-1:1,z=riverZ(x)+side*(s.hw-0.8+R()*1.6);
     if(Math.abs(x)<4&&side<0)continue;reeds.push(M(x,heightAt(x,z)-0.2,z,(R()-0.5)*0.2,R()*6,(R()-0.5)*0.2,1,0.8+R()*0.6,1));}
-  const rm=new THREE.InstancedMesh(REED,vcMat,reeds.length);rm.userData.shared=true;reeds.forEach((m,q)=>rm.setMatrixAt(q,m));g.add(rm);
+  const rm=new THREE.InstancedMesh(REED,laubMat,reeds.length);rm.userData.shared=true;reeds.forEach((m,q)=>rm.setMatrixAt(q,m));g.add(rm);
   // Schiff
   deShip=null;if(s.ship){const sh=makeShip(s.ship);g.add(sh);deShip={g:sh,x:-DE.w*0.4,sp:s.ship==='gross'?1.6:2.2,lane:s.ship==='gross'?0.2:0.35};}
   return true;}
@@ -3037,7 +3075,7 @@ function buildCity(){if(cityBuilt)return;
   const P=geo.attributes.position,cols=new Float32Array(P.count*3),c=new THREE.Color();
   for(let i=0;i<P.count;i+=3){const cx=(P.getX(i)+P.getX(i+1)+P.getX(i+2))/3,cyy=(P.getY(i)+P.getY(i+1)+P.getY(i+2))/3,cz=(P.getZ(i)+P.getZ(i+1)+P.getZ(i+2))/3;
     c.set(cityColor(cx,cz,cyy));for(let q=0;q<3;q++){cols[(i+q)*3]=c.r;cols[(i+q)*3+1]=c.g;cols[(i+q)*3+2]=c.b;}}
-  geo.setAttribute('color',new THREE.BufferAttribute(cols,3));g.add(new THREE.Mesh(geo,vcMat));
+  geo.setAttribute('color',new THREE.BufferAttribute(cols,3));g.add(new THREE.Mesh(geo,wieseMat));
   // Kleine Teile (Zebrastreifen, Fenster, Poller …) kommen alle in EIN Mesh, das spart Arbeit beim Zeichnen
   const deco=[],dbox=(w,h,d,col,x,y,z,ry)=>deco.push(part(new THREE.BoxGeometry(w,h,d),col,M(x,y+h/2,z,0,ry||0,0)));
   const win=[],wbox=(w,h,d,x,y,z,ry)=>win.push(part(new THREE.BoxGeometry(w,h,d),'#8fc3dd',M(x,y+h/2,z,0,ry||0,0))); // Fenster: leuchten nachts (winMat)
@@ -3114,7 +3152,7 @@ function buildCity(){if(cityBuilt)return;
       if(circleHitsRect(MARKET,x,z,3)||hitsList(cityCols,x,z,2.5))continue;tree(x,z,R()<0.7?0:1,0.8+R()*0.3);}}
   for(let k=0;k<70;k++){const a=R(),side=Math.floor(R()*3),x=side===0?-140+a*280:side===1?132+R()*14:-(132+R()*14),z=side===0?-2856+R()*4:-3100+a*240;
     if(inRect(AIRFIELD,x,z)||Math.abs(z-CITY_LAND.z)<40&&x<0||hitsList(cityCols,x,z,2))continue;tree(x,z,R()<0.5?2:0,0.9+R()*0.4);}
-  geos.forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,vcMat,sets[i].length);im.userData.shared=true;sets[i].forEach((m,q)=>im.setMatrixAt(q,m));g.add(im);});
+  geos.forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,laubMat,sets[i].length);im.userData.shared=true;sets[i].forEach((m,q)=>im.setMatrixAt(q,m));g.add(im);});
   // Blumen im Park
   const fm=new THREE.InstancedMesh(flowerGeo,flowerMat,90),fc=new THREE.Color();let nf=0;
   for(let k=0;k<600&&nf<90;k++){const x=PARK.x0+3+R()*(PARK.x1-PARK.x0-6),z=PARK.z0+3+R()*(PARK.z1-PARK.z0-6);
@@ -3129,6 +3167,7 @@ function buildCity(){if(cityBuilt)return;
       poles.push(part(new THREE.CylinderGeometry(0.08,0.12,3.4,8),'#2b2f33',M(x,2.9,z)));heads.push(part(new THREE.SphereGeometry(0.34,12,8),'#f2efe2',M(x,4.75,z)));cityCols.push({x,z,r:0.25});}
     heads.push(part(new THREE.CylinderGeometry(1.13,1.13,1.7,12),'#f2efe2',M(110,18.1,-3140))); // Licht im Leuchtturm
     g.add(new THREE.Mesh(merge(poles),vcMat));g.add(new THREE.Mesh(merge(heads),lampMat));}
+  makeBloom(sets[0],g); // Blüten im Frühling (ohne R())
   buildPeople(g,rng(815));
   VEHICLE_IDS.forEach(id=>{vehMesh[id]=buildVehicleMesh(id);bakeKids(vehMesh[id]);g.add(vehMesh[id]);}); // ohne Zufall, damit die Häuser bleiben, wo sie sind
   placeVehicles();
@@ -3533,6 +3572,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:33,day:'27.10.2026',ico:'🍂',t:'Jahreszeiten',d:'In Deutschland gibt es jetzt Jahreszeiten wie bei dir: Im Frühling blühen die Bäume, im Herbst wird das Laub bunt und im Winter ist die Wiese weiß. Am Amazonas erklärt dir eine neue Infotafel die Regenzeit.'},
  {v:32,day:'27.10.2026',ico:'🌅',t:'Echte Tageszeit',d:'Im Spiel ist jetzt dieselbe Uhrzeit wie bei dir. Abends geht die Sonne unter, nachts siehst du Sterne und den Mond!'},
  {v:31,day:'27.10.2026',ico:'🔒',t:'Sicherer Spielstand',d:'Wenn du eine Sicherheitskopie lädst, prüft das Spiel jetzt jeden Wert ganz genau. So kann eine fremde Datei nichts kaputt machen.'},
  {v:30,day:'23.10.2026',ico:'🐟',t:'Angeln im Hafen',d:'Im Hafen von Hafenhausen kannst du jetzt angeln! Dort beißen Hering, Makrele, Scholle, Hornhecht und Dorsch, und Fischer Hannes kauft sie dir ab.'},
@@ -3757,7 +3797,8 @@ updateTimeChip();if(timeLeft()<=0)lockTime();
 updateWorldTime();
 // Nur für die automatischen Tests (der Browser meldet sich dann als „webdriver“): Spieler an eine Stelle setzen
 if(navigator.webdriver===true)window.__test={warp(x,z){player.pos.set(x,0,z);player.y=groundY(x,z);player.root.position.set(x,player.y,z);updateWorldTime();saveWhere();},
-  welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible}),
+  welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible,region:WT.region,laub:'#'+laubMat.color.getHexString(),wiese:'#'+wieseMat.color.getHexString(),blueten:bloomOn&&blooms.size>0&&[...blooms].every(p=>p.visible)}),
+  hoehe:(x,z)=>heightAt(x,z),
   // jeden Flussplatz bauen: wie hoch stehen Hannes und die Infotafel? (unter 0 = im Wasser)
   ufer(){const was=curSpot&&curSpot.id,fa=state.flussAt,r=SPOTS.map(s=>{buildSpot(s.id);return {id:s.id,hannes:heightAt(hannes.x,hannes.z),tafel:heightAt(deBoard.x,deBoard.z)};});if(was)buildSpot(was);state.flussAt=fa;return r;}};
 player.root.position.set(player.pos.x,player.y,player.pos.z);

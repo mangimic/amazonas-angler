@@ -1355,6 +1355,62 @@ test('Weltzeit: Jahreszeit', async () => {
   await ctx.close();
 });
 
+// Jahreszeiten: Farbe von Laub und Wiese (Faktor auf die Farben) und die Blüten im Frühling, nur in Deutschland
+const SAISON = { fruehling: { laub: '#ffe6ef', wiese: '#ffffff', blueten: true }, sommer: { laub: '#ffffff', wiese: '#ffffff', blueten: false },
+  herbst: { laub: '#ffb35c', wiese: '#ffffff', blueten: false }, winter: { laub: '#e8eef2', wiese: '#eef3f6', blueten: false } };
+test('Jahreszeiten: am Heimat-See wechseln Laub und Wiese, am Amazonas bleibt alles grün', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-04-15T12:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
+  for (const [iso, jz] of [['2026-04-15T12:00:00+02:00', 'fruehling'], ['2026-07-15T12:00:00+02:00', 'sommer'],
+    ['2026-10-15T12:00:00+02:00', 'herbst'], ['2026-12-15T12:00:00+01:00', 'winter']]) {
+    await ctx.clock.setFixedTime(new Date(iso));
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.locator('body[data-region="de"][data-season="' + jz + '"]').waitFor({ state: 'attached', timeout: 5000 });
+    const w = await page.evaluate(() => window.__test.welt());
+    assert.deepEqual({ laub: w.laub, wiese: w.wiese, blueten: w.blueten }, SAISON[jz], jz);
+  }
+  // am 15.12. ins Dorf am Amazonas: das Datum bleibt Winter, aber dort gibt es keine Jahreszeiten-Farben
+  const VX = 10 * Math.sin(1) + 24; // wie im Spiel: riverX(0)+24
+  await page.evaluate(x => window.__test.warp(x, 2), VX - 6);
+  await page.locator('body[data-region="amazonas"]').waitFor({ state: 'attached', timeout: 5000 });
+  assert.equal(await page.evaluate(() => document.body.dataset.season), 'winter');
+  const w = await page.evaluate(() => window.__test.welt());
+  assert.deepEqual({ laub: w.laub, wiese: w.wiese, blueten: w.blueten }, SAISON.sommer, 'Amazonas: neutral');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Position einer Infotafel aus INFOBOARDS lesen: {id:'…',x:VX±a,z:b,…} (x relativ zum Dorf)
+function tafelOrt(id) {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = html.match(new RegExp("\\{id:'" + id + "',x:VX([+-]\\d+(?:\\.\\d+)?),z:(-?\\d+(?:\\.\\d+)?),"));
+  assert.ok(m, 'Infotafel ' + id + ' steht in INFOBOARDS');
+  return { x: 10 * Math.sin(1) + 24 + Number(m[1]), z: Number(m[2]) }; // VX wie im Spiel: riverX(0)+24
+}
+
+test('Jahreszeiten: Infotafel Regenzeit am Amazonas', async () => {
+  const T = tafelOrt('regenzeit');
+  const { ctx, page, errors } = await zeitSeite('2026-12-15T12:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ where: { x: T.x - 2, z: T.z, f: Math.PI / 2, boat: false } }) }); // vor der Tafel (Flussseite)
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('body[data-region="amazonas"][data-season="winter"]').waitFor({ state: 'attached', timeout: 5000 });
+  const knopf = page.locator('#btnCtx:has-text("Infotafel lesen")');
+  await knopf.waitFor({ timeout: 20000 });
+  await knopf.click();
+  await page.locator('#card.info').waitFor();
+  const text = await page.textContent('#card');
+  assert.match(text, /Regenzeit/);
+  assert.match(text, /Trockenzeit/);
+  assert.match(text, /Äquator/);
+  assert.match(text, /Neues Wissen! \+5 Ludins/);
+  assert.deepEqual((await weg(page)).infoRead, ['regenzeit']);
+  assert.ok((await page.evaluate(([x, z]) => window.__test.hoehe(x, z), [T.x, T.z])) > 0.5, 'die Tafel steht an Land');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 // Sonnenhöhe wie im Spiel (sunElevation in index.html), für Deutschland: Sonnen-Uhrzeit = UTC + 10/15 Stunden
 function sonnenhoehe(d) {
   const r = Math.PI / 180, doy = Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(d.getUTCFullYear(), 0, 1)) / 864e5) + 1;
