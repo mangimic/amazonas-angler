@@ -526,7 +526,7 @@ test('Angel-Quiz bei Opa Tiago: richtige Antworten bringen Ludins und den Junior
   await page.click('#btnGo');
   await page.locator('#btnCtx:has-text("Opa Tiago")').waitFor({ timeout: 5000 });
   await page.click('#btnCtx');
-  await page.locator('text=Du hast schon 19').waitFor();
+  await page.locator('text=Noch 1 bis zum Angelschein!').waitFor();
   await page.click('#btnQuiz');
   for (let i = 0; i < 5; i++) {
     const frage = (await page.textContent('#card .qq')).trim();
@@ -1598,7 +1598,7 @@ test('Läden: um 23 Uhr hat Rosa zu', async () => {
   await page.click('#btnCtx');
   assert.equal(await page.locator('#modal').isVisible(), false, 'der Laden geht nicht auf');
   assert.equal(await page.locator('#card').isVisible(), false);
-  assert.match(await page.textContent('#toast'), /Geschlossen – öffnet um 8 Uhr/);
+  assert.equal(await page.textContent('#toast'), 'Der Laden ist zu, bis 8 Uhr. Angeln geht immer. Deine Fische bleiben im Eimer.');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -1702,6 +1702,7 @@ test('Verkehr: Truck schnell gegen Haus kostet 20 Ludins', async () => {
   const { ctx, page, errors, s } = await truckGegenHaus(100, 2000);
   assert.equal(s.ludins, 80);
   assert.match(await page.textContent('#toast'), /🚨 Strafzettel! Du bist gegen .+ gefahren\. −20 Ludins/);
+  assert.match(await page.textContent('#toast'), /Fahr langsamer: wisch nur ein kleines Stück\./, 'der Strafzettel sagt, wie es besser geht');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -1891,7 +1892,7 @@ test('Nachbarn: reden, Aufgabe, Fisch bringen, Belohnung', async () => {
   await page.click('#card button:has-text("Tschüss!")');
   await page.click('#btnMap');
   await page.locator('#card h3:has-text("📝 Aufgaben")').waitFor();
-  assert.match(await page.textContent('#card'), /: bring .+ \(0\/1\)/);
+  assert.match(await page.textContent('#card'), /: 🐟 .+ 0\/1 · fängst du (im Hafen|am Heimat-See) · \+\d+ Ludins/);
   // den gewünschten Fisch in den Eimer legen und neu laden
   await seed(page, { [KEY]: JSON.stringify({ ...s, bucket: [{ id: A.fish, cm: 30, value: 9 }] }) });
   await startGame(page);
@@ -2131,7 +2132,7 @@ test('Museum: um 23 Uhr geschlossen', async () => {
   assert.equal((await page.textContent('#btnCtx')).trim(), '🌙 Geschlossen – öffnet um 8 Uhr');
   await page.click('#btnCtx');
   assert.equal(await page.locator('#modal').isVisible(), false, 'das Museum geht nicht auf');
-  assert.match(await page.textContent('#toast'), /Geschlossen – öffnet um 8 Uhr/);
+  assert.match(await page.textContent('#toast'), /bis 8 Uhr\. Angeln geht immer\./);
   const s = await weg(page);
   assert.equal(s.bucket.length, 1);
   assert.deepEqual(s.museum, {});
@@ -2435,7 +2436,7 @@ test('Karte: offene Aufgaben stehen auch auf der großen Karte', async () => {
   await page.click('#btnMap');
   await page.locator('#card h3:has-text("Amazonas")').waitFor();
   await page.locator('#card h3:has-text("📝 Aufgaben")').waitFor();
-  assert.match(await page.textContent('#card'), /bring Hering \(0\/1\)/);
+  assert.match(await page.textContent('#card'), new RegExp(': 🐟 Hering 0/1 · fängst du im Hafen · \\+' + (2 * fischPreis('hering') + 10) + ' Ludins'));
   await page.click('#card button:has-text("Fertig")');
   // ohne offene Aufgaben: kein Bereich Aufgaben
   await seed(page, { [KEY]: stadtSeed({}) });
@@ -2524,6 +2525,192 @@ test('Mehrere Spieler: Museum, Nachbarn und Aufgaben bleiben bei jedem Spieler',
   assert.equal(s.playerId, 'p1');
   assert.deepEqual(teile(s), A, 'Testkind hat alles zurück');
   assert.deepEqual(teile(JSON.parse(await read(page, KEY + '-spieler-p2'))), B, 'Papa ist sicher aufgehoben');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Klarere Texte (Skill i-have-adhd): Meldungen nennen Ursache und Ausweg, Fortschritt heißt „noch …“, weniger Text auf einmal
+function newsListe() {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const i = html.indexOf('const NEWS=['), j = html.indexOf('];', i);
+  return new Function('return ' + html.slice(i + 'const NEWS='.length, j + 1))();
+}
+const toastIst = (page, start) => page.waitForFunction(s => document.querySelector('#toast').textContent.startsWith(s), start, { timeout: 60000, polling: 100 });
+
+test('Klarere Texte: volle Reuse am Heimat-See schickt dich zu Fischer Hannes', async () => {
+  const { ctx, page, errors } = await newPage();
+  const voll = Array.from({ length: 15 }, () => ({ id: 'rotauge', cm: 20, value: 5 }));
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, bucket: voll,
+    traps: [{ x: 10, z: -936, t: Date.now() - 60 * 1000, fish: [{ id: 'karpfen', cm: 60, value: 25 }] }],
+    where: { x: 10, z: -940, f: 0, boat: false } }) }); // am Südufer, die Reuse liegt 4 m weiter im See
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Reuse ansehen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.click('#card button:has-text("In den Eimer")');
+  assert.equal(await page.textContent('#toast'), 'Dein Eimer ist voll! Verkaufe zuerst Fische bei Fischer Hannes.');
+  assert.equal((await weg(page)).bucket.length, 15);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Klarere Texte: Fisch weg und Eimer voll sagen, was du tun kannst', async () => {
+  // Posenangeln am Amazonas: einen Biss verpassen, dann einen Fisch fangen, der den Eimer voll macht
+  const fast = Array.from({ length: 14 }, () => ({ id: 'piranha', cm: 20, value: 8 }));
+  let { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ bucket: fast, where: { x: 14, z: 0, f: -Math.PI / 2, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnFish');
+  await toastIst(page, 'Der Fisch ist weg'); // nicht ziehen: der Fisch schwimmt weg
+  assert.equal(await page.textContent('#toast'), 'Der Fisch ist weg. Tipp schnell auf ZIEHEN, wenn die Pose taucht.');
+  await page.click('#btnFish');
+  await page.waitForFunction(() => document.querySelector('#fishLbl').textContent === 'ZIEHEN!', null, { timeout: 60000, polling: 100 });
+  await page.keyboard.press('Space');
+  await page.locator('#card h2:has-text("gefangen")').waitFor();
+  await page.click('#card .btns button:has-text("In den Eimer")');
+  assert.equal(await page.textContent('#toast'), 'Eimer voll! Bring die Fische zu Rosa.');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+  // Grundangeln: der Bissanzeiger piept
+  ({ ctx, page, errors } = await newPage());
+  await seed(page, { [KEY]: stadtSeed({ methods: { spin: false, grund: true }, method: 'grund', where: { x: 14, z: 0, f: -Math.PI / 2, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnFish');
+  await toastIst(page, 'Der Fisch ist weg');
+  assert.equal(await page.textContent('#toast'), 'Der Fisch ist weg. Tipp schnell auf ZIEHEN, wenn es piept.');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Klarere Texte: 5 Minuten vor Schluss kommt ein Tipp zum Verkaufen', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ playTime: { day: heute(), sec: 15 * 60 - 303, extra: 0 } }), [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await toastIst(page, 'Noch 5 Minuten');
+  assert.equal(await page.textContent('#toast'), 'Noch 5 Minuten! Jetzt ist eine gute Zeit, deine Fische zu verkaufen.');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Klarere Texte: Angel-Quiz zeigt, wie viele richtige Fragen noch fehlen', async () => {
+  const quiz = quizAusDemSpiel();
+  let { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ metTiago: true, quiz: { ok: quiz.slice(0, 7).map(q => q.id) }, where: NEBEN_TIAGO }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Opa Tiago")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Opa Tiagos Angelladen")').waitFor();
+  assert.match(await page.textContent('#card'), /🎓 7 von 20 richtig\. Noch 13 bis zum Angelschein!/);
+  assert.doesNotMatch(await page.textContent('#card'), /Du hast schon/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+  ({ ctx, page, errors } = await newPage());
+  await seed(page, { [KEY]: stadtSeed({ metTiago: true, angelschein: true, quiz: { ok: quiz.slice(0, 20).map(q => q.id) }, where: NEBEN_TIAGO }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Opa Tiago")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Opa Tiagos Angelladen")').waitFor();
+  assert.match(await page.textContent('#card'), /🎓 Du hast den Junior-Angelschein!/);
+  assert.doesNotMatch(await page.textContent('#card'), /Noch \d+ bis/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Klarere Texte: Nachbar-Karte zeigt, wie viele Herzen bis Freund fehlen', async () => {
+  let { ctx, page, errors } = await stadtSeite({ nachbarn: { n0: { f: 2, talk: '', gift: '' } } });
+  await redeMit(page, 0); // erstes Gespräch heute: +1, also 3 Herzen
+  assert.equal((await page.locator('#card p.small').first().textContent()).trim(), '❤️ Bekannt · noch 2 Herzen bis Freund');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+  ({ ctx, page, errors } = await stadtSeite({ nachbarn: { n0: { f: 30, talk: '2026-10-31', gift: '2026-10-31' } } }));
+  await redeMit(page, 0);
+  assert.equal((await page.locator('#card p.small').first().textContent()).trim(), '❤️❤️❤️ Bester Freund');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Klarere Texte: Museum sagt, wie viele Arten schon ausgestellt sind', async () => {
+  const { ctx, page, errors } = await museumSeite({ bucket: [{ id: 'hering', cm: 25, value: 6 }], museum: { hering: { cm: 30, t: 1761900000000 } } });
+  await museumAuf(page);
+  const n = await page.evaluate(() => window.__test.fischInfo('hering').anzahl);
+  assert.match(await page.textContent('#card'), new RegExp('Im Museum: 1 von ' + n + '\\. Fang eine neue Art, dann kannst du spenden\\.'));
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Klarere Texte: Flussplatz-Tipp zählt, was für den Stempel fehlt, die Infotafel zeigt den Stempel oben', async () => {
+  const rhein = flussplaetze().find(s => s.id === 'bw-rhein');
+  const vorTafel = { x: -2.8, z: -1800 - rhein.hw - 9, f: 0, boat: false };
+  const tipp = page => page.waitForFunction(() => document.querySelector('#tip').textContent.includes('Stempel'), null, { timeout: 20000 }).then(() => page.textContent('#tip'));
+  let { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ fluss: { 'bw-rhein': { f: ['barbe'] } }, flussAt: 'bw-rhein', where: vorTafel }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  assert.equal(await tipp(page), 'Stempel: noch 2 Fischarten, dann das Rätsel an der Infotafel 🧩.');
+  await page.locator('#btnCtx:has-text("Infotafel")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Rhein bei Breisach")').waitFor();
+  const teile = await page.evaluate(() => [...document.querySelectorAll('#card > *')].map(e => e.tagName + '.' + e.className));
+  assert.deepEqual(teile.slice(0, 4), ['DIV.infohead', 'H2.', 'P.qe', 'DIV.rule'], 'Belohnung unter dem Titel, Stempel-Kasten vor dem Text: ' + teile);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+  // Rätsel schon gelöst: nur noch die Fischarten
+  ({ ctx, page, errors } = await newPage());
+  await seed(page, { [KEY]: stadtSeed({ fluss: { 'bw-rhein': { f: ['barbe', 'nase'], q: true } }, flussAt: 'bw-rhein', where: vorTafel }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  assert.equal(await tipp(page), 'Stempel: noch 1 Fischart.');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Klarere Texte: Infotafel zeigt die Belohnung gleich unter dem Titel', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) }); // neben der Regel-Tafel
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Infotafel")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#card table.rules').waitFor();
+  const teile = await page.evaluate(() => [...document.querySelectorAll('#card > *')].map(e => e.tagName + '.' + e.className));
+  assert.deepEqual(teile.slice(0, 3), ['DIV.infohead', 'H2.', 'P.qe'], 'Belohnung gleich unter dem Titel: ' + teile);
+  assert.equal(await page.textContent('#card .qe'), '📚 Neues Wissen! +5 Ludins · 1 von 8 Tafeln');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Was ist neu: zeigt nur die neuen Einträge, die älteren sind zugeklappt', async () => {
+  const news = newsListe(), V = news[0].v;
+  assert.equal(new Set(news.map(n => n.v)).size, news.length, 'jede Nummer gibt es nur einmal');
+  assert.match(news.find(n => n.v === 5).d, /Sicherheitskopie als Datei/, 'v5 nennt die Sicherheitskopie');
+  assert.doesNotMatch(news.find(n => n.v === 5).d, /Spielstand-Code/);
+  const neu = news.find(n => n.v === 40);
+  assert.ok(neu && neu.ico === '💡' && neu.t === 'Klarere Tipps' && neu.day === '27.10.2026', 'Eintrag v40');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ newsSeen: V - 2 }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#card h2:has-text("Was ist neu?")').waitFor({ timeout: 5000 });
+  await page.locator('#card h3:has-text("Neu für dich")').waitFor({ timeout: 2000 });
+  const sichtbar = () => page.locator('#card .newsitem:visible').count();
+  assert.equal(await sichtbar(), 2, 'nur die 2 neuen Einträge');
+  const knopf = page.locator('#card button:has-text("Ältere Neuigkeiten")');
+  assert.ok((await knopf.boundingBox()).height >= 60, 'Knopf mindestens 60 px');
+  await knopf.click();
+  assert.equal(await sichtbar(), news.length, 'aufgeklappt: alle Einträge');
+  assert.equal((await weg(page)).newsSeen, V);
+  // von Hand geöffnet, ohne Neues: die neuesten 3 und der Knopf
+  await page.click('#card button:has-text("Los geht")');
+  await page.click('#btnNews');
+  await page.locator('#card h2:has-text("Was ist neu?")').waitFor();
+  assert.equal(await sichtbar(), 3);
+  assert.equal(await page.locator('#card h3:has-text("Neu für dich")').count(), 0);
+  assert.equal(await page.locator('#card button:has-text("Ältere Neuigkeiten")').isVisible(), true);
   assert.deepEqual(errors, []);
   await ctx.close();
 });

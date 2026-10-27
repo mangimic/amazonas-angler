@@ -78,6 +78,8 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .newsitem .ni{font-size:34px;line-height:1.1;text-align:center}
 .newsitem b{display:block;font:800 18px/1.2 var(--display)}
 .newsitem span{display:block;font-size:15px;line-height:1.4;margin-top:2px}
+.newsnew{margin:0;font:800 20px var(--display)}
+.newsmore{width:100%;flex-shrink:0}
 .newsver{font-size:13px;color:var(--muted);text-align:center;font-variant-numeric:tabular-nums}
 .sonar b{position:absolute;left:0;right:0;bottom:0;background:var(--ink);color:#fff;font:800 15px/1.6 var(--display);text-align:center}
 .sonar.ping{animation:bump .5s}
@@ -438,12 +440,12 @@ const BAITS={
 // Angelarten: Posenangeln hat jeder, Spinnrute und Grundrute gibt es bei Opa Tiago.
 // like = beißen viel öfter (×3), no = beißen kaum (×0,15)
 const METHODS={
- pose:{name:'Posenangeln',ico:'🎣',like:[],no:[],hint:'Posenangeln: Die Pose schwimmt oben. Taucht sie unter, beißt ein Fisch!'},
+ pose:{name:'Posenangeln',ico:'🎣',like:[],no:[],miss:'wenn die Pose taucht',hint:'Posenangeln: Die Pose schwimmt oben. Taucht sie unter, beißt ein Fisch!'},
  spin:{name:'Spinnfischen',ico:'🌀',like:['hecht','zander','barsch','forelle','doebel','pfauen','dorado','arowana','piranha','rapfen','huchen'],
    no:['neon','beil','skalar','diskus','karausche','schleie','karpfen','rotfeder','tambaqui','pacu','brachse','nase','quappe','aal','stoer','scholle'],
-   hint:'Spinnfischen: Der Kunstköder kommt von selbst zu dir zurück. Raubfische jagen ihm nach!'},
+   miss:'wenn es am Köder spritzt',hint:'Spinnfischen: Der Kunstköder kommt von selbst zu dir zurück. Raubfische jagen ihm nach!'},
  grund:{name:'Grundangeln',ico:'⚓',like:['karpfen','schleie','karausche','antennen','piraiba','rochen','tambaqui','pacu','barbe','brachse','wels','aal','quappe','stoer','scholle','dorsch'],
-   no:['neon','beil','skalar','diskus','arowana','rapfen'],hint:'Grundangeln: Das Blei liegt am Grund. Warte, bis der Bissanzeiger piept!'}};
+   no:['neon','beil','skalar','diskus','arowana','rapfen'],miss:'wenn es piept',hint:'Grundangeln: Das Blei liegt am Grund. Warte, bis der Bissanzeiger piept!'}};
 const methodNow=()=>state.method!=='pose'&&state.methods[state.method]?state.method:'pose';
 // Opa Tiagos Angelladen
 const TIAGO_TABS=[['angeln','Angeln'],['koeder','Köder'],['boot','Boot'],['kleidung','Kleidung']];
@@ -720,6 +722,7 @@ const onRoad=(x,z)=>CITY_ROADS.some(R=>x>=R.x0&&x<=R.x1&&z>=R.z0&&z<=R.z1);
 const onWalk=(x,z)=>!onRoad(x,z)&&CITY_ROADS.some(R=>x>=R.x0-WALK_W&&x<=R.x1+WALK_W&&z>=R.z0-WALK_W&&z<=R.z1+WALK_W);
 const atDE=()=>player.pos.z<DE.zone&&!atCity();
 const atLake=()=>player.pos.z<LAKE.zone&&!atDE()&&!atCity();
+const sellTo=()=>atDE()||atLake()||atCity()?'Fischer Hannes':'Rosa'; // wer hier deine Fische kauft (für „Eimer voll“)
 const riverZ=x=>DE.z+deP.bend*Math.sin(x*deP.k);
 function deHeight(x,z){if(!deP)return 3;
   const rz=riverZ(x),sl=deP.bend*deP.k*Math.cos(x*deP.k),d=Math.abs(z-rz)/Math.sqrt(1+sl*sl),HW=deP.hw,north=z>rz;
@@ -802,6 +805,7 @@ const isNight=()=>WT.phase==='nacht';
 const SHOP_HOURS={auf:8,zu:22};
 const shopOpen=()=>WT.hour>=SHOP_HOURS.auf&&WT.hour<SHOP_HOURS.zu;
 const SHOP_CLOSED_TXT='🌙 Geschlossen – öffnet um '+SHOP_HOURS.auf+' Uhr';
+const SHOP_CLOSED_TOAST='Der Laden ist zu, bis '+SHOP_HOURS.auf+' Uhr. Angeln geht immer. Deine Fische bleiben im Eimer.';
 const SHOP_HOURS_TXT=SHOP_HOURS.auf+'–'+SHOP_HOURS.zu+' Uhr';
 const SHOP_CTX=['shop','tiago','hannes','vshop','museum']; // diese Kontext-Knöpfe führen in einen Laden
 // Himmel: Tag hellgrün-blau, Dämmerung rosa-orange, Nacht dunkelblau (nie schwarz)
@@ -1444,6 +1448,7 @@ let rideStuck=0,rideHint=0; // wie lange das Fahrzeug schon hängt, und Pause zw
 // Niemand wird verletzt: das Fahrzeug hält vorher an, der Mensch schaut nur erschrocken und schimpft ein bisschen.
 const FINE={bike:5,roller:5,skate:5,truck:20};
 const CRASH_TXT={mensch:'Fast wärst du in jemanden hineingefahren.',fahrzeug:'Du bist gegen ein Fahrzeug gefahren.',wand:'Du bist gegen eine Wand gefahren.'};
+const CRASH_TIPP='Fahr langsamer: wisch nur ein kleines Stück.';
 let crashT=0,rideMoved=false;
 // Was steht dem Fahrzeug an der Stelle (x,z) im Weg? {kind,p} oder null (z. B. nur Wasser oder der Rand der Stadt: das kostet nichts)
 function crashWhat(x,z,skip){let pts=[[x,z,0.35]];
@@ -1457,7 +1462,7 @@ function crash(kind,who){const f=Math.min(Math.max(0,state.ludins),FINE[player.r
   tone(180,0.12,'sine',0.08); // „Bonk“
   if(f>0){state.ludins-=f;save();refreshHud(true);}
   if(kind==='mensch'&&who)who.wave=1.5; // der Mensch dreht sich zu dir um (updatePeople)
-  toast((kind==='mensch'?'„Hey, pass doch auf!“ ':'')+'🚨 Strafzettel! '+CRASH_TXT[kind]+(f>0?' −'+f+' Ludins':''));}
+  toast((kind==='mensch'?'„Hey, pass doch auf!“ ':'')+'🚨 Strafzettel! '+CRASH_TXT[kind]+(f>0?' −'+f+' Ludins.':'')+' '+CRASH_TIPP);}
 function updatePlayer(dt,t){
   if(player.ride==='tram'){ // in der Straßenbahn fährt man mit: Wischen bewegt nichts, Kamera und Karte folgen der Bahn
     const p=tramPos(tram.s);player.pos.set(p.x,0,p.z);player.facing=p.yaw;player.y=groundY(p.x,p.z);player.speed=0;
@@ -1567,7 +1572,7 @@ function fishPress(){
   if(atCity()&&player.ride){toast('Steig erst ab, dann kannst du angeln.');return;}
   if(atCity()&&fishing.state==='idle'&&!findWater()){toast('Angeln kannst du hier am Hafen! Stell dich an die Kaimauer und schau aufs Wasser.');return;}
   if(fishing.state==='idle'){
-    if(state.bucket.length>=bucketMax()){toast('Dein Eimer ist voll! Bring die Fische zu '+(atDE()||atLake()||atCity()?'Fischer Hannes':'Rosa')+'.');return;}
+    if(state.bucket.length>=bucketMax()){toast('Dein Eimer ist voll! Bring die Fische zu '+sellTo()+'.');return;}
     const w=findWater();if(!w){toast(player.inBoat?'Hier ist es zu flach. Fahr weiter in den Fluss!':'Hier ist kein Wasser. Stell dich ans Ufer oder auf den Steg!');return;}
     fishing.method=methodNow();fishing.state='cast';fishing.t=0;fishing.target.copy(w);fishing.bait=fishing.method==='spin'?'wurm':useBait();player.av.rod.visible=true;
     player.av.tip.getWorldPosition(fishing.from);tone(300,0.25,'sine',0.08);
@@ -1618,7 +1623,7 @@ function updateFishing(dt,t){
     av.rod.rotation.x=0.93+Math.sin(t*30)*(m==='grund'?0.09:0.05);
     if(m==='pose'){bb.position.copy(fishing.target);bb.position.y=-0.12*Math.abs(Math.sin(fishing.t*16));}
     else if(m==='spin')bb.position.y=-0.05*Math.abs(Math.sin(fishing.t*20));
-    if(fishing.t>fishing.win){stopFishing();toast('Oh nein, der Fisch ist weggeschwommen! Probier es nochmal.');}
+    if(fishing.t>fishing.win){stopFishing();toast('Der Fisch ist weg. Tipp schnell auf ZIEHEN, '+(METHODS[m]||METHODS.pose).miss+'.');}
   }
   // Schnur
   av.tip.getWorldPosition(tipW);line.visible=bb.visible;
@@ -1808,6 +1813,7 @@ const QUIZ=[
 const QUIZ_BY={};QUIZ.forEach(q=>QUIZ_BY[q.id]=q);
 const QUIZ_GOAL=20,QUIZ_LUDINS=10,SCHEIN_LUDINS=100;
 const quizOk=()=>state.quiz.ok.filter(id=>QUIZ_BY[id]);
+const quizNoch=()=>{const n=Math.min(quizOk().length,QUIZ_GOAL);return '🎓 '+n+' von '+QUIZ_GOAL+' richtig. Noch '+(QUIZ_GOAL-n)+' bis zum Angelschein!';};
 function showQuiz(round){
   if(!round){ // 5 Fragen, zuerst die, die noch nicht richtig beantwortet sind
     const ok=quizOk(),mix=a=>a.map(x=>[Math.random(),x]).sort((p,q)=>p[0]-q[0]).map(x=>x[1]);
@@ -1821,7 +1827,7 @@ function showQuiz(round){
     const n=quizOk().length;
     if(!state.angelschein&&n>=QUIZ_GOAL){state.angelschein=true;state.ludins+=SCHEIN_LUDINS;save();refreshHud(true);sfxCatch();
       card.appendChild(el('div','schein','<div class="sico">🎓</div><b>Junior-Angelschein</b><span>für '+esc(state.avatar.name||'Angler')+'</span><p>Du kennst dich mit Fischen, Wasser und Natur aus. Opa Tiago ist stolz auf dich!</p><p><b>+'+SCHEIN_LUDINS+' Ludins</b></p>'));}
-    else if(!state.angelschein)card.appendChild(el('p',null,'Für den <b>Junior-Angelschein</b> brauchst du '+QUIZ_GOAL+' richtige Fragen. Du hast schon '+n+'.'));
+    else if(!state.angelschein)card.appendChild(el('p',null,quizNoch()));
     else card.appendChild(el('p',null,'🎓 Du hast den Junior-Angelschein! Spiel trotzdem gern weiter.'));
     const bt=el('div','btns');const again=el('button','b go','Noch eine Runde');again.onclick=()=>showQuiz();
     const back=el('button','b alt','Zurück zum Laden');back.onclick=showTiago;bt.append(again,back);card.appendChild(bt);return;}
@@ -1911,6 +1917,8 @@ function showInfo(b){
   openModal();card.className='card info';card.innerHTML='';
   card.appendChild(el('div','infohead','ℹ️ Infotafel'));
   card.appendChild(el('h2',null,b.ico+' '+esc(b.title)));
+  if(!state.infoRead.includes(b.id)){state.infoRead.push(b.id);state.ludins+=INFO_LUDINS;save();refreshHud(true);
+    card.appendChild(el('p','qe','📚 Neues Wissen! +'+INFO_LUDINS+' Ludins · '+state.infoRead.filter(id=>INFO_TEXT[id]).length+' von '+INFOBOARDS.length+' Tafeln'));}
   t.p.forEach(x=>card.appendChild(el('p',null,x)));
   if(t.rules){const tb=el('table','rules');tb.innerHTML='<tr><th>Fisch</th><th>Mindestmaß</th><th>Schonzeit</th></tr>';
     Object.keys(RULES).forEach(id=>{const r=RULES[id],f=FISH_BY[id];if(!f||r.selten)return;const now=inSeason(r);
@@ -1918,8 +1926,6 @@ function showInfo(b){
     card.appendChild(tb);card.appendChild(el('p','small','Allgemeine Regeln in Baden-Württemberg. An manchen Gewässern gelten andere Regeln.'));}
   if(t.fish&&t.fish.length){const g=el('div','catches');
     t.fish.forEach(id=>{const f=FISH_BY[id];if(!f)return;const d=el('div');d.appendChild(fishImg(f,'cimg'));d.appendChild(el('b',null,esc(f.name)));g.appendChild(d);});card.appendChild(g);}
-  if(!state.infoRead.includes(b.id)){state.infoRead.push(b.id);state.ludins+=INFO_LUDINS;save();refreshHud(true);
-    card.appendChild(el('p','qe','📚 Neues Wissen! +'+INFO_LUDINS+' Ludins. Du hast '+state.infoRead.filter(id=>INFO_TEXT[id]).length+' von '+INFOBOARDS.length+' Infotafeln gelesen.'));}
   const bt=el('div','btns');const c=el('button','b','Fertig');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
 }
 function showCatch(f,cm,value,isNew,extra){
@@ -1939,7 +1945,7 @@ function showCatch(f,cm,value,isNew,extra){
   if(Math.random()<0.4)card.appendChild(el('p','tipline','💡 '+esc(TIPS[Math.floor(Math.random()*TIPS.length)])));
   const bt=el('div','btns');
   const keep=el('button','b go','In den Eimer');keep.onclick=()=>{state.bucket.push({id:f.id,cm,value});save();refreshHud();closeModal();
-    if(state.bucket.length>=bucketMax())toast('Dein Eimer ist jetzt voll!');afterCatch();};
+    if(state.bucket.length>=bucketMax())toast('Eimer voll! Bring die Fische zu '+sellTo()+'.');afterCatch();};
   const rel=el('button','b alt','Freilassen');rel.onclick=()=>{closeModal();splash(player.pos.x+Math.sin(player.facing)*3,player.pos.z+Math.cos(player.facing)*3);toast('Tschüss, '+({ein:'kleines',eine:'kleine'}[f.art]||'kleiner')+' '+f.name+'!');afterCatch();};
   bt.append(keep,rel);card.appendChild(bt);
 }
@@ -2005,7 +2011,7 @@ function showTiago(){
   head.appendChild(el('div',null,'<h2>Opa Tiagos Angelladen</h2><p class="small">Offen '+SHOP_HOURS_TXT+'</p><p>Olá, '+esc(state.avatar.name||'du')+'! Ich habe alles, was ein Angler braucht.</p>'));
   card.appendChild(head);
   const qrow=el('div','item shopitem');qrow.appendChild(el('div','shopicon','🎓'));
-  qrow.appendChild(el('div','t','<b>Angel-Quiz</b><span>'+(state.angelschein?'Du hast den Junior-Angelschein!':'Beantworte '+QUIZ_GOAL+' Fragen richtig, dann bekommst du den Junior-Angelschein. Du hast schon '+quizOk().length+'.')+'</span>'));
+  qrow.appendChild(el('div','t','<b>Angel-Quiz</b><span>'+(state.angelschein?'🎓 Du hast den Junior-Angelschein!':quizNoch())+'</span>'));
   const qz=el('button','b go','Los!');qz.id='btnQuiz';qz.onclick=()=>showQuiz();qrow.appendChild(qz);card.appendChild(qrow);
   const tabs=el('div','tabs four');
   TIAGO_TABS.forEach(([id,lb])=>{const b=el('button',null,lb);b.setAttribute('aria-pressed',tiagoTab===id);b.onclick=()=>{tiagoTab=id;showTiago();};tabs.appendChild(b);});
@@ -2104,7 +2110,7 @@ function showMuseum(say){
   if(museumTab==='spenden'){
     if(say)card.appendChild(el('p','small','<b>Herr Eugen:</b> '+esc(say)));
     const l=el('div','list'),donors=museumDonors();
-    if(!donors.length)l.appendChild(el('div','empty',state.bucket.length?'Kein Fisch in deinem Eimer ist neu für das Museum.':'Dein Eimer ist leer. Fang erst ein paar Fische!'));
+    if(!donors.length)l.appendChild(el('div','empty',state.bucket.length?'Im Museum: '+museumCount()+' von '+FISH.length+'. Fang eine neue Art, dann kannst du spenden.':'Dein Eimer ist leer. Fang erst ein paar Fische!'));
     donors.forEach(({i,f})=>{const it=state.bucket[i],row=el('div','item');row.appendChild(fishThumb(f));
       row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm</span>'));
       const b=el('button','b','Spenden');b.onclick=()=>{const k=state.bucket.indexOf(it);if(k<0||museumHas(f.id))return;
@@ -2205,7 +2211,7 @@ function updateCtx(){
     b.textContent=closed?SHOP_CLOSED_TXT:vm?vm.ico+' '+vm.on:tk?'💬 Reden mit '+tk.name:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='museum'?'🏛️ Ins Museum':a==='tram'?'🚋 Einsteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='flasche'?'🍾 Flaschenpost':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
 $('#btnCtx').onclick=()=>{audio();
-  if(SHOP_CTX.includes(ctxAction)&&!shopOpen()){toast(SHOP_CLOSED_TXT);return;} // Laden zu: nichts öffnet sich
+  if(SHOP_CTX.includes(ctxAction)&&!shopOpen()){toast(SHOP_CLOSED_TOAST);return;} // Laden zu: nichts öffnet sich
   if(ctxAction==='shop'){stopFishing();showShop();}
   else if(ctxAction==='tiago'){stopFishing();showTiago();}
   else if(ctxAction==='hannes'){stopFishing();showHannes();}
@@ -2241,10 +2247,11 @@ function tipText(){
   if(fishing.state!=='idle')return '';
   if(atCity())return parkedOk(state.city.parked.bike)?'':'Willkommen in Hafenhausen! Steig auf dein Fahrrad am Flugplatz.';
   if(found===0)return 'Lauf über den Holzsteg bis ans Wasser. Dann tippe auf „Angeln“.';
-  if(state.bucket.length>=bucketMax())return atDE()||atLake()?'Dein Eimer ist voll! Verkaufe die Fische bei Fischer Hannes am Stand.':'Dein Eimer ist voll! Bring die Fische zu Rosa an die Hütte.';
+  if(state.bucket.length>=bucketMax())return sellTo()==='Rosa'?'Dein Eimer ist voll! Bring die Fische zu Rosa an die Hütte.':'Dein Eimer ist voll! Verkaufe die Fische bei Fischer Hannes am Stand.';
   if(atLake()&&!Object.keys(state.book).some(id=>FISH_BY[id]&&fishHome(FISH_BY[id])==='see'))return 'Lauf über den Steg bis ans Wasser und wirf die Angel aus!';
   if(atDE()&&curSpot){const p=prog(curSpot.id);
-    if(!p.s)return p.f.length<STAMP_FISH?'Fluss-Stempel: Fang hier '+STAMP_FISH+' Fischarten ('+p.f.length+' von '+STAMP_FISH+') und lies die Infotafel.':'Super! Jetzt noch das Rätsel an der Infotafel lösen.';
+    if(!p.s){const miss=STAMP_FISH-p.f.length;
+      return miss>0?'Stempel: noch '+miss+(miss===1?' Fischart':' Fischarten')+(p.q?'.':', dann das Rätsel an der Infotafel 🧩.'):'Super! Jetzt noch das Rätsel an der Infotafel lösen.';}
     const nx=linksOf(curSpot.id).map(k=>SPOTS_BY[k.to]).find(x=>!stamped(x.id));if(nx)return 'Du hast den Stempel! Mit dem Flugzeug kannst du weiter, zum Beispiel: '+nx.name+'.';}
   if(!state.visitedLake&&found>=5)return 'Neben dem Dorf steht ein Flugzeug. Damit fliegst du zum Heimat-See!';
   if(state.visitedLake&&!Object.keys(state.fluss).length&&found>=8&&!atDE())return 'Neu: Mit dem Flugzeug fliegst du zu Flüssen in Deutschland!';
@@ -2405,7 +2412,7 @@ function tickPlayTime(){
   const now=Date.now(),dt=lastTick?Math.min(1,(now-lastTick)/1000):0;lastTick=now;
   if(!timeSet.min||timeLocked||document.hidden||dt<=0)return;
   playTimeToday().sec+=dt;const left=timeLeft();
-  if(left<=300&&left>0&&!timeWarned){timeWarned=true;toast('Noch 5 Minuten Spielzeit für heute.');}
+  if(left<=300&&left>0&&!timeWarned){timeWarned=true;toast('Noch 5 Minuten! Jetzt ist eine gute Zeit, deine Fische zu verkaufen.');}
   if(left<=0)lockTime();
   updateTimeChip();}
 // Rechenaufgabe für Erwachsene (für Kinder mit 7–9 Jahren noch zu schwer)
@@ -3463,14 +3470,18 @@ const AUFGABEN_FISCHE=FISH.filter(f=>(f.home==='meer'||f.home==='see')&&!(RULES[
 const schonzeit=id=>!!RULES[id]&&inSeason(RULES[id]);
 const aufgabeFisch=id=>{const l=AUFGABEN_FISCHE.filter(f=>!schonzeit(f));return l[dayHash(todayKey()+id)%l.length];};
 const AUFGABEN_MAX=3,FREUND_STUFEN=['Bekannt','Freund','Bester Freund'];
-const freundStufe=f=>f>=15?2:f>=5?1:0; // unter 5 Bekannt, ab 5 Freund, ab 15 Bester Freund
+const FREUND_AB=[0,5,15]; // ab so vielen Herzen: Bekannt, Freund, Bester Freund
+const freundStufe=f=>f>=FREUND_AB[2]?2:f>=FREUND_AB[1]?1:0;
+const freundNoch=f=>{const st=freundStufe(f);if(st>=2)return '';const k=FREUND_AB[st+1]-f;return ' · noch '+k+(k===1?' Herz':' Herzen')+' bis '+FREUND_STUFEN[st+1];};
 function nachbarInfo(k){const p=people[k];if(!p)return null;if(p.info)return p.info;
   let ki=0,ei=0;for(let j=0;j<k;j++){if(people[j].kid)ki++;else ei++;}
   return p.info=Object.assign({kid:p.kid},p.kid?NAMEN_KIND[ki%NAMEN_KIND.length]:NAMEN_ERW[ei%NAMEN_ERW.length]);}
 const nb=id=>state.nachbarn[id]||(state.nachbarn[id]={f:0,talk:'',gift:''});
 const fishAcc=f=>(f.art==='eine'?'eine':f.art==='ein'?'ein':'einen')+' '+f.name;
 const fishDer=f=>f.art==='eine'?'die':f.art==='ein'?'das':'der';
-const fishWo=f=>(f.art==='eine'?'Die':f.art==='ein'?'Das':'Den')+' fängst du '+(f.home==='meer'?'im Hafen':'am Heimat-See')+'.';
+const FISH_ORT={meer:'im Hafen',see:'am Heimat-See',fluss:'an den Flüssen in Deutschland',amazonas:'am Amazonas'};
+const fishWo=f=>(f.art==='eine'?'Die':f.art==='ein'?'Das':'Den')+' fängst du '+FISH_ORT[fishHome(f)]+'.';
+const aufgabeLohn=f=>2*f.price+10; // Belohnung für eine Aufgabe
 const rnd=a=>a[Math.floor(Math.random()*a.length)];
 const stufeToast=(a,b)=>b>a?(b===2?' 🎉 Ihr seid jetzt beste Freunde!':' 🎉 Ihr seid jetzt Freunde!'):'';
 let talkP=null; // mit wem man gerade redet: er bleibt stehen und schaut zu dir
@@ -3499,7 +3510,7 @@ function showTalk(k,say){const p=people[k],info=nachbarInfo(k);if(!p||!info)retu
   openModal();card.className='card';card.innerHTML='';
   const st=freundStufe(n.f);
   card.appendChild(el('h2',null,'💬 '+esc(info.name)));
-  card.appendChild(el('p','small','❤️'.repeat(st+1)+' '+FREUND_STUFEN[st]));
+  card.appendChild(el('p','small','❤️'.repeat(st+1)+' '+FREUND_STUFEN[st]+freundNoch(n.f)));
   card.appendChild(el('p',null,esc(say)));
   const a=state.aufgaben.find(x=>x.n===p.id),has=!!a&&state.bucket.some(it=>it.id===a.fish);
   const bt=el('div','btns');
@@ -3521,7 +3532,7 @@ function helpText(k){const p=people[k],sw=swapSchonzeit(p);if(sw)return sw;const
 // „Hier, bitte!“: Fisch abgeben. Belohnung 2 × Preis + 10 Ludins und +3 Freundschaft
 function handFish(k){const p=people[k],info=nachbarInfo(k),a=state.aufgaben.find(x=>x.n===p.id);if(!a)return;
   const i=state.bucket.findIndex(it=>it.id===a.fish);if(i<0)return;
-  const f=FISH_BY[a.fish],lohn=2*f.price+10,n=nb(p.id),st0=freundStufe(n.f);
+  const f=FISH_BY[a.fish],lohn=aufgabeLohn(f),n=nb(p.id),st0=freundStufe(n.f);
   state.bucket.splice(i,1);state.aufgaben.splice(state.aufgaben.indexOf(a),1);
   state.ludins+=lohn;n.f=Math.min(999,n.f+3);save();sfxCoins();refreshHud(true);
   toast('❤️ '+info.name+' freut sich! +'+lohn+' Ludins.'+stufeToast(st0,freundStufe(n.f)));
@@ -3532,7 +3543,7 @@ function aufgabenList(){const box=el('div','towbox');box.appendChild(el('h3',nul
   const list=state.aufgaben.map(a=>({a,k:people.length?people.findIndex(p=>p.id===a.n):-2})).filter(x=>x.k!==-1);
   if(!list.length)box.appendChild(el('p',null,'Noch keine Aufgaben. Frag die Menschen in der Stadt: „Kann ich dir helfen?“'));
   list.forEach(({a,k})=>{const f=FISH_BY[a.fish],has=state.bucket.some(it=>it.id===a.fish)?1:0;
-    box.appendChild(el('p',null,(k>=0?esc(nachbarInfo(k).name):'Jemand in Hafenhausen')+': bring '+esc(f.name)+' ('+has+'/1)'+(has?' ✅':schonzeit(a.fish)?' – hat gerade Schonzeit, frag noch mal nach':'')));});
+    box.appendChild(el('p',null,(k>=0?esc(nachbarInfo(k).name):'Jemand in Hafenhausen')+': 🐟 '+esc(f.name)+' '+has+'/1 · fängst du '+FISH_ORT[fishHome(f)]+' · +'+aufgabeLohn(f)+' Ludins'+(has?' ✅':schonzeit(a.fish)?' – hat gerade Schonzeit, frag noch mal nach':'')));});
   return box;}
 // Darf ein Mensch auf die Stelle (x,z) treten? Nicht in geparkte Fahrzeuge, die Straßenbahn, den Abschleppwagen und nicht dir in den Weg.
 function blockedForPeople(x,z){return hitsParked(x,z,0.5)||hitsList(tram.cols,x,z,0.5)||hitsList(tow.cols,x,z,0.5)||inPlayerWay(x,z);}
@@ -3602,14 +3613,14 @@ function showSpotInfo(s){const p=prog(s.id),b=BL[s.bl];
   openModal();card.className='card info';card.innerHTML='';
   card.appendChild(el('div','infohead','ℹ️ Infotafel'));
   card.appendChild(el('h2',null,'🌊 '+esc(s.name)));
+  if(!p.r){p.r=true;state.ludins+=INFO_LUDINS;save();refreshHud(true);card.appendChild(el('p','qe','📚 Neues Wissen! +'+INFO_LUDINS+' Ludins.'));}
+  if(p.s)card.appendChild(el('div','rule','<b>🏅 Du hast den Fluss-Stempel!</b><p>Von hier geht es weiter: '+linksOf(s.id).map(k=>esc(SPOTS_BY[k.to].name)+' ('+esc(k.river)+')').join(', ')+'</p>'));
+  else card.appendChild(el('div','rule','<b>🏅 So bekommst du den Fluss-Stempel</b><p>🐟 Fang hier '+STAMP_FISH+' verschiedene Fischarten: <b>'+Math.min(p.f.length,STAMP_FISH)+' von '+STAMP_FISH+'</b><br>🧩 Löse das Fluss-Rätsel: <b>'+(p.q?'geschafft ✔':'noch nicht')+'</b></p><small>Mit dem Stempel darfst du dem Fluss ins nächste Bundesland folgen.</small>'));
   card.appendChild(el('p',null,'📍 Bundesland: <b>'+esc(b.name)+'</b> · Landeshauptstadt: <b>'+esc(b.hs)+'</b>'));
   s.p.forEach(x=>card.appendChild(el('p',null,esc(x))));
   card.appendChild(el('h3','bookhead','Diese Fische leben hier'));
   const g=el('div','catches');s.fish.forEach(id=>{const f=FISH_BY[id];if(!f)return;const d=el('div');d.appendChild(fishImg(f,'cimg'));
     d.appendChild(el('b',null,esc(f.name)+(p.f.includes(id)?' ✔':'')));g.appendChild(d);});card.appendChild(g);
-  if(p.s)card.appendChild(el('div','rule','<b>🏅 Du hast den Fluss-Stempel!</b><p>Von hier geht es weiter: '+linksOf(s.id).map(k=>esc(SPOTS_BY[k.to].name)+' ('+esc(k.river)+')').join(', ')+'</p>'));
-  else card.appendChild(el('div','rule','<b>🏅 So bekommst du den Fluss-Stempel</b><p>🐟 Fang hier '+STAMP_FISH+' verschiedene Fischarten: <b>'+Math.min(p.f.length,STAMP_FISH)+' von '+STAMP_FISH+'</b><br>🧩 Löse das Fluss-Rätsel: <b>'+(p.q?'geschafft ✔':'noch nicht')+'</b></p><small>Mit dem Stempel darfst du dem Fluss ins nächste Bundesland folgen.</small>'));
-  if(!p.r){p.r=true;state.ludins+=INFO_LUDINS;save();refreshHud(true);card.appendChild(el('p','qe','📚 Neues Wissen! +'+INFO_LUDINS+' Ludins.'));}
   const bt=el('div','btns');
   if(!p.q){const rz=el('button','b go','🧩 Fluss-Rätsel');rz.id='btnRiddle';rz.onclick=()=>showRiddle(s);bt.appendChild(rz);}
   const mp=el('button','b alt','🗺️ Karte');mp.onclick=()=>showGermany('view');const c=el('button','b','Fertig');c.onclick=closeModal;bt.append(mp,c);card.appendChild(bt);}
@@ -3774,7 +3785,7 @@ function showTrap(t){
   if(t.fish.length&&t.fish.length>=REUSE.full)card.appendChild(el('p',null,'Die Reuse ist voll. Leere sie, dann können neue Fische hinein.'));
   const bt=el('div','btns');
   if(t.fish.length){const take=el('button','b go','In den Eimer');take.onclick=()=>{
-      const space=bucketMax()-state.bucket.length;if(space<=0){toast('Dein Eimer ist voll! Verkaufe zuerst Fische bei Rosa.');return;}
+      const space=bucketMax()-state.bucket.length;if(space<=0){toast('Dein Eimer ist voll! Verkaufe zuerst Fische bei '+sellTo()+'.');return;}
       const moved=t.fish.splice(0,space);
       let freed=0;
       moved.forEach(it=>{const b=state.book[it.id]||{n:0,best:0};b.n++;b.best=Math.max(b.best,it.cm);state.book[it.id]=b;
@@ -3929,6 +3940,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:40,day:'27.10.2026',ico:'💡',t:'Klarere Tipps',d:'Das Spiel sagt dir jetzt genauer, was du als Nächstes tun kannst – und wie viel dir noch fehlt.'},
  {v:39,day:'27.10.2026',ico:'🍾',t:'Jeden Tag neu',d:'Jeden Tag gibt es einen Tagesfisch: Rosa und Fischer Hannes zahlen dafür doppelt. Und an einem Ufer liegt eine Flaschenpost mit einem Rätsel, einem Tipp oder Ludins!'},
  {v:38,day:'27.10.2026',ico:'🏛️',t:'Museum',d:'In Hafenhausen gibt es ein Museum. Schenk Herrn Eugen von jeder Fischart einen Fisch, dann steht er in der Ausstellung!'},
  {v:37,day:'27.10.2026',ico:'💬',t:'Nachbarn',d:'In Hafenhausen haben alle Menschen jetzt Namen. Rede mit ihnen, hilf ihnen und werde Freund!'},
@@ -3963,22 +3975,30 @@ const NEWS=[
  {v:8,day:'19.10.2026',ico:'📸',t:'Echte Fotos',d:'Im Fischbuch siehst du echte Fotos von allen 15 Amazonas-Fischen.'},
  {v:7,day:'19.10.2026',ico:'🧺',t:'Reusen',d:'Kauf bei Opa Tiago eine Reuse und leg sie ins Wasser. Alle 2 Minuten schwimmt ein Fisch hinein. Ist die Boje grün, hol ihn ab!'},
  {v:6,day:'19.10.2026',ico:'✈️',t:'Heimat-See',d:'Mit dem Flugzeug neben dem Dorf fliegst du zu einem See wie in Deutschland. Dort leben 10 neue Fische, zum Beispiel Hecht, Zander und Forelle.'},
- {v:5,day:'19.10.2026',ico:'💾',t:'Spielstand sichern',d:'In der Avatar-Werkstatt (👕) bekommst du einen Spielstand-Code. Heb ihn gut auf, dann geht dein Spiel nie verloren.'},
+ {v:5,day:'19.10.2026',ico:'💾',t:'Spielstand sichern',d:'In der Avatar-Werkstatt (👕) kannst du eine Sicherheitskopie als Datei speichern. Dann geht dein Spiel nie verloren.'},
  {v:4,day:'18.10.2026',ico:'🌊',t:'Langer Fluss',d:'Der Fluss ist jetzt über 2 km lang, mit einer Insel und Stromschnellen, die dein Boot schieben.'},
  {v:3,day:'18.10.2026',ico:'🏠',t:'Dein eigenes Haus',d:'Hinter Opa Tiagos Hütte kannst du ein Pfahlhaus am Fluss bauen.'},
  {v:2,day:'18.10.2026',ico:'🎣',t:'Opa Tiagos Angelladen',d:'Angeln, Köder, Motorboot, Echolot und Kleidung gibt es bei Opa Tiago neben Rosa.'},
  {v:1,day:'18.10.2026',ico:'🐟',t:'Amazonas Angler',d:'Die erste Version: Avatar bauen, angeln, Fische bei Rosa verkaufen und ein Boot kaufen.'}];
 const NEWS_V=NEWS[0].v;
+function newsBox(list,fresh){const box=el('div','news');let day='';
+  list.forEach(n=>{if(n.day!==day){day=n.day;box.appendChild(el('h3','newsday',n.day));}
+    const it=el('div','newsitem'+(fresh?' fresh':''));it.appendChild(el('div','ni',n.ico));
+    it.appendChild(el('div',null,'<b>'+esc(n.t)+'</b><span>'+esc(n.d)+'</span>'));box.appendChild(it);});
+  return box;}
 function updateNewsDot(){$('#newsDot').hidden=(state.newsSeen|0)>=NEWS_V;}
 function showNews(){
   stopFishing();openModal();card.className='card';card.innerHTML='';
-  const seen=state.newsSeen|0;
+  // Oben steht nur, was seit dem letzten Mal neu ist (sonst die neuesten 3). Alles Ältere ist hinter einem Knopf zugeklappt.
+  // NEWS ist nach v sortiert (neueste zuerst), darum sind die neuen Einträge immer der Anfang der Liste.
+  const seen=state.newsSeen|0,fresh=seen>0?NEWS.filter(n=>n.v>seen):[];
+  const top=fresh.length?fresh:NEWS.slice(0,3),rest=NEWS.slice(top.length);
   card.appendChild(el('h2',null,'Was ist neu?'));
-  const box=el('div','news');let day='';
-  NEWS.forEach(n=>{if(n.day!==day){day=n.day;box.appendChild(el('h3','newsday',n.day));}
-    const it=el('div','newsitem'+(n.v>seen&&seen>0?' fresh':''));it.appendChild(el('div','ni',n.ico));
-    it.appendChild(el('div',null,'<b>'+esc(n.t)+'</b><span>'+esc(n.d)+'</span>'));box.appendChild(it);});
-  card.appendChild(box);
+  if(fresh.length)card.appendChild(el('h3','newsnew','Neu für dich'));
+  card.appendChild(newsBox(top,fresh.length>0));
+  if(rest.length){const old=newsBox(rest,false),more=el('button','b alt newsmore','Ältere Neuigkeiten ▾');old.hidden=true;
+    more.onclick=()=>{old.hidden=!old.hidden;more.textContent='Ältere Neuigkeiten '+(old.hidden?'▾':'▴');};
+    card.append(more,old);}
   card.appendChild(el('p','newsver','Version '+NEWS_V+' vom '+NEWS[0].day));
   const ok=el('button','b','Los geht\'s!');ok.onclick=closeModal;const bt=el('div','btns');bt.appendChild(ok);card.appendChild(bt);
   state.newsSeen=NEWS_V;save();updateNewsDot();
