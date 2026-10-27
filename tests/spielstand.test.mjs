@@ -1832,3 +1832,178 @@ test('Verkehr: Truck steht auf dem Rad und kann trotzdem wegfahren', async () =>
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+// Nachbarn in Hafenhausen: Namen, reden (+1 pro Tag), Aufgaben (Fisch bringen: 2 × Preis + 10 Ludins, +3 Freundschaft)
+const SAMSTAG = '2026-10-31T10:00:00+01:00'; // Samstagvormittag: fast alle sind unterwegs, auch die Kinder
+function fischPreis(id) {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = html.match(new RegExp("\\{id:'" + id + "'[^}]*price:(\\d+)"));
+  assert.ok(m, 'Preis von ' + id);
+  return Number(m[1]);
+}
+async function stadtSeite(extra, iso = SAMSTAG, fest = false) {
+  const L = stadtWert('CITY_LAND');
+  const { ctx, page, errors } = fest ? await zeitSeite(iso) : await startZeitSeite(iso);
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true }, where: { x: L.x, z: L.z, f: L.f, boat: false }, ...extra }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  return { ctx, page, errors };
+}
+// zu Mensch k gehen (1,5 m vor ihn auf seinen Weg) und „Reden“ antippen. Er läuft, darum schnell klicken (solange die Karte offen ist, bleibt er stehen).
+async function redeMit(page, k) {
+  for (let tries = 0; tries < 6; tries++) {
+    await page.waitForFunction(k => window.__test.nachbar(k).sichtbar, k, { timeout: 20000 });
+    const p = await page.evaluate(k => window.__test.nachbar(k), k);
+    const l = Math.hypot(p.ziel.x - p.x, p.ziel.z - p.z) || 1, d = Math.min(1.5, l);
+    await page.evaluate(([x, z]) => window.__test.warp(x, z), [p.x + (p.ziel.x - p.x) / l * d, p.z + (p.ziel.z - p.z) / l * d]);
+    try {
+      await page.locator('#btnCtx:has-text("💬 Reden mit")').click({ timeout: 2000 });
+      await page.locator('#card h2:has-text("💬")').waitFor({ timeout: 2000 });
+      return;
+    } catch { /* er ist schon weitergelaufen: noch einmal hingehen */ }
+  }
+  assert.fail('Gespräch mit Mensch ' + k + ' geht nicht auf');
+}
+
+test('Nachbarn: reden, Aufgabe, Fisch bringen, Belohnung', async () => {
+  const { ctx, page, errors } = await stadtSeite({ ludins: 100 });
+  await redeMit(page, 0);
+  // Gespräch: Thema oben, 2–3 große Knöpfe; „Hier, bitte!“ nur, wenn ein passender Fisch im Eimer ist
+  const knoepfe = await page.locator('#card .btns button').evaluateAll(bs => bs.map(b => b.getBoundingClientRect().height));
+  assert.ok(knoepfe.length >= 2 && knoepfe.length <= 3, 'zwei oder drei Knöpfe: ' + knoepfe.length);
+  assert.ok(knoepfe.every(h => h >= 60), 'Knöpfe mindestens 60 px: ' + knoepfe);
+  assert.equal(await page.locator('#card button:has-text("Hier, bitte!")').count(), 0);
+  await page.click('#card button:has-text("Kann ich dir helfen?")');
+  let s = await weg(page);
+  assert.equal(s.aufgaben.length, 1);
+  const A = s.aufgaben[0];
+  assert.equal(A.n, 'n0');
+  assert.match(A.day, /^2026-10-31$/);
+  assert.ok(['hering', 'makrele', 'scholle', 'hornhecht', 'rotauge', 'rotfeder', 'barsch', 'karausche', 'doebel', 'schleie', 'karpfen', 'forelle', 'zander', 'hecht'].includes(A.fish), A.fish);
+  assert.equal(s.nachbarn.n0.f, 1, 'erstes Gespräch heute: +1');
+  // noch einmal fragen: keine zweite Aufgabe von derselben Person
+  await page.click('#card button:has-text("Kann ich dir helfen?")');
+  assert.equal((await weg(page)).aufgaben.length, 1);
+  // Stadtplan: Bereich Aufgaben
+  await page.click('#card button:has-text("Tschüss!")');
+  await page.click('#btnMap');
+  await page.locator('#card h3:has-text("📝 Aufgaben")').waitFor();
+  assert.match(await page.textContent('#card'), /: bring .+ \(0\/1\)/);
+  // den gewünschten Fisch in den Eimer legen und neu laden
+  await seed(page, { [KEY]: JSON.stringify({ ...s, bucket: [{ id: A.fish, cm: 30, value: 9 }] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await redeMit(page, 0);
+  await page.click('#card button:has-text("Hier, bitte!")');
+  s = await weg(page);
+  const lohn = 2 * fischPreis(A.fish) + 10;
+  assert.equal(s.ludins, 100 + lohn, 'Belohnung: 2 × Preis + 10 Ludins');
+  assert.equal(s.nachbarn.n0.f, 4, '1 (Reden) + 3 (Aufgabe)');
+  assert.deepEqual(s.aufgaben, []);
+  assert.deepEqual(s.bucket, []);
+  // bleibt nach dem Neuladen
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  s = await weg(page);
+  assert.equal(s.ludins, 100 + lohn);
+  assert.equal(s.nachbarn.n0.f, 4);
+  assert.deepEqual(s.aufgaben, []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Nachbarn: einmal pro Tag +1', async () => {
+  const { ctx, page, errors } = await stadtSeite({});
+  await redeMit(page, 0);
+  // solange die Karte offen ist, bleibt der Mensch stehen (auch wenn man ihm nicht mehr im Weg steht: man steht jetzt hinter ihm)
+  const a = await page.evaluate(() => window.__test.nachbar(0));
+  const l = Math.hypot(a.ziel.x - a.x, a.ziel.z - a.z) || 1;
+  await page.evaluate(([x, z]) => window.__test.warp(x, z), [a.x - (a.ziel.x - a.x) / l * 2, a.z - (a.ziel.z - a.z) / l * 2]);
+  await page.waitForTimeout(2000);
+  const b = await page.evaluate(() => window.__test.nachbar(0));
+  assert.ok(Math.hypot(b.x - a.x, b.z - a.z) < 0.01, 'er steht still');
+  await page.click('#card button:has-text("Tschüss!")');
+  await redeMit(page, 0);
+  const s = await weg(page);
+  assert.equal(s.nachbarn.n0.f, 1);
+  assert.equal(s.nachbarn.n0.talk, '2026-10-31');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Nachbarn: schlafende Nachbarn reden nicht', async () => {
+  const { ctx, page, errors } = await stadtSeite({}, '2026-10-27T23:00:00+01:00', true);
+  await page.waitForFunction(() => document.body.dataset.leute !== undefined, null, { timeout: 20000 });
+  const alle = await page.evaluate(() => Array.from({ length: 24 }, (_, k) => ({ ...window.__test.nachbar(k), k })));
+  const wach = alle.filter(p => p.sichtbar);
+  // ein schlafender Erwachsener (nicht n8/n9, die sind nachts unterwegs), weit weg von allen, die wach sind
+  const p = alle.find(p => p.k >= 4 && p.kid === false && !p.sichtbar && wach.every(w => Math.hypot(w.x - p.x, w.z - p.z) > 12));
+  assert.ok(p, 'ein schlafender Erwachsener');
+  await page.evaluate(([x, z]) => window.__test.warp(x, z), [p.x + 0.8, p.z]);
+  await page.waitForTimeout(1000);
+  assert.equal(await page.locator('#btnCtx:has-text("Reden")').isVisible(), false, 'kein „Reden“-Knopf bei Mensch ' + p.k);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Nachbarn: kaputte Werte werden repariert', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({
+    nachbarn: { n0: { f: '<b>', talk: 'x' }, zz: {}, n3: 'kaputt', yy: 5, n1: { f: 7.6, talk: '2026-10-30', gift: '<i>' } },
+    aufgaben: [{ n: 'n1', fish: 'gibtsnicht' }, 'x'] }) });
+  await startGame(page);
+  await playAndLeave(page);
+  let s = JSON.parse(await read(page));
+  assert.deepEqual(s.nachbarn.n0, { f: 0, talk: '', gift: '' });
+  assert.deepEqual(s.nachbarn.zz, {}, 'unbekannte ids bleiben gespeichert (nie löschen), das Spiel beachtet sie nicht');
+  assert.deepEqual(s.nachbarn.n3, { f: 0, talk: '', gift: '' }, 'kein Objekt: wird ersetzt');
+  assert.equal('yy' in s.nachbarn, false, 'ungültig und kein Objekt: fällt weg');
+  assert.deepEqual(s.nachbarn.n1, { f: 8, talk: '2026-10-30', gift: '' });
+  assert.deepEqual(s.aufgaben, []);
+  // ganz kaputt: Startwerte; mehr als 3 Aufgaben: nur die ersten 3
+  const vier = ['hering', 'barsch', 'karpfen', 'scholle'].map((fish, i) => ({ n: 'n' + i, fish, day: '2026-10-30' }));
+  await seed(page, { [KEY]: stadtSeed({ nachbarn: 'x', aufgaben: [{ n: '<b>', fish: 'hering' }, ...vier] }) });
+  await startGame(page);
+  await playAndLeave(page);
+  s = JSON.parse(await read(page));
+  assert.deepEqual(s.nachbarn, {});
+  assert.deepEqual(s.aufgaben, vier.slice(0, 3));
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Alter Spielstand: nachbarn und aufgaben bekommen Startwerte', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify(ALT_V1) });
+  await startGame(page);
+  await playAndLeave(page);
+  const s = JSON.parse(await read(page));
+  assert.deepEqual(s.nachbarn, {});
+  assert.deepEqual(s.aufgaben, []);
+  assert.equal(s.clothes.muetze, false);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Nachbarn: Bester Freund schenkt einmal die Mütze', async () => {
+  const { ctx, page, errors } = await stadtSeite({ ludins: 0, nachbarn: { n0: { f: 20, talk: '', gift: '' } } });
+  await page.click('#btnAvatar');
+  assert.equal(await page.locator('#opHat button:text-is("Mütze")').count(), 0, 'ohne Mütze keine Mütze in der Werkstatt');
+  await page.click('#btnGo');
+  await page.evaluate(() => { Math.random = () => 0.1; }); // das Geschenk (Wahrscheinlichkeit 0,3) kommt sicher
+  await redeMit(page, 0);
+  assert.match(await page.textContent('#card'), /❤️❤️❤️/, 'drei Herzen: Bester Freund');
+  const s = await weg(page);
+  assert.equal(s.clothes.muetze, true);
+  assert.equal(s.nachbarn.n0.gift, '2026-10-31');
+  assert.equal(s.nachbarn.n0.f, 21);
+  assert.ok(s.baits.frucht === 3 || (s.ludins >= 10 && s.ludins <= 30), 'dazu Früchte oder Ludins');
+  await page.click('#card button:has-text("Tschüss!")');
+  await page.click('#btnAvatar');
+  await page.click('#opHat button:text-is("Mütze")');
+  await page.click('#btnGo'); // in der Werkstatt wird erst beim Losgehen gespeichert
+  assert.equal((await weg(page)).avatar.hat, 'muetze');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

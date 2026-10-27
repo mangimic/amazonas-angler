@@ -480,7 +480,7 @@ const HAIRS=[['kurz','Kurz'],['lang','Lang'],['locken','Locken'],['keine','Keine
 const HAIRCOLS=['#1d1611','#5a3720','#a8652e','#e3b85a','#c2401f','#7a4fb8'];
 const SHIRTS=['#e2412b','#f6a623','#2f9e5b','#2f7fd8','#8e44c4','#f2f0e6','#1e2b33','#ef6fa5'];
 const PANTS=['#2f4a7a','#3d3a33','#7a5a3a','#3e6b3a','#c0c6cc'];
-const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen','Blumen']];
+const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen','Blumen'],['muetze','Mütze']]; // die Mütze schenkt ein bester Freund in Hafenhausen (state.clothes.muetze)
 
 /* =================== Speicherstand =================== */
 // WICHTIG – damit kein Spielstand verloren geht (siehe CLAUDE.md, Abschnitt „Spielstand“):
@@ -488,7 +488,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],fluss:{},flussAt:'',
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false,muetze:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],fluss:{},flussAt:'',nachbarn:{},aufgaben:[],
   city:{visited:false,vehicles:{bike:true,roller:false,skate:false,truck:false},parked:{},riding:''},
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
@@ -529,7 +529,7 @@ if(!Array.isArray(state.bucket))state.bucket=[];
 if(!isObj(state.book))state.book={};
 for(const id in state.book){const b=state.book[id];state.book[id]=isObj(b)?Object.assign(b,{n:num(b.n),best:num(b.best,10000)}):{n:1,best:0};}
 state.baits=Object.assign({frucht:0,blinker:0},isObj(state.baits)?state.baits:{});
-state.clothes=Object.assign({anglerhut:false,weste:false},isObj(state.clothes)?state.clothes:{});
+state.clothes=Object.assign({anglerhut:false,weste:false,muetze:false},isObj(state.clothes)?state.clothes:{});
 if(!BAITS[state.bait])state.bait='wurm';
 state.house=Object.assign({w:{},r:{}},isObj(state.house)?state.house:{});
 state.reusen=Math.max(0,Math.round(Number(state.reusen)||0));
@@ -559,6 +559,16 @@ let lostFishLudins=0;
 state.bucket=state.bucket.filter(it=>{if(isObj(it)&&FISH_BY[it.id])return true;lostFishLudins+=num(it&&it.value,1e6);return false;});
 state.bucket.forEach(it=>{it.cm=num(it.cm,10000);it.value=num(it.value,1e6);});
 state.ludins+=lostFishLudins;
+// Nachbarn in Hafenhausen: id ('n'+Nummer) → {f = Freundschaft, talk = Tag des letzten Gesprächs, gift = Tag des letzten Geschenks}.
+// Unbekannte ids bleiben gespeichert, wenn sie ein Objekt sind (nie löschen); das Spiel beachtet sie nicht. Aufgaben: höchstens 3.
+const NB_ID=/^n\d{1,2}$/,dayOk=v=>typeof v==='string'&&/^\d{4}-\d\d-\d\d$/.test(v)?v:''; // Tag wie todayKey(): JJJJ-MM-TT
+if(!isObj(state.nachbarn))state.nachbarn={};
+for(const id of Object.keys(state.nachbarn)){const v=state.nachbarn[id];
+  if(!NB_ID.test(id)){if(!isObj(v))delete state.nachbarn[id];continue;}
+  state.nachbarn[id]=isObj(v)?Object.assign(v,{f:num(v.f,999),talk:dayOk(v.talk),gift:dayOk(v.gift)}):{f:0,talk:'',gift:''};}
+state.aufgaben=(Array.isArray(state.aufgaben)?state.aufgaben:[]).filter(a=>isObj(a)&&typeof a.n==='string'&&NB_ID.test(a.n)&&
+  typeof a.fish==='string'&&Object.prototype.hasOwnProperty.call(FISH_BY,a.fish)).slice(0,3);
+state.aufgaben.forEach(a=>{a.day=dayOk(a.day);});
 const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
 // Sicherheitskopie: der Stand vom letzten Spielstart. Geht der Hauptstand kaputt, lädt das Spiel diese Kopie.
 if(loadedFrom==='main')lsSet(BACKUP_KEY,savedRaw);
@@ -1117,6 +1127,9 @@ function buildAvatar(a,rodCol){
   if(a.hat==='angler'){const brim=new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.52,0.05,22),mat('#6b7d3a'));brim.position.y=HY+0.17;g.add(brim);
     const cr=new THREE.Mesh(new THREE.CylinderGeometry(0.27,0.33,0.26,18),mat('#6b7d3a'));cr.position.y=HY+0.32;g.add(cr);
     const band=new THREE.Mesh(new THREE.CylinderGeometry(0.335,0.335,0.06,18),mat('#3e4a22'));band.position.y=HY+0.23;g.add(band);}
+  if(a.hat==='muetze'){const dome=new THREE.Mesh(new THREE.SphereGeometry(0.335,16,10,0,Math.PI*2,0,Math.PI*0.5),mat('#2f7fd8'));dome.position.y=HY+0.1;dome.scale.y=1.1;g.add(dome);
+    const rim=new THREE.Mesh(new THREE.CylinderGeometry(0.34,0.34,0.09,18),mat('#f2f0e6'));rim.position.y=HY+0.12;g.add(rim);
+    const bommel=new THREE.Mesh(new THREE.SphereGeometry(0.1,10,8),mat('#f2f0e6'));bommel.position.y=HY+0.5;g.add(bommel);}
   if(a.vest){const v=new THREE.Mesh(new THREE.CylinderGeometry(0.32,0.29,0.62,14),mat('#f57c1f'));v.position.y=1.1;g.add(v);
     const st=new THREE.Mesh(new THREE.CylinderGeometry(0.325,0.31,0.06,14),mat('#e8e8e8'));st.position.y=0.98;g.add(st);
     for(const s of[-1,1]){const sh=new THREE.Mesh(new THREE.BoxGeometry(0.16,0.08,0.34),mat('#f57c1f'));sh.position.set(0.17*s,1.43,0);g.add(sh);}}
@@ -2042,7 +2055,8 @@ function horn(){if(player.ride!=='truck')return;tone(523,0.15,'square',0.08);ton
 $('#btnHorn').onclick=()=>{audio();horn();};
 function cityCtx(){const st=tramStopNear();if(st&&tramAtStop()===st)return 'tram'; // die Bahn ist da: das geht vor dem eigenen Fahrzeug
   const v=vehicleNear();if(v)return 'mount:'+v;
-  return Math.hypot(player.pos.x-SHOP_AT.x,player.pos.z-SHOP_AT.z)<4?'vshop':null;}
+  if(Math.hypot(player.pos.x-SHOP_AT.x,player.pos.z-SHOP_AT.z)<4)return 'vshop';
+  const k=talkNear();return k>=0?'talk:'+k:null;} // reden: kein Laden, darum keine Öffnungszeiten
 function updateCtx(){
   let a=null;const p=player.pos;
   if(player.ride){if(VEHICLES[player.ride]){exitSpot=exitFor(player.ride);if(exitSpot)a='dismount';}
@@ -2063,8 +2077,8 @@ function updateCtx(){
   const hb=$('#btnHorn'),noHorn=player.ride!=='truck';if(hb.hidden!==noHorn)hb.hidden=noHorn;
   const closed=!!a&&SHOP_CTX.includes(a)&&!shopOpen();
   if(a!==ctxAction||closed!==ctxClosed){ctxAction=a;ctxClosed=closed;const b=$('#btnCtx');b.hidden=!a;
-    const vm=a&&a.startsWith('mount:')&&VEHICLES[a.slice(6)];
-    b.textContent=closed?SHOP_CLOSED_TXT:vm?vm.ico+' '+vm.on:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='tram'?'🚋 Einsteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
+    const vm=a&&a.startsWith('mount:')&&VEHICLES[a.slice(6)],tk=a&&a.startsWith('talk:')&&nachbarInfo(+a.slice(5));
+    b.textContent=closed?SHOP_CLOSED_TXT:vm?vm.ico+' '+vm.on:tk?'💬 Reden mit '+tk.name:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='tram'?'🚋 Einsteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
 $('#btnCtx').onclick=()=>{audio();
   if(SHOP_CTX.includes(ctxAction)&&!shopOpen()){toast(SHOP_CLOSED_TXT);return;} // Laden zu: nichts öffnet sich
@@ -2077,6 +2091,8 @@ $('#btnCtx').onclick=()=>{audio();
   else if(ctxAction==='fly'){const pl=planeNear();if(pl){fly(pl);return;}}
   else if(ctxAction==='build'){stopFishing();openBuild();}
   else if(ctxAction&&ctxAction.startsWith('mount:'))mountVehicle(ctxAction.slice(6));
+  else if(ctxAction&&ctxAction.startsWith('talk:')){const k=+ctxAction.slice(5),p=people[k];
+    if(p&&p.awake&&!player.ride&&Math.hypot(p.g.position.x-player.pos.x,p.g.position.z-player.pos.z)<4){stopFishing();showTalk(k);}return;}
   else if(ctxAction==='dismount')dismount(); // klappt es nicht, sagt dismount selbst warum
   else if(ctxAction==='vshop'){stopFishing();showVehicleShop();}
   else if(ctxAction==='tram')boardTram();
@@ -2131,7 +2147,8 @@ function buildCreator(){
     b.onclick=()=>{a[key]=v;buildCreator();rebuildPlayer();};box.appendChild(b);});}
   swatches('#swSkin',SKINS,'skin');options('#opHair',HAIRS,'hair');swatches('#swHair',HAIRCOLS,'hairColor');
   swatches('#swShirt',SHIRTS,'shirt');swatches('#swPants',PANTS,'pants');
-  options('#opHat',state.clothes.anglerhut?HATS.concat([['angler','Anglerhut']]):HATS,'hat');
+  const hats=HATS.filter(h=>h[0]!=='muetze'||state.clothes.muetze); // die Mütze gibt es erst als Geschenk
+  options('#opHat',state.clothes.anglerhut?hats.concat([['angler','Anglerhut']]):hats,'hat');
   $('#rowVest').hidden=!state.clothes.weste;
   const vb=$('#opVest');vb.innerHTML='';[[true,'An'],[false,'Aus']].forEach(([v,l])=>{const b=el('button',null,l);b.setAttribute('aria-pressed',!!a.vest===v);
     b.onclick=()=>{a.vest=v;buildCreator();rebuildPlayer();};vb.appendChild(b);});
@@ -3263,7 +3280,7 @@ function buildPeople(g,R){const pick=a=>a[Math.floor(R()*a.length)],order=[];
     let path=[{x:x0,z:z0},{x:x1,z:z0},{x:x1,z:z1},{x:x0,z:z1}];if(R()<0.5)path.reverse();
     let i=0,x=0,z=0;for(let tr=0;tr<20;tr++){i=Math.floor(R()*4);const a=path[(i+3)%4],e=path[i],f=R();x=a.x+(e.x-a.x)*f;z=a.z+(e.z-a.z)*f;
       if(keepFree.every(p=>Math.hypot(p.x-x,p.z-z)>5))break;}
-    const kid=R()<0.3,av=buildAvatar({skin:pick(SKINS),hair:pick(HAIRS)[0],hairColor:pick(HAIRCOLS),shirt:pick(SHIRTS),pants:pick(PANTS),hat:pick(HATS)[0]});
+    const kid=R()<0.3,av=buildAvatar({skin:pick(SKINS),hair:pick(HAIRS)[0],hairColor:pick(HAIRCOLS),shirt:pick(SHIRTS),pants:pick(PANTS),hat:pick(HATS.slice(0,4))[0]});
     [av.group,...av.legs,...av.arms].forEach(bakeKids); // Körper, Beine und Arme: je 1 Mesh statt ~30 Teile
     if(kid)av.group.scale.setScalar(0.72);av.group.position.set(x,heightAt(x,z),z);g.add(av.group);
     const col={x,z,r:0.5};peopleCols.push(col);
@@ -3274,6 +3291,106 @@ let waveIn=6,peopleTick=0;
 function personAwake(p,d){const h=d.getHours()+d.getMinutes()/60,day=d.getDay(),we=day===0||day===6;
   if(h>=22||h<6)return p.night;
   return p.kid?h>=(we?9:13)&&h<19:true;}
+/* ---- Nachbarn: Namen, Gespräche, Aufgaben, Freundschaft ----
+   Jeder Mensch in Hafenhausen hat einen festen Namen (nach Bau-Index: Kinder der Reihe nach aus NAMEN_KIND, Erwachsene aus NAMEN_ERW).
+   Spielstand: state.nachbarn[id] = {f, talk, gift}, state.aufgaben = [{n, fish, day}] (höchstens AUFGABEN_MAX). ids ('n'+k) nie ändern. */
+const NAMEN_ERW=[
+ {name:'Frau Blum',art:'freundlich'},{name:'Herr Krause',art:'ruhig'},{name:'Hilde',art:'oma'},{name:'Jonas',art:'frech'},
+ {name:'Frau Petersen',art:'freundlich'},{name:'Willi',art:'opa'},{name:'Herr Brandt',art:'ruhig'},{name:'Ayşe',art:'freundlich'},
+ {name:'Frau Lorenz',art:'ruhig'},{name:'Kalle',art:'frech'},{name:'Erna',art:'oma'},{name:'Herr Yılmaz',art:'freundlich'},
+ {name:'Marie',art:'freundlich'},{name:'Herr Hansen',art:'opa'},{name:'Frau Nowak',art:'ruhig'},{name:'Paul',art:'frech'},
+ {name:'Gerda',art:'oma'},{name:'Herr Becker',art:'freundlich'},{name:'Lena',art:'ruhig'},{name:'Karl',art:'opa'},
+ {name:'Frau Schulte',art:'frech'},{name:'Mehmet',art:'freundlich'},{name:'Frau Jansen',art:'oma'},{name:'Herr Vogel',art:'ruhig'}];
+const NAMEN_KIND=[
+ {name:'Tom',alter:8,art:'kind'},{name:'Mia',alter:7,art:'kind'},{name:'Leon',alter:9,art:'kind'},{name:'Emma',alter:8,art:'kind'},
+ {name:'Finn',alter:7,art:'kind'},{name:'Lina',alter:9,art:'kind'},{name:'Ben',alter:8,art:'kind'},{name:'Sophie',alter:7,art:'kind'},
+ {name:'Noah',alter:9,art:'kind'},{name:'Ella',alter:8,art:'kind'},{name:'Luis',alter:7,art:'kind'},{name:'Hanna',alter:9,art:'kind'}];
+// Begrüßung je nach Art (1–2 kurze Sätze). {name} und {alter} werden ersetzt.
+const GRUSS_ART={
+ freundlich:['Hallo! Schön, dich zu sehen.','Guten Tag! Heute ist ein schöner Tag am Hafen.','Hallo! Hast du heute schon einen Fisch gefangen?'],
+ frech:['Na, du! Wieder unterwegs?','Hey! Ich wette, ich fange mehr Fische als du.','Na? Hast du schon mal einen Hering mit Hut gesehen? Ich auch nicht!'],
+ ruhig:['Oh, hallo. Ich schaue gern den Schiffen zu.','Guten Tag. Hier am Hafen ist es schön ruhig.','Hallo. Hörst du die Möwen?'],
+ oma:['Hallo, wie schön! Ich habe früher auch gern geangelt.','Guten Tag! Pass gut auf dich auf, ja?','Hallo! Bei mir im Garten blühen die schönsten Blumen.'],
+ opa:['Moin! Früher bin ich mit dem Kutter aufs Meer gefahren.','Moin! Ein Kutter ist ein kleines Fischerboot.','Moin moin! Heute riecht es nach Meer.'],
+ kind:['Hi! Ich bin {name} und {alter} Jahre alt.','Hallo! Ich mag die gelbe Straßenbahn am liebsten.','Hi! Ich will später auch mal Anglerin oder Angler werden.']};
+const TIPPS_STADT=[
+ 'Mit der gelben Straßenbahn kommst du schnell zum Hafen, zum Markt und in den Park.',
+ 'Im Hafen beißen Hering, Makrele, Scholle und Hornhecht. Probier es an der Kaimauer!',
+ 'Fischer Hannes hat einen Stand an der Kaimauer. Er kauft dir deine Fische ab.',
+ 'Den Dorsch setzen wir immer zurück. Es gibt nur noch wenige.',
+ 'Steht dein Fahrzeug weit weg? Auf dem Stadtplan rufst du den Abschleppdienst.',
+ 'Die Läden haben von '+SHOP_HOURS.auf+' bis '+SHOP_HOURS.zu+' Uhr offen.',
+ 'Am Wochenende sind die Kinder schon morgens unterwegs. In der Woche kommen sie nach der Schule.',
+ 'Fahr langsam, wenn Menschen auf dem Gehweg sind!',
+ 'Mit dem Flugzeug am Flugplatz fliegst du zurück an den Amazonas.',
+ 'Auf dem Stadtplan siehst du alle deine Aufgaben.'];
+// Fische für Aufgaben: aus dem Meer (Hafen) und dem Heimat-See, keine seltenen Fische (die setzen wir immer zurück)
+const AUFGABEN_FISCHE=FISH.filter(f=>(f.home==='meer'||f.home==='see')&&!(RULES[f.id]&&RULES[f.id].selten)).map(f=>f.id);
+const AUFGABEN_MAX=3,FREUND_STUFEN=['Bekannt','Freund','Bester Freund'];
+const freundStufe=f=>f>=15?2:f>=5?1:0; // unter 5 Bekannt, ab 5 Freund, ab 15 Bester Freund
+function nachbarInfo(k){const p=people[k];if(!p)return null;if(p.info)return p.info;
+  let ki=0,ei=0;for(let j=0;j<k;j++){if(people[j].kid)ki++;else ei++;}
+  return p.info=Object.assign({kid:p.kid},p.kid?NAMEN_KIND[ki%NAMEN_KIND.length]:NAMEN_ERW[ei%NAMEN_ERW.length]);}
+const nb=id=>state.nachbarn[id]||(state.nachbarn[id]={f:0,talk:'',gift:''});
+const fishAcc=f=>(f.art==='eine'?'eine':f.art==='ein'?'ein':'einen')+' '+f.name;
+const fishWo=f=>(f.art==='eine'?'Die':f.art==='ein'?'Das':'Den')+' fängst du '+(f.home==='meer'?'im Hafen':'am Heimat-See')+'.';
+const stufeToast=(a,b)=>b>a?(b===2?' 🎉 Ihr seid jetzt beste Freunde!':' 🎉 Ihr seid jetzt Freunde!'):'';
+const rnd=a=>a[Math.floor(Math.random()*a.length)];
+let talkP=null; // mit wem man gerade redet: er bleibt stehen und schaut zu dir
+// Wacher Mensch in weniger als 3 m (der nächste), sonst -1
+function talkNear(){let best=-1,bd=3;
+  people.forEach((p,k)=>{if(!p.awake)return;const d=Math.hypot(p.g.position.x-player.pos.x,p.g.position.z-player.pos.z);if(d<bd){bd=d;best=k;}});
+  return best;}
+// Geschenk von einem Freund: 3 Früchte oder 10–30 Ludins. Ein bester Freund schenkt einmal die Mütze dazu.
+function giveGift(n,info){n.gift=todayKey();let t;
+  if(Math.random()<0.5){state.baits.frucht=num(state.baits.frucht)+3;t='3 Früchte';}
+  else{const l=10+Math.floor(Math.random()*21);state.ludins+=l;t=l+' Ludins';}
+  const hat=freundStufe(n.f)>=2&&!state.clothes.muetze;if(hat){state.clothes.muetze=true;t+=' und eine Mütze';}
+  refreshHud(true);
+  return '🎁 '+info.name+' schenkt dir '+t+'!'+(hat?' In der Avatar-Werkstatt (👕) kannst du sie aufsetzen.':'');}
+// Gesprächskarte. say = was der Mensch gerade sagt (sonst: Begrüßung, das Gespräch beginnt)
+function showTalk(k,say){const p=people[k],info=nachbarInfo(k);if(!p||!info)return;
+  const n=nb(p.id);
+  if(say==null){const today=todayKey(),st0=freundStufe(n.f);let msg='';
+    if(n.talk!==today){n.talk=today;n.f=Math.min(999,n.f+1);msg=stufeToast(st0,freundStufe(n.f)); // erstes Gespräch heute: +1
+      if(freundStufe(n.f)>=1&&n.gift!==today&&Math.random()<0.3)msg=giveGift(n,info)+msg;}
+    save();if(msg)toast(msg.trim());
+    say=rnd(GRUSS_ART[info.art]||GRUSS_ART.freundlich).replace('{name}',info.name).replace('{alter}',info.alter);
+    if(WT.hour>=18||WT.hour<5)say=say.replace('Guten Tag','Guten Abend');
+    talkP=p;p.wave=0;p.av.arms[1].rotation.z=0.08;}
+  openModal();card.className='card';card.innerHTML='';
+  const st=freundStufe(n.f);
+  card.appendChild(el('h2',null,'💬 '+esc(info.name)));
+  card.appendChild(el('p','small','❤️'.repeat(st+1)+' '+FREUND_STUFEN[st]));
+  card.appendChild(el('p',null,esc(say)));
+  const a=state.aufgaben.find(x=>x.n===p.id),has=!!a&&state.bucket.some(it=>it.id===a.fish);
+  const bt=el('div','btns');
+  const b1=el('button','b','Hast du einen Tipp?');b1.onclick=()=>showTalk(k,rnd(TIPPS_STADT));
+  const b2=el('button','b',has?'Hier, bitte!':'Kann ich dir helfen?');b2.onclick=()=>has?handFish(k):showTalk(k,helpText(k));
+  const b3=el('button','b alt','Tschüss!');b3.onclick=closeModal;
+  [b1,b2,b3].forEach(b=>bt.appendChild(b));card.appendChild(bt);}
+// „Kann ich dir helfen?“: neue Aufgabe, oder sagen, worauf er noch wartet
+function helpText(k){const p=people[k],a=state.aufgaben.find(x=>x.n===p.id);
+  if(a){const f=FISH_BY[a.fish];return 'Ich warte noch auf '+fishAcc(f)+'. '+fishWo(f);}
+  if(state.aufgaben.length>=AUFGABEN_MAX)return 'Danke! Aber du hast schon '+AUFGABEN_MAX+' Aufgaben. Mach erst eine fertig.';
+  const f=FISH_BY[rnd(AUFGABEN_FISCHE)];state.aufgaben.push({n:p.id,fish:f.id,day:todayKey()});save();
+  toast('📝 Neue Aufgabe! Auf dem Stadtplan (🗺️) siehst du alle Aufgaben.');
+  return 'Oh ja! Bringst du mir '+fishAcc(f)+'? '+fishWo(f);}
+// „Hier, bitte!“: Fisch abgeben. Belohnung 2 × Preis + 10 Ludins und +3 Freundschaft
+function handFish(k){const p=people[k],info=nachbarInfo(k),a=state.aufgaben.find(x=>x.n===p.id);if(!a)return;
+  const i=state.bucket.findIndex(it=>it.id===a.fish);if(i<0)return;
+  const f=FISH_BY[a.fish],lohn=2*f.price+10,n=nb(p.id),st0=freundStufe(n.f);
+  state.bucket.splice(i,1);state.aufgaben.splice(state.aufgaben.indexOf(a),1);
+  state.ludins+=lohn;n.f=Math.min(999,n.f+3);save();sfxCoins();refreshHud(true);
+  toast('❤️ '+info.name+' freut sich! +'+lohn+' Ludins.'+stufeToast(st0,freundStufe(n.f)));
+  showTalk(k,'Juhu, danke! Hier sind '+lohn+' Ludins für dich.');}
+// Stadtplan: offene Aufgaben (unbekannte Menschen werden nicht gezeigt)
+function aufgabenList(){const box=el('div','towbox');box.appendChild(el('h3',null,'📝 Aufgaben'));
+  const list=state.aufgaben.map(a=>({a,k:people.findIndex(p=>p.id===a.n)})).filter(x=>x.k>=0);
+  if(!list.length)box.appendChild(el('p',null,'Noch keine Aufgaben. Frag die Menschen in der Stadt: „Kann ich dir helfen?“'));
+  list.forEach(({a,k})=>{const f=FISH_BY[a.fish],has=state.bucket.some(it=>it.id===a.fish)?1:0;
+    box.appendChild(el('p',null,esc(nachbarInfo(k).name)+': bring '+esc(f.name)+' ('+has+'/1)'+(has?' ✅':'')));});
+  return box;}
 // Darf ein Mensch auf die Stelle (x,z) treten? Nicht in geparkte Fahrzeuge, die Straßenbahn, den Abschleppwagen und nicht dir in den Weg.
 function blockedForPeople(x,z){return hitsParked(x,z,0.5)||hitsList(tram.cols,x,z,0.5)||hitsList(tow.cols,x,z,0.5)||inPlayerWay(x,z);}
 // Steht der Spieler an der Stelle (x,z) im Weg? Der Cyber-Truck ist lang: dann zählen Mitte, Nase und Heck (wie bei truckFits).
@@ -3282,7 +3399,7 @@ function inPlayerWay(x,z){const p=player.pos,r=0.55;
   const sx=Math.sin(player.facing)*2,sz=Math.cos(player.facing)*2;
   return Math.hypot(x-p.x,z-p.z)<1.4+r||Math.hypot(x-p.x-sx,z-p.z-sz)<1.2+r||Math.hypot(x-p.x+sx,z-p.z+sz)<1.2+r;}
 function updatePeople(dt,t){if(!people.length||!atCity())return;
-  const px=player.pos.x,pz=player.pos.z;
+  const px=player.pos.x,pz=player.pos.z;if(talkP&&mode!=='modal')talkP=null; // Gesprächskarte zu: weiterlaufen
   // einmal pro Sekunde: wer ist wach? Schlafende sieht man nicht, und sie sind kein Hindernis (ihr Kreis liegt weit weg).
   peopleTick-=dt;if(peopleTick<=0){peopleTick=1;const d=new Date();let n=0;
     for(const p of people){const a=personAwake(p,d);if(a)n++;if(a===p.awake)continue;p.awake=a;
@@ -3294,7 +3411,8 @@ function updatePeople(dt,t){if(!people.length||!atCity())return;
   for(const p of people){if(!p.awake){p.g.visible=false;continue;}
     const o=p.g.position,dist=Math.hypot(o.x-px,o.z-pz);p.g.visible=dist<120;if(dist>=80)continue;
     const av=p.av;let moving=false;
-    if(p.wave>0){p.wave-=dt;p.g.rotation.y=angleLerp(p.g.rotation.y,Math.atan2(px-o.x,pz-o.z),1-Math.exp(-dt*6));
+    if(p===talkP)p.g.rotation.y=angleLerp(p.g.rotation.y,Math.atan2(px-o.x,pz-o.z),1-Math.exp(-dt*6)); // beim Reden: stehen und zu dir schauen
+    else if(p.wave>0){p.wave-=dt;p.g.rotation.y=angleLerp(p.g.rotation.y,Math.atan2(px-o.x,pz-o.z),1-Math.exp(-dt*6));
       av.arms[1].rotation.z=-0.3-Math.abs(Math.sin(t*6))*0.9;if(p.wave<=0)av.arms[1].rotation.z=0.08;}
     else{const w=p.path[p.i],dx=w.x-o.x,dz=w.z-o.z,l=Math.hypot(dx,dz),step=p.speed*dt;
       if(l<=step){o.x=w.x;o.z=w.z;p.i=(p.i+1)%p.path.length;}
@@ -3646,6 +3764,7 @@ function showCityMap(){
   const leg=el('div','maplegend');
   [['🚋','Haltestelle der Straßenbahn'],['🛒','Fahrzeug-Laden'],['🐟','Fischer Hannes (Angeln am Hafen)'],['🚲','Dein Fahrrad'],['✈️','Flugzeug'],['🟫','Haus']].forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
   row.appendChild(leg);card.appendChild(row);
+  card.appendChild(aufgabenList());
   card.appendChild(towList());
   const bt=el('div','btns'),cl=el('button','b','Fertig');cl.onclick=closeModal;bt.appendChild(cl);card.appendChild(bt);
   const W=Math.round(Math.min((card.clientWidth||600)-36,Math.max(260,innerHeight*0.6),560));w.style.width=W+'px';
@@ -3665,6 +3784,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:37,day:'27.10.2026',ico:'💬',t:'Nachbarn',d:'In Hafenhausen haben alle Menschen jetzt Namen. Rede mit ihnen, hilf ihnen und werde Freund!'},
  {v:36,day:'27.10.2026',ico:'🚦',t:'Verkehrsregeln',d:'Menschen laufen jetzt um Fahrzeuge herum. Wer zu schnell irgendwo dagegenfährt, bekommt einen Strafzettel.'},
  {v:35,day:'27.10.2026',ico:'🕗',t:'Öffnungszeiten',d:'Rosa, Opa Tiago, Fischer Hannes und der Fahrzeug-Laden sind von 8 bis 22 Uhr offen. Nachts kannst du im Eimer deine Fische freilassen: Platsch!'},
  {v:34,day:'27.10.2026',ico:'🦉',t:'Fische nach Uhrzeit',d:'Manche Fische beißen nur abends und nachts, zum Beispiel Aal, Wels und Zitteraal. Hecht und Pfauenbarsch jagen tagsüber. Im Fischbuch steht, wann sie beißen.'},
