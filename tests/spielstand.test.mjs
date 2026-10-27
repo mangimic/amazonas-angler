@@ -1302,6 +1302,7 @@ test('Weltzeit: 23 Uhr ist Nacht, mit Sternen', async () => {
   await page.click('#btnGo');
   await page.locator('body[data-phase="nacht"]').waitFor({ state: 'attached', timeout: 5000 });
   assert.match(await page.textContent('#clockChip'), /🌙 23:00/);
+  assert.equal((await page.evaluate(() => window.__test.welt())).stars, true, 'die Sterne sind zu sehen');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -1335,6 +1336,54 @@ test('Weltzeit: Jahreszeit', async () => {
     await page.locator('body[data-season]').waitFor({ state: 'attached', timeout: 5000 });
     assert.equal(await page.evaluate(() => document.body.dataset.season), jz, iso);
   }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Sonnenhöhe wie im Spiel (sunElevation in index.html), für Deutschland: Sonnen-Uhrzeit = UTC + 10/15 Stunden
+function sonnenhoehe(d) {
+  const r = Math.PI / 180, doy = Math.round((Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()) - Date.UTC(d.getUTCFullYear(), 0, 1)) / 864e5) + 1;
+  const de = -23.44 * Math.cos(2 * Math.PI * (doy + 10) / 365) * r, ha = 15 * (d.getUTCHours() + d.getUTCMinutes() / 60 + 10 / 15 - 12) * r, la = 51 * r;
+  return Math.asin(Math.sin(la) * Math.sin(de) + Math.cos(la) * Math.cos(de) * Math.cos(ha)) / r;
+}
+
+test('Weltzeit: bei Sonnenuntergang ist Dämmerung', async () => {
+  // heute, erste Minute nach Sonnenuntergang (Sonne gerade unter dem Horizont): sicher Dämmerung, egal an welchem Tag im Jahr
+  const d = new Date(); d.setUTCHours(12, 0, 0, 0);
+  while (sonnenhoehe(d) > 0) d.setUTCMinutes(d.getUTCMinutes() + 1);
+  const h = sonnenhoehe(d);
+  assert.ok(h > -3 && h <= 0, 'Sonne knapp unter dem Horizont: ' + h);
+  const { ctx, page, errors } = await zeitSeite(d.toISOString());
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('body[data-phase="daemmerung"]').waitFor({ state: 'attached', timeout: 5000 });
+  assert.match(await page.textContent('#clockChip'), /🌅/);
+  assert.equal((await page.evaluate(() => window.__test.welt())).phase, 'daemmerung');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Weltzeit: in der Avatar-Werkstatt ist immer Tag, danach wieder die echte Zeit', async () => {
+  const TAG = '#a6dccd', NACHT = '#22335e';
+  const { ctx, page, errors } = await zeitSeite('2026-10-27T23:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
+  await startGame(page); // das Spiel beginnt in der Werkstatt
+  const welt = () => page.evaluate(() => window.__test.welt());
+  let w = await welt();
+  assert.equal(w.sky, TAG, 'Werkstatt beim Start: Tageshimmel');
+  assert.equal(w.stars, false);
+  await page.click('#btnGo');
+  w = await welt();
+  assert.equal(w.sky, NACHT, 'nach der Werkstatt: Nacht');
+  assert.equal(w.stars, true);
+  await page.click('#btnAvatar');
+  await page.locator('#btnGo').waitFor({ state: 'visible' });
+  w = await welt();
+  assert.equal(w.sky, TAG, 'Werkstatt wieder offen: Tageshimmel');
+  assert.equal(w.phase, 'nacht', 'die Weltzeit bleibt trotzdem Nacht');
+  await page.click('#btnGo');
+  assert.equal((await welt()).sky, NACHT, 'Werkstatt zu: wieder Nacht');
   assert.deepEqual(errors, []);
   await ctx.close();
 });

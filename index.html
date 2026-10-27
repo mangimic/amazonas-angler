@@ -794,14 +794,15 @@ function applySky(e,h,doy,region){const c=skyColor(e,new THREE.Color()),k=smooth
   const v=new THREE.Vector3(Math.cos(de)*Math.sin(ha),Math.sin(la)*Math.sin(de)+Math.cos(la)*Math.cos(de)*Math.cos(ha),Math.cos(la)*Math.sin(de)-Math.sin(la)*Math.cos(de)*Math.cos(ha));
   if(v.y<0)v.negate();v.y=Math.max(v.y,0.35);v.normalize();sun.position.copy(v).multiplyScalar(100);
   moonDir.set(v.x,0,v.z);if(moonDir.lengthSq()<1e-4)moonDir.set(0,0,-1);moonDir.normalize().multiplyScalar(0.94).setY(0.34); // Mond tief am Himmel, damit man ihn sieht
-  const night=WT.phase==='nacht';stars.visible=moon.visible=night;flies.visible=night&&region==='amazonas';
+  const night=phaseOf(e)==='nacht';stars.visible=moon.visible=night;flies.visible=night&&region==='amazonas';
   winMat.color.copy(night?GLOW:WIN_DAY);winMat.emissive.copy(GLOW).multiplyScalar(night?0.8:0);
   lampMat.color.copy(night?GLOW:LAMP_DAY);lampMat.emissive.copy(GLOW).multiplyScalar(night?0.95:0);}
 function updateWorldTime(){const d=new Date(),region=regionNow(),h=solarHour(d,region),doy=dayOfYear(d),elev=sunElevation(LAT[region],h,doy);
   Object.assign(WT,{phase:phaseOf(elev),elev,season:season(d),hour:d.getHours()+d.getMinutes()/60,region,key:todayKey(d)});
   document.body.dataset.phase=WT.phase;document.body.dataset.season=WT.season;
   $('#clockChip').textContent=(WT.phase==='tag'?'☀️':WT.phase==='daemmerung'?'🌅':'🌙')+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
-  applySky(elev,h,doy,region);}
+  if(mode==='creator')applySky(45,12,doy,region); // in der Avatar-Werkstatt immer Tageslicht, damit man die Farben gut sieht
+  else applySky(elev,h,doy,region);}
 setInterval(updateWorldTime,30000);
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)updateWorldTime();}); // zurück im Spiel: gleich die richtige Uhrzeit
 
@@ -2058,12 +2059,12 @@ function openCreator(){
   // Auf den Schienen fährt das Fahrzeug zurück an seinen Startplatz (parkHere), man selbst bleibt hier.
   if(player.ride&&!dismount(true)){const f=player.facing,x=player.pos.x-Math.cos(f)*2,z=player.pos.z+Math.sin(f)*2;parkHere();
     if(walkable(x,z)){player.pos.x=x;player.pos.z=z;}player.y=groundY(player.pos.x,player.pos.z);save();}
-  mode='creator';$('#hud').hidden=true;$('#creator').hidden=false;$('#modal').hidden=true;buildCreator();creatorSpin=0;
+  mode='creator';$('#hud').hidden=true;$('#creator').hidden=false;$('#modal').hidden=true;buildCreator();creatorSpin=0;updateWorldTime();
   if(player.inBoat){player.inBoat=false;player.pos.set(VX-6,0,2);player.y=groundY(player.pos.x,player.pos.z);}
   faceFreeSide();}
 $('#btnGo').onclick=()=>{audio();if(!state.avatar.name)state.avatar.name='Angler';if(state.hasYacht)buildYachtName();
   if(boardOnStart){boardOnStart=false;player.inBoat=true;player.pos.copy(boat.pos);player.facing=boat.yaw;}
-  save();$('#creator').hidden=true;$('#hud').hidden=false;mode='play';
+  save();$('#creator').hidden=true;$('#hud').hidden=false;mode='play';updateWorldTime(); // zurück zur echten Tageszeit
   camera.clearViewOffset();player.root.rotation.y=player.facing;refreshHud();updateFishBtn();
   updateNewsDot();
   const playedBefore=state.ludins>0||Object.keys(state.book).length>0||state.hasBoat;
@@ -3753,7 +3754,8 @@ if(askWhoPlays)showPlayers();
 updateTimeChip();if(timeLeft()<=0)lockTime();
 updateWorldTime();
 // Nur für die automatischen Tests (der Browser meldet sich dann als „webdriver“): Spieler an eine Stelle setzen
-if(navigator.webdriver===true)window.__test={warp(x,z){player.pos.set(x,0,z);player.y=groundY(x,z);player.root.position.set(x,player.y,z);updateWorldTime();saveWhere();}};
+if(navigator.webdriver===true)window.__test={warp(x,z){player.pos.set(x,0,z);player.y=groundY(x,z);player.root.position.set(x,player.y,z);updateWorldTime();saveWhere();},
+  welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible})};
 player.root.position.set(player.pos.x,player.y,player.pos.z);
 loop();
 })();
