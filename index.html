@@ -827,7 +827,7 @@ function merge(parts){
 }
 const vcMat=new THREE.MeshLambertMaterial({vertexColors:true});
 /* ---- Jahreszeiten: nur in Deutschland (Heimat-See, Flussplätze, Hafenhausen). Der Amazonas bleibt immer grün. ----
-   laubMat (Bäume, Büsche, Schilf) und wieseMat (Boden) sind Kopien von vcMat nur für die deutschen Gebiete.
+   laubMat (Laubbäume, Büsche, Schilf) und wieseMat (Boden und Fichten) sind Kopien von vcMat nur für die deutschen Gebiete.
    material.color ist ein Faktor auf die Farben der Ecken. Weil ein Faktor Grün nicht heller machen kann,
    bleicht uniform „fade“ nur grüne Stellen zu Weiß aus (Stämme, Wege, Sand und Straßen bleiben, wie sie sind). */
 function seasonMat(){const m=vcMat.clone(),fade={value:0};m.userData.fade=fade;
@@ -2401,6 +2401,8 @@ $('#btnRank').onclick=$('#btnRanking').onclick=()=>{audio();stopFishing();save()
 // Bäume wie in Deutschland: Fichten und Birken (am Heimat-See und an den Flüssen)
 const FICHTE=merge([part(new THREE.CylinderGeometry(0.22,0.3,2,6),'#5e4128',M(0,1,0)),
     part(new THREE.ConeGeometry(2.2,3.4,7),'#2b5a33',M(0,3.2,0)),part(new THREE.ConeGeometry(1.7,2.8,7),'#2f6338',M(0,4.8,0)),part(new THREE.ConeGeometry(1.1,2.2,7),'#356b3c',M(0,6.2,0))]);
+// Material für Bäume in Deutschland: Fichten sind Nadelbäume und bleiben grün (wie die Wiese, im Winter verschneit), Laubbäume färben sich
+const treeMat=geo=>geo===FICHTE?wieseMat:laubMat;
 const BIRKE=merge([part(new THREE.CylinderGeometry(0.16,0.22,5,6),'#ece8dc',M(0,2.5,0)),
     part(new THREE.CylinderGeometry(0.17,0.17,0.25,6),'#2a2a2a',M(0,1.6,0)),part(new THREE.CylinderGeometry(0.17,0.17,0.2,6),'#2a2a2a',M(0,3.1,0)),
     part(new THREE.IcosahedronGeometry(1.6,0),'#8dbb4a',M(0,5.6,0,0,0,0,1,1.3,1))]);
@@ -2424,7 +2426,7 @@ const REED=merge([part(new THREE.CylinderGeometry(0.03,0.04,1.8,4),'#7d8f3a',M(0
     if(colliders.some(o=>(o.x-x)**2+(o.z-z)**2<10))continue;
     const t=R()<0.45?0:R()<0.6?1:2,sc=0.8+R()*0.5;
     sets[t].push(M(x,h-0.2,z,0,R()*6.28,0,sc,sc*(0.9+R()*0.3),sc));colliders.push({x,z,r:0.55*sc});}
-  [FICHTE,BIRKE,treeC].forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,laubMat,sets[i].length);sets[i].forEach((m,q)=>im.setMatrixAt(q,m));scene.add(im);});
+  [FICHTE,BIRKE,treeC].forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,treeMat(tg2),sets[i].length);sets[i].forEach((m,q)=>im.setMatrixAt(q,m));scene.add(im);});
   makeBloom(sets[2],scene); // Blüten im Frühling
   // Schilf am Ufer
   const reeds=[];for(let i=0;i<3000&&reeds.length<420;i++){const a=R()*Math.PI*2,r=0.84+R()*0.12,x=LAKE.x+Math.cos(a)*LAKE.a*r,z=LAKE.z+Math.sin(a)*LAKE.b*r;
@@ -2823,7 +2825,7 @@ function buildSpot(id){const s=SPOTS_BY[id];if(!s)return false;
     if(noTree.some(o=>(o.x-x)**2+(o.z-z)**2<o.r*o.r)||hitsList(deCols,x,z,1.5))continue;
     const d=Math.abs(z-riverZ(x))-s.hw,t=h>6?(R()<0.7?3:0):d<10?(R()<0.5?1:2):(R()<0.75?0:4),sc=0.8+R()*0.5;
     sets[t].push(M(x,h-0.2,z,0,R()*6.28,0,sc,sc*(0.9+R()*0.3),sc));if(z<riverZ(x))deCols.push({x,z,r:0.55*sc});}
-  geos.forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,laubMat,sets[i].length);im.userData.shared=true;sets[i].forEach((m,q)=>im.setMatrixAt(q,m));g.add(im);});
+  geos.forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,treeMat(tg2),sets[i].length);im.userData.shared=true;sets[i].forEach((m,q)=>im.setMatrixAt(q,m));g.add(im);});
   dropBloom(spotBloom);spotBloom=makeBloom(sets[0],g); // Blüten im Frühling (die alten vom letzten Platz kommen weg)
   const bushes=[],fm=new THREE.InstancedMesh(flowerGeo,flowerMat,220),fc=new THREE.Color();let nf=0;
   for(let i=0;i<4000&&(bushes.length<140||nf<220);i++){const x=(R()*2-1)*(DE.w-4),z=DE.z+(R()*2-1)*(DE.l-4),h=heightAt(x,z);
@@ -3152,7 +3154,7 @@ function buildCity(){if(cityBuilt)return;
       if(circleHitsRect(MARKET,x,z,3)||hitsList(cityCols,x,z,2.5))continue;tree(x,z,R()<0.7?0:1,0.8+R()*0.3);}}
   for(let k=0;k<70;k++){const a=R(),side=Math.floor(R()*3),x=side===0?-140+a*280:side===1?132+R()*14:-(132+R()*14),z=side===0?-2856+R()*4:-3100+a*240;
     if(inRect(AIRFIELD,x,z)||Math.abs(z-CITY_LAND.z)<40&&x<0||hitsList(cityCols,x,z,2))continue;tree(x,z,R()<0.5?2:0,0.9+R()*0.4);}
-  geos.forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,laubMat,sets[i].length);im.userData.shared=true;sets[i].forEach((m,q)=>im.setMatrixAt(q,m));g.add(im);});
+  geos.forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,treeMat(tg2),sets[i].length);im.userData.shared=true;sets[i].forEach((m,q)=>im.setMatrixAt(q,m));g.add(im);});
   // Blumen im Park
   const fm=new THREE.InstancedMesh(flowerGeo,flowerMat,90),fc=new THREE.Color();let nf=0;
   for(let k=0;k<600&&nf<90;k++){const x=PARK.x0+3+R()*(PARK.x1-PARK.x0-6),z=PARK.z0+3+R()*(PARK.z1-PARK.z0-6);
@@ -3797,7 +3799,8 @@ updateTimeChip();if(timeLeft()<=0)lockTime();
 updateWorldTime();
 // Nur für die automatischen Tests (der Browser meldet sich dann als „webdriver“): Spieler an eine Stelle setzen
 if(navigator.webdriver===true)window.__test={warp(x,z){player.pos.set(x,0,z);player.y=groundY(x,z);player.root.position.set(x,player.y,z);updateWorldTime();saveWhere();},
-  welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible,region:WT.region,laub:'#'+laubMat.color.getHexString(),wiese:'#'+wieseMat.color.getHexString(),blueten:bloomOn&&blooms.size>0&&[...blooms].every(p=>p.visible)}),
+  welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible,region:WT.region,laub:'#'+laubMat.color.getHexString(),wiese:'#'+wieseMat.color.getHexString(),laubFade:laubMat.userData.fade.value,wieseFade:wieseMat.userData.fade.value,
+    fichten:(()=>{const f=[];scene.traverse(o=>{if(o.isInstancedMesh&&o.geometry===FICHTE)f.push(o.material===wieseMat);});return f.length>0&&f.every(Boolean);})(),blueten:bloomOn&&blooms.size>0&&[...blooms].every(p=>p.visible)}),
   hoehe:(x,z)=>heightAt(x,z),
   // jeden Flussplatz bauen: wie hoch stehen Hannes und die Infotafel? (unter 0 = im Wasser)
   ufer(){const was=curSpot&&curSpot.id,fa=state.flussAt,r=SPOTS.map(s=>{buildSpot(s.id);return {id:s.id,hannes:heightAt(hannes.x,hannes.z),tafel:heightAt(deBoard.x,deBoard.z)};});if(was)buildSpot(was);state.flussAt=fa;return r;}};

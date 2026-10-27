@@ -1356,8 +1356,12 @@ test('Weltzeit: Jahreszeit', async () => {
 });
 
 // Jahreszeiten: Farbe von Laub und Wiese (Faktor auf die Farben) und die Blüten im Frühling, nur in Deutschland
-const SAISON = { fruehling: { laub: '#ffe6ef', wiese: '#ffffff', blueten: true }, sommer: { laub: '#ffffff', wiese: '#ffffff', blueten: false },
-  herbst: { laub: '#ffb35c', wiese: '#ffffff', blueten: false }, winter: { laub: '#e8eef2', wiese: '#eef3f6', blueten: false } };
+// laubFade/wieseFade: wie stark Grün ausbleicht (true = mehr als 0). Fichten haben das Material der Wiese (Nadelbäume färben sich nicht).
+const SAISON = { fruehling: { laub: '#ffe6ef', wiese: '#ffffff', blueten: true, laubFade: false, wieseFade: false, fichten: true },
+  sommer: { laub: '#ffffff', wiese: '#ffffff', blueten: false, laubFade: false, wieseFade: false, fichten: true },
+  herbst: { laub: '#ffb35c', wiese: '#ffffff', blueten: false, laubFade: true, wieseFade: false, fichten: true },
+  winter: { laub: '#e8eef2', wiese: '#eef3f6', blueten: false, laubFade: true, wieseFade: true, fichten: true } };
+const saisonWerte = w => ({ laub: w.laub, wiese: w.wiese, blueten: w.blueten, laubFade: w.laubFade > 0, wieseFade: w.wieseFade > 0, fichten: w.fichten });
 test('Jahreszeiten: am Heimat-See wechseln Laub und Wiese, am Amazonas bleibt alles grün', async () => {
   const { ctx, page, errors } = await zeitSeite('2026-04-15T12:00:00+02:00');
   await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
@@ -1368,7 +1372,7 @@ test('Jahreszeiten: am Heimat-See wechseln Laub und Wiese, am Amazonas bleibt al
     await page.click('#btnGo');
     await page.locator('body[data-region="de"][data-season="' + jz + '"]').waitFor({ state: 'attached', timeout: 5000 });
     const w = await page.evaluate(() => window.__test.welt());
-    assert.deepEqual({ laub: w.laub, wiese: w.wiese, blueten: w.blueten }, SAISON[jz], jz);
+    assert.deepEqual(saisonWerte(w), SAISON[jz], jz);
   }
   // am 15.12. ins Dorf am Amazonas: das Datum bleibt Winter, aber dort gibt es keine Jahreszeiten-Farben
   const VX = 10 * Math.sin(1) + 24; // wie im Spiel: riverX(0)+24
@@ -1376,9 +1380,27 @@ test('Jahreszeiten: am Heimat-See wechseln Laub und Wiese, am Amazonas bleibt al
   await page.locator('body[data-region="amazonas"]').waitFor({ state: 'attached', timeout: 5000 });
   assert.equal(await page.evaluate(() => document.body.dataset.season), 'winter');
   const w = await page.evaluate(() => window.__test.welt());
-  assert.deepEqual({ laub: w.laub, wiese: w.wiese, blueten: w.blueten }, SAISON.sommer, 'Amazonas: neutral');
+  assert.deepEqual(saisonWerte(w), SAISON.sommer, 'Amazonas: neutral');
   assert.deepEqual(errors, []);
   await ctx.close();
+});
+
+test('Jahreszeiten: Fichten bleiben im Herbst grün (Flussplatz und Hafenhausen)', async () => {
+  const neckar = flussplaetze().find(s => s.id === 'bw-neckar');
+  for (const where of [landeplatz(neckar), { ...stadtWert('CITY_LAND'), boat: false }]) {
+    const { ctx, page, errors } = await zeitSeite('2026-10-15T12:00:00+02:00');
+    await seed(page, { [KEY]: stadtSeed({ flussAt: 'bw-neckar', where }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.locator('body[data-region="de"][data-season="herbst"]').waitFor({ state: 'attached', timeout: 5000 });
+    const w = await page.evaluate(() => window.__test.welt());
+    assert.equal(w.fichten, true, 'alle Fichten haben das Material der Wiese (z = ' + where.z + ')');
+    assert.equal(w.wiese, '#ffffff', 'Fichten: Farbfaktor weiß');
+    assert.equal(w.wieseFade, 0, 'Fichten: kein Ausbleichen');
+    assert.equal(w.laub, '#ffb35c', 'Laubbäume: Herbst');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
 });
 
 // Position einer Infotafel aus INFOBOARDS lesen: {id:'…',x:VX±a,z:b,…} (x relativ zum Dorf)
