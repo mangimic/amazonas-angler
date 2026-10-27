@@ -1582,3 +1582,98 @@ test('Fischbuch zeigt Zeiten', async () => {
   assert.deepEqual(errors, []);
   await ctx.close();
 });
+
+// Öffnungszeiten: die Läden sind von 8 bis 22 Uhr offen (SHOP_HOURS). Seed-Ort: neben Rosa bzw. Opa Tiago.
+const VX_TEST = 10 * Math.sin(1) + 24;
+const NEBEN_ROSA = { x: VX_TEST + 1, z: -1, f: 0, boat: false };
+const NEBEN_TIAGO = { x: 33.8, z: 2.6, f: 0, boat: false };
+
+test('Läden: um 23 Uhr hat Rosa zu', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-06-21T23:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ where: NEBEN_ROSA }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Geschlossen")').waitFor({ timeout: 5000 });
+  assert.equal((await page.textContent('#btnCtx')).trim(), '🌙 Geschlossen – öffnet um 8 Uhr');
+  await page.click('#btnCtx');
+  assert.equal(await page.locator('#modal').isVisible(), false, 'der Laden geht nicht auf');
+  assert.equal(await page.locator('#card').isVisible(), false);
+  assert.match(await page.textContent('#toast'), /Geschlossen – öffnet um 8 Uhr/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Läden: um 9 Uhr hat Rosa offen', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-06-21T09:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ where: NEBEN_ROSA }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Rosa")').waitFor({ timeout: 5000 });
+  assert.doesNotMatch(await page.textContent('#btnCtx'), /Geschlossen/);
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Rosas Fischhandel")').waitFor();
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Läden: Opa Tiago macht um 22 Uhr zu und um 8 Uhr auf', async () => {
+  for (const [iso, zu] of [['2026-06-21T21:59:00+02:00', false], ['2026-06-21T22:00:00+02:00', true], ['2026-06-21T07:59:00+02:00', true], ['2026-06-21T08:00:00+02:00', false]]) {
+    const { ctx, page, errors } = await zeitSeite(iso);
+    await seed(page, { [KEY]: stadtSeed({ where: NEBEN_TIAGO }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.locator('#btnCtx').waitFor({ timeout: 5000 });
+    const t = await page.textContent('#btnCtx');
+    assert.equal(/Geschlossen/.test(t), zu, iso + ': ' + t);
+    if (!zu) assert.match(t, /Opa Tiago/);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Läden: die Schilder nennen die Öffnungszeit', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  for (const name of ["'Rosas'", "'Opa Tiagos'", "'Fischer Hannes'"]) {
+    const i = html.indexOf('fillText(' + name);
+    assert.ok(i > 0, name + ' gefunden');
+    assert.match(html.slice(i, i + 700), /SHOP_HOURS_TXT/, name + ': Schild nennt die Öffnungszeit');
+  }
+  assert.match(html, /makeSign\(s\.name,[^;]*SHOP_HOURS_TXT/, 'Fahrzeug-Laden');
+  assert.match(html, /const SHOP_HOURS_TXT=SHOP_HOURS\.auf\+'–'\+SHOP_HOURS\.zu\+' Uhr'/, 'der Text ist „8–22 Uhr“');
+});
+
+test('Eimer: Fische freilassen geht immer', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-06-21T23:00:00+02:00');
+  await seed(page, { [KEY]: stadtSeed({ ludins: 77, bucket: [{ id: 'hering', cm: 25, value: 6 }, { id: 'hecht', cm: 60, value: 50 }] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBucket');
+  await page.locator('#card h2:has-text("Dein Eimer")').waitFor();
+  const h = await page.locator('#btnRelease').evaluate(e => e.getBoundingClientRect().height);
+  assert.ok(h >= 60, 'Knopf mindestens 60 px hoch: ' + h);
+  await page.click('#btnRelease');
+  // erst fragen, nicht gleich alles freilassen
+  await page.locator('#btnReleaseOk').waitFor();
+  assert.equal((await weg(page)).bucket.length, 2, 'ohne „Ja“ bleibt alles im Eimer');
+  const h2 = await page.locator('#btnReleaseOk').evaluate(e => e.getBoundingClientRect().height);
+  assert.ok(h2 >= 60, 'Bestätigen-Knopf mindestens 60 px: ' + h2);
+  await page.click('#btnReleaseOk');
+  const s = await weg(page);
+  assert.deepEqual(s.bucket, []);
+  assert.equal(s.ludins, 77, 'Freilassen bringt keine Ludins');
+  assert.match(await page.textContent('#toast'), /Platsch! Deine Fische schwimmen wieder frei\./);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Eimer: leerer Eimer hat keinen Freilassen-Knopf', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ bucket: [] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBucket');
+  await page.locator('#card h2:has-text("Dein Eimer")').waitFor();
+  assert.equal(await page.locator('#btnRelease').count(), 0);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

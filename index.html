@@ -148,6 +148,8 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
 .b{border:3px solid var(--ink);border-radius:14px;box-shadow:0 4px 0 var(--ink);padding:9px 16px;min-height:60px;font:800 19px var(--display);background:var(--gold)}
 .b.alt{background:#e9dfc5}
 .b.go{background:#5fb36a;color:#fff}
+.b.rel{background:#cfe8f5}
+.releaseask{margin:10px 0;text-align:center}
 .b:disabled{opacity:.5;cursor:default}
 .b:active:not(:disabled){transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
 .tabs{display:flex;gap:8px}
@@ -765,6 +767,12 @@ const phaseOf=e=>e>6?'tag':e>-6?'daemmerung':'nacht';
 const season=d=>['winter','winter','fruehling','fruehling','fruehling','sommer','sommer','sommer','herbst','herbst','herbst','winter'][d.getMonth()];
 const WT={phase:'tag',elev:45,season:'sommer',hour:12,region:'amazonas',key:''};
 const isNight=()=>WT.phase==='nacht';
+// Öffnungszeiten der Läden (Rosa, Opa Tiago, Fischer Hannes, Fahrzeug-Laden, später das Museum): ein Ort für alle
+const SHOP_HOURS={auf:8,zu:22};
+const shopOpen=()=>WT.hour>=SHOP_HOURS.auf&&WT.hour<SHOP_HOURS.zu;
+const SHOP_CLOSED_TXT='🌙 Geschlossen – öffnet um '+SHOP_HOURS.auf+' Uhr';
+const SHOP_HOURS_TXT=SHOP_HOURS.auf+'–'+SHOP_HOURS.zu+' Uhr';
+const SHOP_CTX=['shop','tiago','hannes','vshop','museum']; // diese Kontext-Knöpfe führen in einen Laden
 // Himmel: Tag hellgrün-blau, Dämmerung rosa-orange, Nacht dunkelblau (nie schwarz)
 const SKY_DAY=new THREE.Color('#a6dccd'),SKY_DUSK=new THREE.Color('#f2a07b'),SKY_NIGHT=new THREE.Color('#22335e');
 function skyColor(e,out){return e>=0?out.copy(SKY_DUSK).lerp(SKY_DAY,smooth(0,8,e)):out.copy(SKY_NIGHT).lerp(SKY_DUSK,smooth(-8,0,e));}
@@ -1061,11 +1069,11 @@ const infoNear=()=>INFOBOARDS.find(b=>Math.hypot(player.pos.x-b.x,player.pos.z-b
   const door=new THREE.Mesh(new THREE.CylinderGeometry(0.9,0.9,0.2,12,1,false,0,Math.PI),mat('#3b2a1c'));door.rotation.set(Math.PI/2,0,Math.PI/2);door.position.set(-3.18,0,0);
   door.scale.set(1,1,2.2);hut.add(door);
   // Schild
-  const cv=document.createElement('canvas');cv.width=512;cv.height=160;const x=cv.getContext('2d');
-  x.fillStyle='#fbf3df';x.fillRect(0,0,512,160);x.strokeStyle='#1b2a20';x.lineWidth=14;x.strokeRect(7,7,498,146);
-  x.fillStyle='#1b2a20';x.font='800 58px "Trebuchet MS",sans-serif';x.textAlign='center';x.fillText('Rosas',256,70);x.fillStyle='#e2412b';x.fillText('Fischhandel',256,132);
-  const sign=new THREE.Mesh(new THREE.PlaneGeometry(3.4,1.06),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv)}));
-  sign.position.set(-3.45,3.1,0);sign.rotation.y=-Math.PI/2;hut.add(sign);
+  const cv=document.createElement('canvas');cv.width=512;cv.height=210;const x=cv.getContext('2d');
+  x.fillStyle='#fbf3df';x.fillRect(0,0,512,210);x.strokeStyle='#1b2a20';x.lineWidth=14;x.strokeRect(7,7,498,196);
+  x.fillStyle='#1b2a20';x.font='800 58px "Trebuchet MS",sans-serif';x.textAlign='center';x.fillText('Rosas',256,70);x.fillStyle='#e2412b';x.fillText('Fischhandel',256,132);x.fillStyle='#1b2a20';x.font='800 40px "Trebuchet MS",sans-serif';x.fillText(SHOP_HOURS_TXT,256,188);
+  const sign=new THREE.Mesh(new THREE.PlaneGeometry(3.4,1.4),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv)}));
+  sign.position.set(-3.45,3.27,0);sign.rotation.y=-Math.PI/2;hut.add(sign);
   // Theke mit Fischkiste
   const tbl=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.9,2.4),mat('#8a6340'));tbl.position.set(-4.2,0.45,2.2);hut.add(tbl);
   hut.position.set(HX,heightAt(HX,HZ),HZ);scene.add(hut);
@@ -1143,11 +1151,12 @@ const TIAGO_AT={x:VX+1.4,z:4.6};
   const roof=new THREE.Mesh(new THREE.ConeGeometry(3.7,2.2,4),mat('#c2401f'));roof.rotation.y=Math.PI/4;roof.position.y=3.7;hut.add(roof);
   const door=new THREE.Mesh(new THREE.BoxGeometry(0.12,1.8,1.1),mat('#3b2a1c'));door.position.set(-2.22,0.9,0);hut.add(door);
   // Schild
-  const cv=document.createElement('canvas');cv.width=512;cv.height=160;const x=cv.getContext('2d');
-  x.fillStyle='#fbf3df';x.fillRect(0,0,512,160);x.strokeStyle='#1b2a20';x.lineWidth=14;x.strokeRect(7,7,498,146);
+  const cv=document.createElement('canvas');cv.width=512;cv.height=210;const x=cv.getContext('2d');
+  x.fillStyle='#fbf3df';x.fillRect(0,0,512,210);x.strokeStyle='#1b2a20';x.lineWidth=14;x.strokeRect(7,7,498,196);
   x.fillStyle='#1b2a20';x.font='800 54px "Trebuchet MS",sans-serif';x.textAlign='center';x.fillText('Opa Tiagos',256,68);x.fillStyle='#2f7fd8';x.fillText('Angelladen',256,130);
-  const sign=new THREE.Mesh(new THREE.PlaneGeometry(3.2,1),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv)}));
-  sign.position.set(-2.3,2.95,0);sign.rotation.y=-Math.PI/2;hut.add(sign);
+  x.fillStyle='#1b2a20';x.font='800 40px "Trebuchet MS",sans-serif';x.fillText(SHOP_HOURS_TXT,256,188);
+  const sign=new THREE.Mesh(new THREE.PlaneGeometry(3.2,1.31),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv)}));
+  sign.position.set(-2.3,3.1,0);sign.rotation.y=-Math.PI/2;hut.add(sign);
   // Angeln lehnen an der Wand
   ['#c9a45a','#7a4b2a','#f0b429'].forEach((c,i)=>{const r=new THREE.Mesh(new THREE.CylinderGeometry(0.03,0.05,2.6,6),mat(c));r.position.set(-2.4,1.3,-1.1-i*0.35);r.rotation.x=0.12;r.rotation.z=-0.18;hut.add(r);});
   // Köder-Fass
@@ -1835,7 +1844,18 @@ function showBucket(){
   state.bucket.forEach(it=>{const f=FISH_BY[it.id];const row=el('div','item');row.appendChild(fishThumb(f));
     row.appendChild(el('div','t','<b>'+esc(f.name)+'</b><span>'+it.cm+' cm</span>'));row.appendChild(el('span','sum',it.value+' L'));l.appendChild(row);});
   card.appendChild(l);
-  const c=el('button','b','Fertig');c.onclick=closeModal;const bt=el('div','btns');bt.appendChild(c);card.appendChild(bt);
+  const c=el('button','b','Fertig');c.onclick=closeModal;const bt=el('div','btns');bt.appendChild(c);
+  if(state.bucket.length){ // alle Fische zurück ins Wasser: geht zu jeder Uhrzeit, bringt keine Ludins. Erst nachfragen, damit es nicht aus Versehen passiert.
+    const rel=el('button','b rel','🐟 Fische freilassen');rel.id='btnRelease';
+    rel.onclick=()=>{card.querySelector('.releaseask')?.remove();
+      const ask=el('div','releaseask','<p><b>Wirklich alle '+state.bucket.length+' Fische freilassen?</b> Du bekommst dafür keine Ludins.</p>');
+      const ab=el('div','btns');const ok=el('button','b go','Ja, alle freilassen');ok.id='btnReleaseOk';
+      ok.onclick=()=>{state.bucket=[];save();refreshHud();closeModal();splash(player.pos.x+Math.sin(player.facing)*3,player.pos.z+Math.cos(player.facing)*3);
+        toast('Platsch! Deine Fische schwimmen wieder frei.');};
+      const no=el('button','b alt','Nein, behalten');no.id='btnReleaseNo';no.onclick=showBucket;
+      ab.append(ok,no);ask.appendChild(ab);card.insertBefore(ask,bt);rel.hidden=true;};
+    bt.insertBefore(rel,c);}
+  card.appendChild(bt);
 }
 function showBook(){
   openModal();card.className='card';card.innerHTML='';
@@ -1871,7 +1891,7 @@ function showTiago(){
   if(!state.metTiago){state.metTiago=true;save();}
   openModal();card.className='card';card.innerHTML='';
   const head=el('div','rosa');const face=el('div','face tiago');face.appendChild(el('div','beard'));head.appendChild(face);
-  head.appendChild(el('div',null,'<h2>Opa Tiagos Angelladen</h2><p>Olá, '+esc(state.avatar.name||'du')+'! Ich habe alles, was ein Angler braucht.</p>'));
+  head.appendChild(el('div',null,'<h2>Opa Tiagos Angelladen</h2><p class="small">Offen '+SHOP_HOURS_TXT+'</p><p>Olá, '+esc(state.avatar.name||'du')+'! Ich habe alles, was ein Angler braucht.</p>'));
   card.appendChild(head);
   const qrow=el('div','item shopitem');qrow.appendChild(el('div','shopicon','🎓'));
   qrow.appendChild(el('div','t','<b>Angel-Quiz</b><span>'+(state.angelschein?'Du hast den Junior-Angelschein!':'Beantworte '+QUIZ_GOAL+' Fragen richtig, dann bekommst du den Junior-Angelschein. Du hast schon '+quizOk().length+'.')+'</span>'));
@@ -1900,7 +1920,7 @@ function buyList(items,again){
 function showShop(){
   openModal();card.className='card';card.innerHTML='';
   const head=el('div','rosa');head.appendChild(el('div','face'));
-  head.appendChild(el('div',null,'<h2>Rosas Fischhandel</h2><p>Hallo '+esc(state.avatar.name||'du')+'! Zeig mal, was du gefangen hast.</p>'));
+  head.appendChild(el('div',null,'<h2>Rosas Fischhandel</h2><p class="small">Offen '+SHOP_HOURS_TXT+'</p><p>Hallo '+esc(state.avatar.name||'du')+'! Zeig mal, was du gefangen hast.</p>'));
   card.appendChild(head);
   card.appendChild(el('p',null,'Angeln, Köder und Boote gibt es bei Opa Tiago nebenan.'));
   sellList(showShop,'Tschüss');
@@ -1931,7 +1951,7 @@ function showHannes(){
   openModal();card.className='card';card.innerHTML='';
   const bl=atDE()&&curSpot?curSpot.bl:'',b=BL[bl],hi=atCity()?'Moin':GRUSS[bl]||'Hallo';
   const head=el('div','rosa');head.appendChild(el('div','face hannes'));
-  head.appendChild(el('div',null,'<h2>Fischer Hannes</h2><p>'+hi+', '+esc(state.avatar.name||'du')+'! Ich kaufe deine Fische und habe Angelsachen für dich.</p>'+
+  head.appendChild(el('div',null,'<h2>Fischer Hannes</h2><p class="small">Offen '+SHOP_HOURS_TXT+'</p><p>'+hi+', '+esc(state.avatar.name||'du')+'! Ich kaufe deine Fische und habe Angelsachen für dich.</p>'+
     (GRUSS[bl]?'<p class="small">„'+hi+'“ sagt man oft in '+esc(b.name)+'.</p>':atCity()?'<p class="small">„Moin“ sagt man oft an der Küste.</p>':'')));
   card.appendChild(head);
   const tabs=el('div','tabs four');[['verkaufen','🐟 Verkaufen']].concat(TIAGO_TABS.filter(([id])=>id!=='boot')).forEach(([id,lb])=>{const t=el('button',null,lb);t.setAttribute('aria-pressed',hannesTab===id);
@@ -1944,7 +1964,7 @@ function showHannes(){
 function showVehicleShop(){
   openModal();card.className='card';card.innerHTML='';
   const head=el('div','rosa');head.appendChild(el('div','shopicon','🛒'));
-  head.appendChild(el('div',null,'<h2>Fahrzeug-Laden</h2><p>Hallo '+esc(state.avatar.name||'du')+'! Hier gibt es Fahrzeuge für die Stadt. Dein Fahrrad hast du schon.</p>'));
+  head.appendChild(el('div',null,'<h2>Fahrzeug-Laden</h2><p class="small">Offen '+SHOP_HOURS_TXT+'</p><p>Hallo '+esc(state.avatar.name||'du')+'! Hier gibt es Fahrzeuge für die Stadt. Dein Fahrrad hast du schon.</p>'));
   card.appendChild(head);
   card.appendChild(buyList(['roller','skate','truck'].map(id=>{const V=VEHICLES[id];
     return {name:V.name,price:V.price,ico:V.ico,desc:VEH_DESC[id],msg:'Dein '+V.name+' steht vor dem Laden!',
@@ -1952,7 +1972,7 @@ function showVehicleShop(){
   const bt=el('div','btns');const c=el('button','b alt','Tschüss');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);}
 
 /* ---- Kontext-Knopf ---- */
-let ctxAction=null,exitSpot=null;
+let ctxAction=null,ctxClosed=false,exitSpot=null;
 function findExit(rs,a0,c){ // rs = Abstände, a0 = in welche Richtung man zuerst schaut, c = um welche Stelle (sonst um den Spieler)
   const o=c||player.pos;
   for(const r of rs||[2.5,3.5,4.5,5.5])for(let i=0;i<16;i++){const a=(a0||0)+i/16*Math.PI*2,x=o.x+Math.sin(a)*r,z=o.z+Math.cos(a)*r;
@@ -2016,11 +2036,13 @@ function updateCtx(){
   }else{exitSpot=findExit();if(exitSpot)a='exit';else if(trapNear())a='trap';}
   if(!a&&state.reusen>0&&fishing.state==='idle'&&!atDE()&&!atCity()&&trapSpot())a='placetrap';
   const hb=$('#btnHorn'),noHorn=player.ride!=='truck';if(hb.hidden!==noHorn)hb.hidden=noHorn;
-  if(a!==ctxAction){ctxAction=a;const b=$('#btnCtx');b.hidden=!a;
+  const closed=!!a&&SHOP_CTX.includes(a)&&!shopOpen();
+  if(a!==ctxAction||closed!==ctxClosed){ctxAction=a;ctxClosed=closed;const b=$('#btnCtx');b.hidden=!a;
     const vm=a&&a.startsWith('mount:')&&VEHICLES[a.slice(6)];
-    b.textContent=vm?vm.ico+' '+vm.on:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='tram'?'🚋 Einsteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
+    b.textContent=closed?SHOP_CLOSED_TXT:vm?vm.ico+' '+vm.on:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='tram'?'🚋 Einsteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
 $('#btnCtx').onclick=()=>{audio();
+  if(SHOP_CTX.includes(ctxAction)&&!shopOpen()){toast(SHOP_CLOSED_TXT);return;} // Laden zu: nichts öffnet sich
   if(ctxAction==='shop'){stopFishing();showShop();}
   else if(ctxAction==='tiago'){stopFishing();showTiago();}
   else if(ctxAction==='hannes'){stopFishing();showHannes();}
@@ -2859,9 +2881,10 @@ function buildHannes(g,x,z,pos,ry,cols){Object.assign(pos||hannes,{x,z});
   for(let i=0;i<6;i++)bx(st,0.6,0.12,2.6,i%2?'#ffffff':'#2f7fd8',-1.5+i*0.6,2.6,0.15); // Dach mit Streifen
   bx(st,0.9,0.25,0.6,'#bfe6f2',-0.8,1.1,0.7);bx(st,0.9,0.25,0.6,'#bfe6f2',0.4,1.1,0.7); // Kisten mit Eis
   for(const [fx,fc] of[[-1,'#9aa6ad'],[-0.6,'#c9a24a'],[0.25,'#8a9a7a'],[0.6,'#b0b8bd']])ball(st,0.12,fc,fx,1.38,0.7,2.2,0.7,0.9);
-  const cv=document.createElement('canvas');cv.width=512;cv.height=128;const c=cv.getContext('2d');c.fillStyle='#fbf3df';c.fillRect(0,0,512,128);
-  c.strokeStyle='#1b2a20';c.lineWidth=10;c.strokeRect(5,5,502,118);c.fillStyle='#2f7fd8';c.font='800 54px "Trebuchet MS",sans-serif';c.textAlign='center';c.fillText('Fischer Hannes',256,84);
-  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3,0.75),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));sg.userData.tex=true;sg.position.set(0,3.15,1.3);st.add(sg);
+  const cv=document.createElement('canvas');cv.width=512;cv.height=170;const c=cv.getContext('2d');c.fillStyle='#fbf3df';c.fillRect(0,0,512,170);
+  c.strokeStyle='#1b2a20';c.lineWidth=10;c.strokeRect(5,5,502,160);c.fillStyle='#2f7fd8';c.font='800 54px "Trebuchet MS",sans-serif';c.textAlign='center';c.fillText('Fischer Hannes',256,84);
+  c.fillStyle='#1b2a20';c.font='800 40px "Trebuchet MS",sans-serif';c.fillText(SHOP_HOURS_TXT,256,140);
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(3,0.996),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));sg.userData.tex=true;sg.position.set(0,3.28,1.3);st.add(sg);
   const h=buildAvatar({skin:'#f0c8a8',hair:'kurz',hairColor:'#8a5a2e',shirt:'#2f7fd8',pants:'#3d3a33',hat:'angler'});h.group.position.set(0,0,-0.4);st.add(h.group);
   h.arms[1].rotation.z=-0.9;(cols||deCols).push({x,z,r:2});}
 buildHannes(scene,-12,LAKE.z-LAKE.b-15,hannesSee,Math.atan2(16,4),colliders);
@@ -3143,7 +3166,7 @@ function buildCity(){if(cityBuilt)return;
     const [x,z]=slotPos(b,s.side,along,r),ry=addHouse(x,z,s.side,s.w,s.d,s.h,s.wall,s.roof,true);shopSlots.add(s.blk+s.side);
     for(let i=0;i<6;i++){const lx=-(s.w-1)/2+(i+0.5)*(s.w-1)/6,[ax,az]=rotXZ(x,z,ry,lx,-s.d/2-0.7);dbox((s.w-1)/6,0.15,1.4,i%2?'#ffffff':s.aw,ax,3.4,az,ry);} // Markise
     for(const lx of[-s.w/4-0.6,s.w/4+0.6]){const [wx,wz]=rotXZ(x,z,ry,lx,-s.d/2-0.06);wbox(2.2,1.6,0.1,wx,1.5,wz,ry);} // Schaufenster
-    const [sx,sz]=rotXZ(x,z,ry,-(s.w/2+0.5),-(s.d/2+1.5));makeSign(s.name,'Laden',sx,sz,s.name==='Fahrzeuge'?'#2f7fd8':'#c2401f',g,cityCols,ry+Math.PI);});
+    const [sx,sz]=rotXZ(x,z,ry,-(s.w/2+0.5),-(s.d/2+1.5));makeSign(s.name,s.name==='Fahrzeuge'?'Laden · '+SHOP_HOURS_TXT:'Laden',sx,sz,s.name==='Fahrzeuge'?'#2f7fd8':'#c2401f',g,cityCols,ry+Math.PI);});
   // Häuser: in jedem Block 4–6 Stück, die Tür schaut zur Straße
   for(let i=0;i<4;i++)for(let j=0;j<4;j++){if(i===3&&j===3)continue;const b=cityBlock(i,j);
     const slots=[['-z',b.x0+13],['-z',b.x1-13],['+z',b.x0+13],['+z',b.x1-13],['-x',(b.z0+b.z1)/2],['+x',(b.z0+b.z1)/2]];
@@ -3583,6 +3606,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:35,day:'27.10.2026',ico:'🕗',t:'Öffnungszeiten',d:'Rosa, Opa Tiago, Fischer Hannes und der Fahrzeug-Laden sind von 8 bis 22 Uhr offen. Nachts kannst du im Eimer deine Fische freilassen: Platsch!'},
  {v:34,day:'27.10.2026',ico:'🦉',t:'Fische nach Uhrzeit',d:'Manche Fische beißen nur abends und nachts, zum Beispiel Aal, Wels und Zitteraal. Hecht und Pfauenbarsch jagen tagsüber. Im Fischbuch steht, wann sie beißen.'},
  {v:33,day:'27.10.2026',ico:'🍂',t:'Jahreszeiten',d:'In Deutschland gibt es jetzt Jahreszeiten wie bei dir: Im Frühling blühen die Bäume, im Herbst wird das Laub bunt und im Winter ist die Wiese weiß. Am Amazonas erklärt dir eine neue Infotafel die Regenzeit.'},
  {v:32,day:'27.10.2026',ico:'🌅',t:'Echte Tageszeit',d:'Im Spiel ist jetzt dieselbe Uhrzeit wie bei dir. Abends geht die Sonne unter, nachts siehst du Sterne und den Mond!'},
