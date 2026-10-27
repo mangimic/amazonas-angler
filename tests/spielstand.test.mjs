@@ -2764,7 +2764,7 @@ test('Heute: ein neuer Tag setzt die Zähler zurück und speichert gleich', asyn
 
 test('Heute: ein Fang zählt Fische und neue Arten, ein Verkauf zählt Ludins', async () => {
   const { ctx, page, errors } = await newPage();
-  await seed(page, { [KEY]: stadtSeed({ book: {}, ludins: 0, where: { x: 14, z: 0, f: -Math.PI / 2, boat: false } }) });
+  await seed(page, { [KEY]: stadtSeed({ book: {}, ludins: 100, metTiago: true, where: { x: 14, z: 0, f: -Math.PI / 2, boat: false } }) });
   await startGame(page);
   await page.click('#btnGo');
   await page.click('#btnFish');
@@ -2783,9 +2783,20 @@ test('Heute: ein Fang zählt Fische und neue Arten, ein Verkauf zählt Ludins', 
   await page.click('#btnCtx');
   await page.click('#card button:has-text("Alles verkaufen")');
   s = await weg(page);
-  assert.ok(s.ludins > 0);
-  assert.equal(s.heute.ludins, s.ludins, 'verdiente Ludins');
+  assert.ok(s.ludins > 100);
+  assert.equal(s.heute.ludins, s.ludins - 100, 'verdiente Ludins');
   assert.equal(s.heute.fische, 1, 'Verkaufen zählt nicht als Fang');
+  // bei Opa Tiago einkaufen: das zieht Ludins ab, aber nichts von „Heute geschafft“
+  const verdient = s.heute.ludins, vorher = s.ludins;
+  await page.evaluate(() => { const c = document.querySelector('#card .b.alt, #card button:last-child'); if (c) c.click(); }); // Rosas Karte schließen
+  await page.evaluate(([x, z]) => window.__test.warp(x, z), [NEBEN_TIAGO.x, NEBEN_TIAGO.z]);
+  await page.locator('#btnCtx:has-text("Opa Tiago")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.click('#card .tabs button:text-is("Köder")');
+  await page.click('#card .item:has(b:text-is("Blinker")) button');
+  s = await weg(page);
+  assert.ok(s.ludins < vorher, 'Blinker gekauft');
+  assert.equal(s.heute.ludins, verdient, 'Einkaufen zählt nicht als verdient');
   assert.deepEqual(errors, []);
   await ctx.close();
 });

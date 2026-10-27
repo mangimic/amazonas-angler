@@ -2266,7 +2266,7 @@ const reusenFische=()=>state.traps.reduce((s,t)=>s+trapFishCount(t),0);
 function nachbarName(id){const k=people.findIndex(p=>p.id===id);return k>=0?nachbarInfo(k).name:'';}
 // Nächstes großes Ziel: am Flussplatz der Stempel, sonst der Angelschein, sonst das Museum. z = Zeile auf der Karte, s = Schritt
 function heuteZiel(){
-  if(atDE()&&curSpot){const p=prog(curSpot.id);if(!p.s){const miss=STAMP_FISH-p.f.length;
+  if(atDE()&&curSpot){const p=state.fluss[curSpot.id]||{},pf=Array.isArray(p.f)?p.f:[];if(!p.s){const miss=STAMP_FISH-pf.length; // nur lesen, nichts anlegen
     return miss>0?{z:'Stempel: noch '+miss+(miss===1?' Fischart':' Fischarten'),s:'Fang hier noch '+miss+(miss===1?' neue Fischart':' neue Fischarten')+' für den Stempel.'}
       :{z:'Stempel: noch das Rätsel 🧩',s:'Lös das Rätsel an der Infotafel. Dann bekommst du den Stempel!'};}}
   if(!state.angelschein){const n=Math.max(0,QUIZ_GOAL-quizOk().length);
@@ -2274,14 +2274,15 @@ function heuteZiel(){
   const m=museumCount();
   return {z:'Museum: '+m+' von '+FISH.length,s:m<FISH.length?'Schenk Herrn Eugen im Museum eine neue Fischart.':'Alle Fischarten sind im Museum. Super!'};}
 // Der eine nächste Schritt, in dieser Reihenfolge: Aufgabe abgeben, Eimer voll, Reuse leeren, Flaschenpost, Tagesfisch, nächstes Ziel
-function heuteNext(){
+// kurz = für die Tipp-Zeile oben (ohne Ort beim Tagesfisch)
+function heuteNext(kurz){
   const a=state.aufgaben.find(a=>FISH_BY[a.fish]&&imEimer(a.fish));
   if(a){const f=FISH_BY[a.fish],n=nachbarName(a.n);return 'Bring '+fishDen(f)+' '+f.name+(n?' zu '+n:' nach Hafenhausen')+'!';}
   if(state.bucket.length>=bucketMax())return 'Dein Eimer ist voll. Verkauf die Fische bei '+sellTo()+'!';
   if(reusenFische()>0)return 'Hol die Fische aus deiner Reuse!';
   if(!state.tag.flasche)return 'Such die Flaschenpost am '+FLASCHE_ORT[flascheHeute().ort]+'!';
   const tf=tagesfisch(todayKey());
-  if(!imEimer(tf.id))return 'Fang '+fishAcc(tf)+' '+FISH_ORT[fishHome(tf)]+'. '+fishEr(tf)+' zählt heute doppelt!';
+  if(!imEimer(tf.id))return 'Fang '+fishAcc(tf)+(kurz?'':' '+FISH_ORT[fishHome(tf)])+'. '+fishEr(tf)+' zählt heute doppelt!';
   return heuteZiel().s;}
 // „Heute geschafft: 🐟 6 Fische · 💰 +84 Ludins · 📖 1 neue Art“ (Teile mit 0 fehlen; ist alles 0: '')
 function geschafft(){const h=heuteNow(),t=[];
@@ -2336,7 +2337,7 @@ function tipText(){
   if(found>=FISH.length)return 'Wow! Du hast alle '+FISH.length+' Fischarten gefunden!';
   return '';
 }
-function updateTip(){let t=tipText();if(!t&&fishing.state==='idle')t='👉 '+heuteNext(); // kein anderer Tipp: der nächste Schritt aus „Heute für dich“
+function updateTip(){let t=tipText();if(!t&&fishing.state==='idle')t='👉 '+heuteNext(true); // kein anderer Tipp: der nächste Schritt aus „Heute für dich“
   if(t!==lastTip){lastTip=t;const e=$('#tip');e.textContent=t;e.hidden=!t;}}
 
 /* =================== Avatar-Werkstatt =================== */
