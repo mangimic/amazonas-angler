@@ -42,6 +42,7 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
   font-family:var(--display);font-weight:800;font-size:17px;display:flex;align-items:center;gap:6px}
 .chip:active,.act:active,.big:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
 .spacer{flex:1}
+.who{display:flex;align-items:center;gap:8px} /* Name und 👕 bleiben zusammen, auch wenn die Leiste umbricht */
 .name{font-family:var(--display);font-weight:800;font-size:18px;color:#fff;text-shadow:0 2px 0 var(--ink),0 0 6px rgba(0,0,0,.4);padding:0 4px}
 
 .sonar{position:fixed;left:max(12px,env(safe-area-inset-left,0px));top:calc(env(safe-area-inset-top,0px) + 140px);width:min(240px,34vw);
@@ -54,6 +55,11 @@ button:focus-visible,input:focus-visible{outline:3px solid var(--gold);outline-o
   padding:0 10px;font:800 14px/1.5 var(--display);color:var(--ink)}
 .minimap:active{transform:translateY(3px);box-shadow:0 1px 0 var(--ink)}
 @media (max-width:720px){.minimap{width:104px;height:104px}}
+/* Hochformat oder schmales Fenster: die Leiste oben bricht in eine zweite Reihe um. Dann bleibt rechts Platz für die kleine Karte
+   (Breite der Karte + 12 px), damit kein Knopf darunter liegt. Im breiten Querformat passt alles in die erste Reihe über der Karte. */
+@media (orientation:portrait),(max-width:900px){.topbar{right:calc(max(12px,env(safe-area-inset-right,0px)) + 148px)}
+  #tip{top:calc(env(safe-area-inset-top,0px) + 118px);max-width:min(560px,calc(100% - 320px))}} /* Hinweis unter der zweiten Reihe, neben der Karte */
+@media (max-width:720px){.topbar{right:calc(max(12px,env(safe-area-inset-right,0px)) + 116px)}}
 .card.mapcard{width:min(1040px,100%)}
 .mapwrap{position:relative;flex-shrink:0;border:3px solid var(--ink);border-radius:14px;overflow:hidden;background:#6a9a4a}
 .maprow{flex-shrink:0}
@@ -210,6 +216,7 @@ button.bk:active{border-color:var(--ink)}
 @media (prefers-reduced-motion:reduce){#flight span{animation:none}}
 #timeup{position:fixed;inset:0;z-index:50;background:rgba(10,30,20,.85);display:grid;place-items:center;padding:16px}
 .timechip{pointer-events:none}
+#clockChip{padding:6px 8px;gap:4px;font-size:16px} /* Uhr: klein (Symbol + Uhrzeit), damit die Leiste oben weniger umbricht */
 .timechip.low{background:#ffd9c9}
 .gate input{font:800 26px var(--display);width:120px;padding:8px;border:3px solid var(--ink);border-radius:12px;text-align:center}
 .rank .place{font:800 22px var(--display);width:40px;text-align:center}
@@ -261,8 +268,7 @@ table.rules tr.now td{background:#ffe9c2}
     <span class="chip timechip" id="timeChip" hidden></span>
     <button class="chip" id="btnNews">✨ Neu<span class="newsdot" id="newsDot" hidden></span></button>
     <span class="spacer"></span>
-    <span class="name" id="hudName"></span>
-    <button class="chip" id="btnAvatar" aria-label="Avatar ändern">👕</button>
+    <span class="who"><span class="name" id="hudName"></span><button class="chip" id="btnAvatar" aria-label="Avatar ändern">👕</button></span>
   </div>
   <div class="tip" id="tip" hidden></div>
   <button class="minimap" id="btnMap" aria-label="Große Karte öffnen"><canvas id="miniCv"></canvas><span>Karte</span></button>
@@ -563,12 +569,12 @@ state.bucket=state.bucket.filter(it=>{if(isObj(it)&&FISH_BY[it.id])return true;l
 state.bucket.forEach(it=>{it.cm=num(it.cm,10000);it.value=num(it.value,1e6);});
 state.ludins+=lostFishLudins;
 // Nachbarn in Hafenhausen: id ('n'+Nummer) → {f = Freundschaft, talk = Tag des letzten Gesprächs, gift = Tag des letzten Geschenks}.
-// Unbekannte ids bleiben gespeichert, wenn sie ein Objekt sind (nie löschen); das Spiel beachtet sie nicht. Aufgaben: höchstens 3.
+// Unbekannte ids bleiben gespeichert, wie sie sind (nie löschen); das Spiel beachtet sie nicht. Aufgaben: höchstens 3.
 const PEOPLE_N=24; // so viele Menschen baut buildPeople (ids n0–n23)
 const NB_ID=/^n\d{1,2}$/,dayOk=v=>typeof v==='string'&&/^\d{4}-\d\d-\d\d$/.test(v)?v:''; // Tag wie todayKey(): JJJJ-MM-TT
 if(!isObj(state.nachbarn))state.nachbarn={};
 for(const id of Object.keys(state.nachbarn)){const v=state.nachbarn[id];
-  if(!NB_ID.test(id)){if(!isObj(v))delete state.nachbarn[id];continue;}
+  if(!NB_ID.test(id))continue; // unbekannte id: bleibt, wie sie ist
   state.nachbarn[id]=isObj(v)?Object.assign(v,{f:num(v.f,999),talk:dayOk(v.talk),gift:dayOk(v.gift)}):{f:0,talk:'',gift:''};}
 state.aufgaben=(Array.isArray(state.aufgaben)?state.aufgaben:[]).filter(a=>isObj(a)&&typeof a.n==='string'&&NB_ID.test(a.n)&&+a.n.slice(1)<PEOPLE_N&& // nur echte Menschen (sonst blockiert eine unsichtbare Aufgabe einen Platz)
 
@@ -821,7 +827,8 @@ const flies=(function(){const n=30,p=new Float32Array(n*3),base=[],r=rng(31);
   const f=new THREE.Points(g,new THREE.PointsMaterial({color:'#eaff8f',size:0.45,map:new THREE.CanvasTexture(cv),transparent:true,opacity:0.85,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
   f.userData.base=base;f.visible=false;f.frustumCulled=false;scene.add(f);return f;})();
 function updateFlies(t){if(!flies.visible)return;const P=flies.geometry.attributes.position,b=flies.userData.base;
-  for(let i=0;i<b.length;i++){const q=b[i];P.setXYZ(i,q.x+Math.sin(t*0.4+q.ph)*1.2,Math.max(0,heightAt(q.x,q.z))+q.y+Math.sin(t*0.9+q.ph*2)*0.3,q.z+Math.cos(t*0.33+q.ph)*1.2);}
+  for(let i=0;i<b.length;i++){const q=b[i];if(q.g===undefined)q.g=Math.max(0,heightAt(q.x,q.z)); // Boden unter dem Glühwürmchen: nur einmal ausrechnen
+    P.setXYZ(i,q.x+Math.sin(t*0.4+q.ph)*1.2,q.g+q.y+Math.sin(t*0.9+q.ph*2)*0.3,q.z+Math.cos(t*0.33+q.ph)*1.2);}
   P.needsUpdate=true;flies.material.opacity=0.6+0.25*Math.sin(t*1.5);}
 // Fenster und Laternen in Hafenhausen: eigene Materialien (nicht aus matCache), nachts leuchten sie warm-gelb
 const winMat=new THREE.MeshLambertMaterial({color:'#8fc3dd'}),lampMat=new THREE.MeshLambertMaterial({color:'#f2efe2'});
@@ -1436,7 +1443,7 @@ let rideStuck=0,rideHint=0; // wie lange das Fahrzeug schon hängt, und Pause zw
 // bekommt einen Strafzettel. Höchstens alle 4 s einer (crashT), und nur, wenn man vorher wirklich gefahren ist (rideMoved).
 // Niemand wird verletzt: das Fahrzeug hält vorher an, der Mensch schaut nur erschrocken und schimpft ein bisschen.
 const FINE={bike:5,roller:5,skate:5,truck:20};
-const CRASH_TXT={mensch:'einen Menschen',fahrzeug:'ein Fahrzeug',wand:'eine Wand'};
+const CRASH_TXT={mensch:'Fast wärst du in jemanden hineingefahren.',fahrzeug:'Du bist gegen ein Fahrzeug gefahren.',wand:'Du bist gegen eine Wand gefahren.'};
 let crashT=0,rideMoved=false;
 // Was steht dem Fahrzeug an der Stelle (x,z) im Weg? {kind,p} oder null (z. B. nur Wasser oder der Rand der Stadt: das kostet nichts)
 function crashWhat(x,z,skip){let pts=[[x,z,0.35]];
@@ -1450,7 +1457,7 @@ function crash(kind,who){const f=Math.min(Math.max(0,state.ludins),FINE[player.r
   tone(180,0.12,'sine',0.08); // „Bonk“
   if(f>0){state.ludins-=f;save();refreshHud(true);}
   if(kind==='mensch'&&who)who.wave=1.5; // der Mensch dreht sich zu dir um (updatePeople)
-  toast((kind==='mensch'?'„Hey, pass doch auf!“ ':'')+'🚨 Strafzettel! Du bist gegen '+CRASH_TXT[kind]+' gefahren.'+(f>0?' −'+f+' Ludins':''));}
+  toast((kind==='mensch'?'„Hey, pass doch auf!“ ':'')+'🚨 Strafzettel! '+CRASH_TXT[kind]+(f>0?' −'+f+' Ludins':''));}
 function updatePlayer(dt,t){
   if(player.ride==='tram'){ // in der Straßenbahn fährt man mit: Wischen bewegt nichts, Kamera und Karte folgen der Bahn
     const p=tramPos(tram.s);player.pos.set(p.x,0,p.z);player.facing=p.yaw;player.y=groundY(p.x,p.z);player.speed=0;
@@ -2420,7 +2427,8 @@ function lockTime(){
     [15,30].forEach(m=>{const x=el('button','b go','+ '+m+' Minuten');x.onclick=()=>{playTimeToday().extra+=m*60;save();unlockTime();};b2.appendChild(x);});
     c.appendChild(b2);});};
   bt.appendChild(more);c.appendChild(bt);$('#timeup').hidden=false;}
-function unlockTime(){timeLocked=false;timeWarned=timeLeft()<=300;chipMin=-1;$('#timeup').hidden=true;mode=timeBack;updateTimeChip();}
+function unlockTime(){timeLocked=false;timeWarned=timeLeft()<=300;chipMin=-1;$('#timeup').hidden=true;mode=timeBack;updateTimeChip();
+  updateWorldTime();} // zurück in der Werkstatt: wieder Tageshimmel (in der Pause malt der Uhr-Takt die echte Zeit)
 function showTimeSettings(){
   openModal();card.className='card';card.innerHTML='';
   card.appendChild(el('h2',null,'⏰ Spielzeit'));
@@ -3442,7 +3450,12 @@ const TIPPS_STADT=[
  'Am Wochenende sind die Kinder schon morgens unterwegs. In der Woche kommen sie nach der Schule.',
  'Fahr langsam, wenn Menschen auf dem Gehweg sind!',
  'Mit dem Flugzeug am Flugplatz fliegst du zurück an den Amazonas.',
- 'Auf dem Stadtplan siehst du alle deine Aufgaben.'];
+ 'Auf der Karte siehst du alle deine Aufgaben.',
+ 'Im Museum zeigt Herr Eugen die Fische, die du ihm schenkst. Von jeder Fischart einen!',
+ 'Manche Fische beißen nur nachts, andere nur am Tag. Im Fischbuch steht, wann sie beißen.',
+ ()=>{const f=tagesfisch(todayKey());return 'Heute zahlen Rosa und Fischer Hannes für '+(f.art==='eine'?'die':f.art==='ein'?'das':'den')+' '+f.name+' doppelt!';}];
+// Ein Tipp ist Text oder eine Funktion, die den Text erst beim Zeigen ausrechnet (z. B. den Tagesfisch von heute)
+const tippText=t=>typeof t==='function'?t():t;
 // Fische für Aufgaben: aus dem Meer (Hafen) und dem Heimat-See, keine seltenen Fische (die setzen wir immer zurück)
 const AUFGABEN_FISCHE=FISH.filter(f=>(f.home==='meer'||f.home==='see')&&!(RULES[f.id]&&RULES[f.id].selten)).map(f=>f.id);
 // Fisch für eine neue Aufgabe von Mensch id: keiner, der gerade Schonzeit hat (den dürfte man nicht mitnehmen).
@@ -3490,7 +3503,7 @@ function showTalk(k,say){const p=people[k],info=nachbarInfo(k);if(!p||!info)retu
   card.appendChild(el('p',null,esc(say)));
   const a=state.aufgaben.find(x=>x.n===p.id),has=!!a&&state.bucket.some(it=>it.id===a.fish);
   const bt=el('div','btns');
-  const b1=el('button','b','Hast du einen Tipp?');b1.onclick=()=>showTalk(k,rnd(TIPPS_STADT));
+  const b1=el('button','b','Hast du einen Tipp?');b1.onclick=()=>showTalk(k,tippText(rnd(TIPPS_STADT)));
   const b2=el('button','b',has?'Hier, bitte!':'Kann ich dir helfen?');b2.onclick=()=>has?handFish(k):showTalk(k,helpText(k));
   const b3=el('button','b alt','Tschüss!');b3.onclick=closeModal;
   [b1,b2,b3].forEach(b=>bt.appendChild(b));card.appendChild(bt);}
@@ -3503,7 +3516,7 @@ function helpText(k){const p=people[k],sw=swapSchonzeit(p);if(sw)return sw;const
   if(a){const f=FISH_BY[a.fish];return 'Ich warte noch auf '+fishAcc(f)+'. '+fishWo(f);}
   if(state.aufgaben.length>=AUFGABEN_MAX)return 'Danke! Aber du hast schon '+AUFGABEN_MAX+' Aufgaben. Mach erst eine fertig.';
   const f=FISH_BY[aufgabeFisch(p.id)];state.aufgaben.push({n:p.id,fish:f.id,day:todayKey()});save();
-  toast('📝 Neue Aufgabe! Auf dem Stadtplan (🗺️) siehst du alle Aufgaben.');
+  toast('📝 Neue Aufgabe! Tippe oben rechts auf die Karte. Dort siehst du alle Aufgaben.');
   return 'Oh ja! Bringst du mir '+fishAcc(f)+'? '+fishWo(f);}
 // „Hier, bitte!“: Fisch abgeben. Belohnung 2 × Preis + 10 Ludins und +3 Freundschaft
 function handFish(k){const p=people[k],info=nachbarInfo(k),a=state.aufgaben.find(x=>x.n===p.id);if(!a)return;
@@ -3513,12 +3526,13 @@ function handFish(k){const p=people[k],info=nachbarInfo(k),a=state.aufgaben.find
   state.ludins+=lohn;n.f=Math.min(999,n.f+3);save();sfxCoins();refreshHud(true);
   toast('❤️ '+info.name+' freut sich! +'+lohn+' Ludins.'+stufeToast(st0,freundStufe(n.f)));
   showTalk(k,'Juhu, danke! Hier sind '+lohn+' Ludins für dich.');}
-// Stadtplan: offene Aufgaben (unbekannte Menschen werden nicht gezeigt)
+// Stadtplan und große Karte: offene Aufgaben (unbekannte Menschen werden nicht gezeigt).
+// Ist Hafenhausen noch nicht gebaut (z. B. nach dem Neuladen am Amazonas), kennt das Spiel die Namen noch nicht: dann „Jemand in Hafenhausen“.
 function aufgabenList(){const box=el('div','towbox');box.appendChild(el('h3',null,'📝 Aufgaben'));
-  const list=state.aufgaben.map(a=>({a,k:people.findIndex(p=>p.id===a.n)})).filter(x=>x.k>=0);
+  const list=state.aufgaben.map(a=>({a,k:people.length?people.findIndex(p=>p.id===a.n):-2})).filter(x=>x.k!==-1);
   if(!list.length)box.appendChild(el('p',null,'Noch keine Aufgaben. Frag die Menschen in der Stadt: „Kann ich dir helfen?“'));
   list.forEach(({a,k})=>{const f=FISH_BY[a.fish],has=state.bucket.some(it=>it.id===a.fish)?1:0;
-    box.appendChild(el('p',null,esc(nachbarInfo(k).name)+': bring '+esc(f.name)+' ('+has+'/1)'+(has?' ✅':schonzeit(a.fish)?' – hat gerade Schonzeit, frag noch mal nach':'')));});
+    box.appendChild(el('p',null,(k>=0?esc(nachbarInfo(k).name):'Jemand in Hafenhausen')+': bring '+esc(f.name)+' ('+has+'/1)'+(has?' ✅':schonzeit(a.fish)?' – hat gerade Schonzeit, frag noch mal nach':'')));});
   return box;}
 // Darf ein Mensch auf die Stelle (x,z) treten? Nicht in geparkte Fahrzeuge, die Straßenbahn, den Abschleppwagen und nicht dir in den Weg.
 function blockedForPeople(x,z){return hitsParked(x,z,0.5)||hitsList(tram.cols,x,z,0.5)||hitsList(tow.cols,x,z,0.5)||inPlayerWay(x,z);}
@@ -3848,8 +3862,9 @@ function showMap(){
   const lakeBox=el('div');lakeBox.style.cssText='display:flex;flex-direction:column;gap:6px;width:min(220px,100%)';
   lakeBox.appendChild(el('h3','maphead','Heimat-See ✈️'));w2.style.width='100%';w2.appendChild(cv2);lakeBox.appendChild(w2);row.appendChild(lakeBox);
   const leg=el('div','maplegend');
-  [['🐟','Rosa'],['🎣','Opa Tiago'],['🏠',state.builtOnce?'Dein Haus':'Bauplatz'],['✈️','Flugzeug'],['🛶','Boot'],['🧺','Reuse (grün = Fisch drin)'],['⚠️','Stromschnellen']].forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
+  [['🐟','Rosa'],['🎣','Opa Tiago'],['🏠',state.builtOnce?'Dein Haus':'Bauplatz'],['✈️','Flugzeug'],['🛶','Boot'],['🧺','Reuse (grün = Fisch drin)'],['⚠️','Stromschnellen'],['🍾','Flaschenpost']].forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
   row.appendChild(leg);card.appendChild(row);
+  if(state.aufgaben.length)card.appendChild(aufgabenList()); // offene Aufgaben aus Hafenhausen
   const de=el('button','b alt','🗺️ Deutschland-Karte');de.id='btnGermany';de.onclick=()=>showGermany('view');
   const c3=el('button','b','Fertig');c3.onclick=closeModal;const bt=el('div','btns');bt.append(de,c3);card.appendChild(bt);
   // Amazonas-Streifen
@@ -3892,7 +3907,7 @@ function showCityMap(){
   card.appendChild(el('p',null,'Du bist in der Stadt <b>Hafenhausen</b>. Der rote Pfeil bist du. Norden ist oben.'));
   const row=el('div','maprow'),w=el('div','mapwrap'),cv=el('canvas');cv.id='cityMap';w.appendChild(cv);row.appendChild(w);
   const leg=el('div','maplegend');
-  [['🚋','Haltestelle der Straßenbahn'],['🛒','Fahrzeug-Laden'],['🐟','Fischer Hannes (Angeln am Hafen)'],['🚲','Dein Fahrrad'],['✈️','Flugzeug'],['🟫','Haus']].forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
+  [['🚋','Haltestelle der Straßenbahn'],['🛒','Fahrzeug-Laden'],['🐟','Fischer Hannes (Angeln am Hafen)'],['🚲','Dein Fahrrad'],['✈️','Flugzeug'],['🏛️','Museum'],['🍾','Flaschenpost'],['🟫','Haus']].forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
   row.appendChild(leg);card.appendChild(row);
   card.appendChild(aufgabenList());
   card.appendChild(towList());
@@ -3918,7 +3933,7 @@ const NEWS=[
  {v:38,day:'27.10.2026',ico:'🏛️',t:'Museum',d:'In Hafenhausen gibt es ein Museum. Schenk Herrn Eugen von jeder Fischart einen Fisch, dann steht er in der Ausstellung!'},
  {v:37,day:'27.10.2026',ico:'💬',t:'Nachbarn',d:'In Hafenhausen haben alle Menschen jetzt Namen. Rede mit ihnen, hilf ihnen und werde Freund!'},
  {v:36,day:'27.10.2026',ico:'🚦',t:'Verkehrsregeln',d:'Menschen laufen jetzt um Fahrzeuge herum. Wer zu schnell irgendwo dagegenfährt, bekommt einen Strafzettel.'},
- {v:35,day:'27.10.2026',ico:'🕗',t:'Öffnungszeiten',d:'Rosa, Opa Tiago, Fischer Hannes und der Fahrzeug-Laden sind von 8 bis 22 Uhr offen. Nachts kannst du im Eimer deine Fische freilassen: Platsch!'},
+ {v:35,day:'27.10.2026',ico:'🕗',t:'Öffnungszeiten',d:'Rosa, Opa Tiago, Fischer Hannes und der Fahrzeug-Laden sind von 8 bis 22 Uhr offen. Fische im Eimer freilassen geht immer: Platsch!'},
  {v:34,day:'27.10.2026',ico:'🦉',t:'Fische nach Uhrzeit',d:'Manche Fische beißen nur abends und nachts, zum Beispiel Aal, Wels und Zitteraal. Hecht und Pfauenbarsch jagen tagsüber. Im Fischbuch steht, wann sie beißen.'},
  {v:33,day:'27.10.2026',ico:'🍂',t:'Jahreszeiten',d:'In Deutschland gibt es jetzt Jahreszeiten wie bei dir: Im Frühling blühen die Bäume, im Herbst wird das Laub bunt und im Winter ist die Wiese weiß. Am Amazonas erklärt dir eine neue Infotafel die Regenzeit.'},
  {v:32,day:'27.10.2026',ico:'🌅',t:'Echte Tageszeit',d:'Im Spiel ist jetzt dieselbe Uhrzeit wie bei dir. Abends geht die Sonne unter, nachts siehst du Sterne und den Mond!'},
@@ -4157,6 +4172,7 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
   fische:n=>Array.from({length:n},()=>chooseFish().id),
   aufgabe:n=>Array.from({length:n},(_,i)=>aufgabeFisch('t'+i)), // welche Fische würden sich heute n verschiedene Menschen wünschen (ids t0, t1, …)
   tagesfisch:k=>tagesfisch(k).id, // Tagesfisch am Tag k (JJJJ-MM-TT)
+  tipps:()=>TIPPS_STADT.map(tippText), // alle Tipps der Nachbarn, so wie sie heute klingen
   begehbar:(x,z)=>walkable(x,z), // kann man an (x,z) stehen? (an Land, kein Baum, kein Haus)
   reuse:(home,n)=>Array.from({length:n},()=>trapFish(home).id),
   // jeden Flussplatz bauen: wie hoch stehen Hannes und die Infotafel? (unter 0 = im Wasser)

@@ -1874,6 +1874,9 @@ test('Nachbarn: reden, Aufgabe, Fisch bringen, Belohnung', async () => {
   assert.ok(knoepfe.every(h => h >= 60), 'Knöpfe mindestens 60 px: ' + knoepfe);
   assert.equal(await page.locator('#card button:has-text("Hier, bitte!")').count(), 0);
   await page.click('#card button:has-text("Kann ich dir helfen?")');
+  const neu = await page.textContent('#toast');
+  assert.match(neu, /📝 Neue Aufgabe!.*Karte/, 'der Hinweis nennt die Karte');
+  assert.doesNotMatch(neu, /🗺️/, '🗺️ ist sonst die Deutschland-Karte');
   let s = await weg(page);
   assert.equal(s.aufgaben.length, 1);
   const A = s.aufgaben[0];
@@ -1958,7 +1961,7 @@ test('Nachbarn: kaputte Werte werden repariert', async () => {
   assert.deepEqual(s.nachbarn.n0, { f: 0, talk: '', gift: '' });
   assert.deepEqual(s.nachbarn.zz, {}, 'unbekannte ids bleiben gespeichert (nie löschen), das Spiel beachtet sie nicht');
   assert.deepEqual(s.nachbarn.n3, { f: 0, talk: '', gift: '' }, 'kein Objekt: wird ersetzt');
-  assert.equal('yy' in s.nachbarn, false, 'ungültig und kein Objekt: fällt weg');
+  assert.equal(s.nachbarn.yy, 5, 'unbekannte id, kein Objekt: bleibt auch gespeichert (nie löschen), das Spiel beachtet sie nicht');
   assert.deepEqual(s.nachbarn.n1, { f: 8, talk: '2026-10-30', gift: '' });
   assert.deepEqual(s.aufgaben, [], 'n30 gibt es nicht (nur 24 Menschen): die Aufgabe fällt weg');
   // ganz kaputt: Startwerte; mehr als 3 Aufgaben: nur die ersten 3
@@ -2377,6 +2380,150 @@ test('Alter Spielstand: tag bekommt Startwert, kaputte Werte werden repariert', 
     await playAndLeave(page);
     assert.deepEqual(JSON.parse(await read(page)).tag, soll, JSON.stringify(tag));
   }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Oben in der Leiste darf nichts unter der kleinen Karte liegen: sonst trifft der Finger die Karte statt den Knopf.
+// Mit der Spielzeit-Anzeige (ohne Einstellung: 15 Minuten) und mit einem langen Namen, im Hoch- und im Querformat.
+test('Leiste oben: kein Knopf liegt unter der kleinen Karte (Hoch- und Querformat)', async () => {
+  for (const name of ['Testkind', 'Abcdefghijklmnopqrst']) {
+    const { ctx, page, errors } = await newPage({ viewport: { width: 768, height: 1024 } });
+    await seed(page, { [KEY]: stadtSeed({ avatar: { ...ALT_V1.avatar, name } }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.locator('#timeChip').waitFor({ state: 'visible' });
+    for (const [width, height] of [[768, 1024], [820, 1180], [1024, 768], [1180, 820]]) {
+      await page.setViewportSize({ width, height });
+      await page.waitForTimeout(200);
+      const r = await page.evaluate(() => {
+        const mm = document.querySelector('#btnMap').getBoundingClientRect();
+        const treffer = ['#btnAvatar', '#btnRank', '#btnBook'].filter(s => {
+          const e = document.querySelector(s), b = e.getBoundingClientRect(), h = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+          return !h || !(h === e || e.contains(h));
+        });
+        const unter = [...document.querySelectorAll('.topbar>*:not(.spacer)')].filter(e => {
+          const b = e.getBoundingClientRect();
+          return b.width > 0 && !(b.right <= mm.left || b.left >= mm.right || b.bottom <= mm.top || b.top >= mm.bottom);
+        }).map(e => e.id || e.className);
+        return { treffer, unter };
+      });
+      const wo = width + '×' + height + ', Name ' + name.length + ' Zeichen';
+      assert.deepEqual(r.treffer, [], wo + ': diese Knöpfe kann man nicht antippen');
+      assert.deepEqual(r.unter, [], wo + ': diese Teile liegen unter der kleinen Karte');
+    }
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+  // Bildschirmfoto im Hochformat (zum Anschauen, wenn TOPBAR_FOTO gesetzt ist)
+  if (process.env.TOPBAR_FOTO) {
+    const { ctx, page } = await newPage({ viewport: { width: 768, height: 1024 } });
+    await seed(page, { [KEY]: stadtSeed({ avatar: { ...ALT_V1.avatar, name: 'Abcdefghijklmnopqrst' } }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.waitForTimeout(1500);
+    await page.screenshot({ path: process.env.TOPBAR_FOTO });
+    await ctx.close();
+  }
+});
+
+test('Karte: offene Aufgaben stehen auch auf der großen Karte', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ aufgaben: [{ n: 'n3', fish: 'hering', day: '2026-10-26' }] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnMap');
+  await page.locator('#card h3:has-text("Amazonas")').waitFor();
+  await page.locator('#card h3:has-text("📝 Aufgaben")').waitFor();
+  assert.match(await page.textContent('#card'), /bring Hering \(0\/1\)/);
+  await page.click('#card button:has-text("Fertig")');
+  // ohne offene Aufgaben: kein Bereich Aufgaben
+  await seed(page, { [KEY]: stadtSeed({}) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnMap');
+  await page.locator('#card h3:has-text("Amazonas")').waitFor();
+  assert.equal(await page.locator('#card h3:has-text("Aufgaben")').count(), 0);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Nachbarn: Tipps zu Tagesfisch, Museum und Fisch-Zeiten', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-10-31T10:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({}) });
+  await startGame(page);
+  const namen = Object.fromEntries(Object.entries(fischNamen()).map(([n, id]) => [id, n]));
+  // zwei Tage mit verschiedenem Tagesfisch: der Tipp wird erst beim Zeigen ausgerechnet
+  const a = '2026-10-31', ids = {};
+  for (let d = 1; d <= 9 && !ids.b; d++) {
+    const k = '2026-11-0' + d, id = await page.evaluate(k => window.__test.tagesfisch(k), k);
+    if (id !== await page.evaluate(k => window.__test.tagesfisch(k), a)) ids.b = [k, id];
+  }
+  ids.a = [a, await page.evaluate(k => window.__test.tagesfisch(k), a)];
+  assert.ok(ids.b, 'ein Tag mit anderem Tagesfisch');
+  for (const [k, id] of [ids.a, ids.b]) {
+    if (k !== a) await ctx.clock.setFixedTime(new Date(k + 'T10:00:00+01:00'));
+    const tipps = await page.evaluate(() => window.__test.tipps());
+    assert.ok(tipps.every(t => typeof t === 'string' && t.length > 10), 'alle Tipps sind Text');
+    const t = tipps.find(t => /doppelt/.test(t));
+    assert.ok(t && t.includes(namen[id]), k + ': Tipp zum Tagesfisch ' + namen[id] + ': ' + t);
+    assert.ok(tipps.some(t => /Museum/.test(t) && /Herr Eugen/.test(t)), 'Tipp zum Museum');
+    assert.ok(tipps.some(t => /nachts/.test(t)), 'Tipp zu den Fisch-Zeiten');
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Spielzeit um in der Avatar-Werkstatt: danach wieder Tageshimmel', async () => {
+  const TAG = '#a6dccd', NACHT = '#22335e';
+  const { ctx, page, errors } = await startZeitSeite('2026-10-27T23:00:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ where: SEE_ORT, visitedLake: true, playTime: { day: '2026-10-27', sec: 15 * 60 - 1, extra: 0 } }),
+    [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) });
+  await startGame(page); // das Spiel beginnt in der Werkstatt
+  const welt = () => page.evaluate(() => window.__test.welt());
+  assert.equal((await welt()).sky, TAG);
+  await page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 10000 });
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); // wie der Uhr-Takt alle 30 s
+  assert.equal((await welt()).sky, NACHT, 'während der Pause: echte Zeit');
+  await page.click('#btnMoreTime');
+  await rechenaufgabe(page);
+  await page.click('#timeup button:has-text("+ 15 Minuten")');
+  assert.equal(await page.isVisible('#btnGo'), true, 'wieder in der Werkstatt');
+  assert.equal((await welt()).sky, TAG, 'Werkstatt: wieder Tageshimmel');
+  await page.click('#btnGo');
+  assert.equal((await welt()).sky, NACHT);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Mehrere Spieler: Museum, Nachbarn und Aufgaben bleiben bei jedem Spieler', async () => {
+  const { ctx, page, errors } = await newPage();
+  const A = { museum: { hering: { cm: 22, t: 1761500000000 } }, nachbarn: { n0: { f: 7, talk: '2026-10-26', gift: '' } }, aufgaben: [{ n: 'n3', fish: 'hering', day: '2026-10-26' }] };
+  const B = { museum: { barsch: { cm: 18, t: 1761400000000 } }, nachbarn: { n5: { f: 16, talk: '2026-10-20', gift: '2026-10-20' } }, aufgaben: [{ n: 'n1', fish: 'makrele', day: '2026-10-25' }] };
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playerId: 'p1', ...A }),
+    [KEY + '-spieler-p2']: JSON.stringify({ v: 2, ludins: 50, newsSeen: 999, playerId: 'p2', avatar: { name: 'Papa' }, ...B }),
+    [KEY + '-spieler']: JSON.stringify({ list: [{ id: 'p1', name: 'Testkind' }, { id: 'p2', name: 'Papa' }] }) });
+  const teile = s => ({ museum: s.museum, nachbarn: s.nachbarn, aufgaben: s.aufgaben });
+  // zu Papa wechseln
+  await startGame(page);
+  await page.locator('#card h2:has-text("Wer spielt?")').waitFor({ timeout: 5000 });
+  await Promise.all([page.waitForEvent('load'), page.click('#card .player:has-text("Papa")')]);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  await playAndLeave(page);
+  let s = JSON.parse(await read(page));
+  assert.equal(s.playerId, 'p2');
+  assert.deepEqual(teile(s), B, 'Papa hat seine eigenen Teile');
+  assert.deepEqual(teile(JSON.parse(await read(page, KEY + '-spieler-p1'))), A, 'Testkind ist sicher aufgehoben');
+  // zurück zu Testkind
+  await startGame(page);
+  await page.locator('#card h2:has-text("Wer spielt?")').waitFor({ timeout: 5000 });
+  await Promise.all([page.waitForEvent('load'), page.click('#card .player:has-text("Testkind")')]);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  await playAndLeave(page);
+  s = JSON.parse(await read(page));
+  assert.equal(s.playerId, 'p1');
+  assert.deepEqual(teile(s), A, 'Testkind hat alles zurück');
+  assert.deepEqual(teile(JSON.parse(await read(page, KEY + '-spieler-p2'))), B, 'Papa ist sicher aufgehoben');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
