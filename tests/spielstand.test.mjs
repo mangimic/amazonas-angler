@@ -2040,7 +2040,7 @@ test('Nachbarn: offene Aufgabe mit Schonzeit-Fisch wird getauscht', async () => 
   await page.click('#card button:has-text("Tschüss!")');
   await page.click('#btnMap');
   await page.locator('#card h3:has-text("📝 Aufgaben")').waitFor();
-  assert.doesNotMatch(await page.textContent('#card'), /bring Forelle/);
+  assert.doesNotMatch(await page.textContent('#card'), /🐟 Forelle /);
   await startGame(page);
   await page.click('#btnGo');
   await page.waitForTimeout(300);
@@ -2132,7 +2132,7 @@ test('Museum: um 23 Uhr geschlossen', async () => {
   assert.equal((await page.textContent('#btnCtx')).trim(), '🌙 Geschlossen – öffnet um 8 Uhr');
   await page.click('#btnCtx');
   assert.equal(await page.locator('#modal').isVisible(), false, 'das Museum geht nicht auf');
-  assert.match(await page.textContent('#toast'), /bis 8 Uhr\. Angeln geht immer\./);
+  assert.equal(await page.textContent('#toast'), 'Das Museum ist zu, bis 8 Uhr. Angeln geht immer. Deine Fische bleiben im Eimer.');
   const s = await weg(page);
   assert.equal(s.bucket.length, 1);
   assert.deepEqual(s.museum, {});
@@ -2399,7 +2399,7 @@ test('Leiste oben: kein Knopf liegt unter der kleinen Karte (Hoch- und Querforma
       await page.waitForTimeout(200);
       const r = await page.evaluate(() => {
         const mm = document.querySelector('#btnMap').getBoundingClientRect();
-        const treffer = ['#btnAvatar', '#btnRank', '#btnBook'].filter(s => {
+        const treffer = ['#btnAvatar', '#btnRank', '#btnBook', '#clockChip'].filter(s => {
           const e = document.querySelector(s), b = e.getBoundingClientRect(), h = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
           return !h || !(h === e || e.contains(h));
         });
@@ -2713,4 +2713,190 @@ test('Was ist neu: zeigt nur die neuen Einträge, die älteren sind zugeklappt',
   assert.equal(await page.locator('#card button:has-text("Ältere Neuigkeiten")').isVisible(), true);
   assert.deepEqual(errors, []);
   await ctx.close();
+});
+
+// Heute für dich (Uhr oben antippen) und das Spielzeit-Ende mit Erfolgen. state.heute = was heute geschafft ist.
+const HEUTE_ISO = '2026-10-31T10:00:00+01:00', HEUTE_TAG = '2026-10-31';
+const HEUTE_NULL = { day: HEUTE_TAG, fische: 0, ludins: 0, arten: 0 };
+async function heuteKarte(page) {
+  await page.click('#clockChip');
+  await page.locator('#card h2:text-is("📅 Heute für dich")').waitFor({ timeout: 5000 });
+  return {
+    next: (await page.textContent('#card .next')).trim(),
+    zeilen: (await page.locator('#card .heute p').allTextContents()).map(t => t.trim())
+  };
+}
+
+test('Heute: alter Spielstand bekommt heute mit Startwert, kaputte Werte werden repariert', async () => {
+  const { ctx, page, errors } = await zeitSeite(HEUTE_ISO);
+  await seed(page, { [KEY]: JSON.stringify(ALT_V1) });
+  await startGame(page);
+  await playAndLeave(page);
+  assert.deepEqual(JSON.parse(await read(page)).heute, HEUTE_NULL, 'Startwert, dann gleich der heutige Tag');
+  for (const [heute, soll] of [
+    ['x', HEUTE_NULL],
+    [[1, 2], HEUTE_NULL],
+    [{ day: '<b>', fische: 4 }, HEUTE_NULL],
+    [{ day: HEUTE_TAG, fische: '7', ludins: -3, arten: 2.6, extra: 1 }, { day: HEUTE_TAG, fische: 7, ludins: 0, arten: 3, extra: 1 }],
+    [{ day: HEUTE_TAG, fische: '<b>', ludins: 1e99 }, { day: HEUTE_TAG, fische: 0, ludins: 1e9, arten: 0 }],
+    [{ day: '2026-10-30', fische: 5, ludins: 50, arten: 2, extra: 'a' }, { ...HEUTE_NULL, extra: 'a' }]]) {
+    await seed(page, { [KEY]: stadtSeed({ heute }) });
+    await startGame(page);
+    await playAndLeave(page);
+    assert.deepEqual(JSON.parse(await read(page)).heute, soll, JSON.stringify(heute));
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Heute: ein neuer Tag setzt die Zähler zurück und speichert gleich', async () => {
+  const { ctx, page, errors } = await zeitSeite('2026-10-31T23:59:00+01:00');
+  await seed(page, { [KEY]: stadtSeed({ heute: { day: HEUTE_TAG, fische: 6, ludins: 84, arten: 1 } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  assert.deepEqual(JSON.parse(await read(page)).heute, { day: HEUTE_TAG, fische: 6, ludins: 84, arten: 1 }, 'heute zählt noch');
+  await ctx.clock.setFixedTime(new Date('2026-11-01T00:01:00+01:00'));
+  await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); // wie der Uhr-Takt alle 30 s
+  assert.deepEqual(JSON.parse(await read(page)).heute, { day: '2026-11-01', fische: 0, ludins: 0, arten: 0 }, 'ohne Schließen gespeichert');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Heute: ein Fang zählt Fische und neue Arten, ein Verkauf zählt Ludins', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ book: {}, ludins: 0, where: { x: 14, z: 0, f: -Math.PI / 2, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnFish');
+  await page.waitForFunction(() => document.querySelector('#fishLbl').textContent === 'ZIEHEN!', null, { timeout: 60000, polling: 100 });
+  await page.keyboard.press('Space');
+  await page.locator('#card h2:has-text("gefangen")').waitFor();
+  let s = await weg(page);
+  assert.equal(s.heute.arten, 1, 'neu im Fischbuch: +1 Art');
+  assert.equal(s.heute.fische, 0, 'noch nicht im Eimer');
+  await page.click('#card .btns button:has-text("In den Eimer")');
+  s = await weg(page);
+  assert.deepEqual([s.heute.fische, s.heute.arten, s.heute.ludins], [1, 1, 0]);
+  // zu Rosa und verkaufen: die Ludins zählen
+  await page.evaluate(([x, z]) => window.__test.warp(x, z), [NEBEN_ROSA.x, NEBEN_ROSA.z]);
+  await page.locator('#btnCtx:has-text("Rosa")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.click('#card button:has-text("Alles verkaufen")');
+  s = await weg(page);
+  assert.ok(s.ludins > 0);
+  assert.equal(s.heute.ludins, s.ludins, 'verdiente Ludins');
+  assert.equal(s.heute.fische, 1, 'Verkaufen zählt nicht als Fang');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Heute: Fische aus der Reuse zählen, Arten nur beim ersten Mal', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, ludins: 0, book: { ...ALT_V1.book, rotauge: { n: 1, best: 20 } },
+    traps: [{ x: 10, z: -936, t: Date.now() - 60 * 1000, fish: [{ id: 'rotauge', cm: 20, value: 5 }, { id: 'karpfen', cm: 60, value: 25 }] }],
+    where: { x: 10, z: -940, f: 0, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Reuse ansehen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.click('#card button:has-text("In den Eimer")');
+  const s = await weg(page);
+  assert.equal(s.bucket.length, 2);
+  assert.deepEqual([s.heute.fische, s.heute.arten, s.heute.ludins], [2, 1, 0], 'Rotauge kennt das Fischbuch schon, der Karpfen ist neu');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Heute für dich: die Uhr öffnet die Karte, eine abgebbare Aufgabe kommt zuerst', async () => {
+  const { ctx, page, errors } = await zeitSeite(HEUTE_ISO);
+  const namen = Object.fromEntries(Object.entries(fischNamen()).map(([n, id]) => [id, n]));
+  const flascheOrt = { amazonas: 'Amazonas-Dorf', see: 'Heimat-See', stadt: 'Hafen' }[flascheOrte()[dayHash(HEUTE_TAG) % 3].ort];
+  const leicht = { ludins: 100, metTiago: true, builtOnce: true }; // dann hat das Spiel keinen anderen Tipp
+  const start = async extra => { await seed(page, { [KEY]: stadtSeed({ ...leicht, ...extra }) }); await startGame(page); await page.click('#btnGo'); };
+  // 1. Aufgabe abgebbar: Hering im Eimer
+  await start({ aufgaben: [{ n: 'n3', fish: 'hering', day: HEUTE_TAG }], bucket: [{ id: 'hering', cm: 25, value: 6 }] });
+  let k = await heuteKarte(page);
+  assert.equal(k.next, '👉 Als Nächstes: Bring den Hering nach Hafenhausen!');
+  assert.ok(k.zeilen.length <= 5, 'höchstens 5 Zeilen: ' + k.zeilen.length);
+  assert.equal(k.zeilen[0], '📝 Aufgaben: 1 offen: Hering für jemanden in Hafenhausen ✅ bring ihn hin!');
+  assert.equal(k.zeilen[1], '🍾 Flaschenpost: liegt heute am ' + flascheOrt);
+  const tf = await page.evaluate(k => window.__test.tagesfisch(k), HEUTE_TAG);
+  assert.equal(k.zeilen[2], '⭐ Tagesfisch: ' + namen[tf] + ' zählt heute doppelt');
+  assert.equal(k.zeilen.length, 4, 'ohne Reusen keine Reusen-Zeile');
+  assert.equal(k.zeilen[3], '🎯 Nächstes Ziel: Angelschein: noch 20 Quizfragen');
+  for (const t of ['🗺️ Karte', 'Weiter spielen']) assert.ok((await page.locator('#card button:has-text("' + t + '")').boundingBox()).height >= 60, t + ': mindestens 60 px');
+  await page.click('#card button:has-text("Weiter spielen")');
+  assert.equal(await page.isVisible('#modal'), false);
+  // 2. Eimer voll
+  await start({ bucket: Array.from({ length: 15 }, () => ({ id: 'rotauge', cm: 20, value: 5 })) });
+  k = await heuteKarte(page);
+  assert.equal(k.next, '👉 Als Nächstes: Dein Eimer ist voll. Verkauf die Fische bei Rosa!');
+  assert.equal(k.zeilen[0], '📝 Aufgaben: Keine Aufgabe. Frag in Hafenhausen jemanden!');
+  // 3. Reuse mit Fischen
+  await start({ reusen: 1, traps: [{ x: 10, z: -936, t: 0 }] }); // lange her: die Reuse ist voll (Date.now läuft hier nicht mit der festen Uhr mit)
+  k = await heuteKarte(page);
+  assert.equal(k.next, '👉 Als Nächstes: Hol die Fische aus deiner Reuse!');
+  assert.ok(k.zeilen.includes('🪤 Reusen: 3 Fische in deinen Reusen'), k.zeilen.join(' | '));
+  // 4. Flaschenpost noch nicht gefunden; die Tipp-Zeile zeigt denselben Schritt
+  await start({});
+  k = await heuteKarte(page);
+  assert.equal(k.next, '👉 Als Nächstes: Such die Flaschenpost am ' + flascheOrt + '!');
+  await page.click('#card button:has-text("Weiter spielen")');
+  await page.waitForFunction(() => document.querySelector('#tip').textContent.startsWith('👉'), null, { timeout: 20000 }).catch(() => {}); // langsame Bilder: der Tipp kommt alle 0,2 s Spielzeit
+  assert.equal(await page.textContent('#tip'), '👉 Such die Flaschenpost am ' + flascheOrt + '!');
+  // 5. Flaschenpost gefunden: den Tagesfisch fangen
+  await start({ tag: { day: HEUTE_TAG, flasche: true } });
+  k = await heuteKarte(page);
+  assert.match(k.next, new RegExp('^👉 Als Nächstes: Fang (einen|eine|ein) ' + namen[tf] + ' .+\\. (Er|Sie|Es) zählt heute doppelt!$'));
+  assert.equal(k.zeilen[1], '🍾 Flaschenpost: gefunden ✅');
+  // 6. Tagesfisch schon im Eimer: das nächste Ziel
+  await start({ tag: { day: HEUTE_TAG, flasche: true }, angelschein: true, bucket: [{ id: tf, cm: 30, value: 9 }], museum: { piranha: { cm: 20, t: 1 } } });
+  k = await heuteKarte(page);
+  assert.equal(k.next, '👉 Als Nächstes: Schenk Herrn Eugen im Museum eine neue Fischart.');
+  assert.equal(k.zeilen.at(-1), '🎯 Nächstes Ziel: Museum: 1 von ' + Object.keys(namen).length);
+  // Knopf Karte: öffnet die Karte von hier (Amazonas)
+  await page.click('#card button:has-text("🗺️ Karte")');
+  await page.locator('#card h2:text-is("Karte")').waitFor({ timeout: 5000 });
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Heute für dich: am Flussplatz zeigt das Ziel den Stempel', async () => {
+  const s = flussplaetze().find(s => s.id === 'bw-neckar');
+  const { ctx, page, errors } = await zeitSeite(HEUTE_ISO);
+  await seed(page, { [KEY]: stadtSeed({ ludins: 100, metTiago: true, builtOnce: true, tag: { day: HEUTE_TAG, flasche: true }, flussAt: s.id,
+    fluss: { [s.id]: { f: ['barbe'], q: false, s: false, r: false } }, where: landeplatz(s) }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  const k = await heuteKarte(page);
+  assert.equal(k.zeilen.at(-1), '🎯 Nächstes Ziel: Stempel: noch 2 Fischarten');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Spielzeit-Ende zeigt, was du heute geschafft hast', async () => {
+  for (const [heute, soll] of [
+    [{ day: HEUTE_TAG, fische: 6, ludins: 84, arten: 1 }, 'Heute geschafft: 🐟 6 Fische · 💰 +84 Ludins · 📖 1 neue Art'],
+    [{ day: HEUTE_TAG, fische: 1, ludins: 0, arten: 2 }, 'Heute geschafft: 🐟 1 Fisch · 📖 2 neue Arten'],
+    [{ day: HEUTE_TAG, fische: 0, ludins: 0, arten: 0 }, 'Schön, dass du da warst!']]) {
+    const { ctx, page, errors } = await startZeitSeite(HEUTE_ISO);
+    await seed(page, { [KEY]: stadtSeed({ heute, playTime: { day: '2026-10-31', sec: 15 * 60 - 1, extra: 0 } }), [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 10000 });
+    assert.equal((await page.textContent('#timeup .geschafft')).trim(), soll);
+    assert.match(await page.textContent('#timeup'), /Morgen wartet: eine neue Flaschenpost 🍾 und ein neuer Tagesfisch ⭐/);
+    assert.equal(await page.isVisible('#btnMoreTime'), true, 'die Knöpfe für Erwachsene bleiben');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Klarere Texte: Spinnfischen sagt „platscht“, Was ist neu v41', () => {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  assert.match(html, /miss:'wenn es am Köder platscht'/);
+  assert.doesNotMatch(html, /am Köder spritzt/);
+  const n = newsListe()[0];
+  assert.deepEqual({ v: n.v, day: n.day, ico: n.ico, t: n.t, d: n.d }, { v: 41, day: '27.10.2026', ico: '📅', t: 'Heute für dich',
+    d: 'Tipp auf die Uhr oben: Dort steht, was heute für dich ansteht – und was du schon geschafft hast.' });
 });

@@ -29,6 +29,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - **Spielzeit** (für Eltern): In der Avatar-Werkstatt „⏰ Spielzeit“. Ändern geht nur nach einer Rechenaufgabe für Erwachsene.
   Aus/15/30/45/60/90 Minuten pro Tag (**Standard: 15 Minuten**, `TIME_DEFAULT`), gilt fürs ganze Gerät (`amazonas-angler-1-spielzeit`), gezählt wird pro Spieler (`state.playTime`).
   Oben steht, wie viele Minuten übrig sind. Ist die Zeit um, macht das Spiel Pause; Erwachsene können +15/+30 Minuten geben.
+  Der Pausen-Bildschirm zeigt die Erfolge von heute („Heute geschafft: 🐟 … · 💰 … · 📖 …“, aus `state.heute`) und was morgen wartet.
 - **Bestenliste** (🏆 oben und in der Avatar-Werkstatt): Ludins, Fischarten, größter Fisch; antippen zeigt, wer was gefangen hat.
   Ohne Internet: Spieler dieses iPads + **Rekord-Karten** von Freunden. Die Karte ist eine bunte **Sammelkarte als Bild** (`Rekordkarte-<Name>.png`,
   Avatar, Ludins, Fischarten, größte Fische mit Foto). Die Daten stecken unsichtbar im PNG (tEXt-Feld `amazonas-angler-karte`);
@@ -83,7 +84,10 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Ids `n0`–`n23` **nie ändern** (stehen im Spielstand), `PEOPLE_N` = 24. **Museum** (`MUSEUM_AT`, Herr Eugen): von jeder Fischart einen Fisch spenden.
   **Jeden Tag neu**: `dayHash` (FNV-1a) aus dem Tag. **Tagesfisch** (`tagesfisch`, nie Bootsfisch, seltener Fisch oder Schonzeit): Rosa und Hannes zahlen doppelt.
   **Tagesaufgaben**: der Fisch einer neuen Aufgabe kommt aus `dayHash(Tag + id)`. **Flaschenpost** (`FLASCHE_SPOTS`, 3 Ufer, einmal pro Tag): Rätsel (+10), Tipp oder 10–30 Ludins.
-  Spielstand: `state.museum`, `state.nachbarn`, `state.aufgaben`, `state.tag` (`day`, `flasche`). Test-Helfer `window.__test` gibt es nur bei `navigator.webdriver` (automatische Tests).
+  **Heute für dich** (Uhr oben antippen, `showHeute`): zuerst „👉 Als Nächstes“ (`heuteNext`), darunter höchstens 5 Zeilen (Aufgaben, Flaschenpost, Tagesfisch, Reusen, Ziel).
+  Ist die Tipp-Zeile leer, steht dort der nächste Schritt. `state.heute` (`day`, `fische`, `ludins`, `arten`) zählt, was heute geschafft ist; neuer Tag = 0.
+  Verdiente Ludins immer mit `earn(n)` gutschreiben (zählt für „Heute geschafft“), Käufe und Strafen direkt abziehen.
+  Spielstand: `state.museum`, `state.nachbarn`, `state.aufgaben`, `state.tag` (`day`, `flasche`), `state.heute`. Test-Helfer `window.__test` gibt es nur bei `navigator.webdriver` (automatische Tests).
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
