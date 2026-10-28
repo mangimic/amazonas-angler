@@ -819,7 +819,7 @@ function stadtWert(name) {
   assert.ok(Number.isFinite(o.x) && Number.isFinite(o.z), name + ' hat x und z als Zahlen');
   return o;
 }
-const STADT_START = { visited: false, vehicles: { bike: true, roller: false, skate: false, truck: false }, parked: {}, riding: '' };
+const STADT_START = { visited: false, vehicles: { bike: true, roller: false, skate: false, truck: false }, parked: {}, riding: '', luxus: false, yachtAt: 'hafen' };
 
 test('Hafenhausen: hinfliegen, Ort bleibt gespeichert, Angeln geht dort nicht', async () => {
   const VX = 10 * Math.sin(1) + 24, L = stadtWert('CITY_LAND'); // wie im Spiel: riverX(0)+24
@@ -2267,6 +2267,143 @@ test('Alter Spielstand: museum bekommt Startwert {}', async () => {
   assert.deepEqual(s.museum, {});
   assert.deepEqual(errors, []);
   await ctx.close();
+});
+
+// Bootshafen in Hafenhausen: dort gibt es die Luxusyacht. Gekauft liegt sie am Hafen-Steg (BERTH_HAFEN), später auch am Insel-Steg (BERTH_INSEL).
+// Ein Liegeplatz: x,z,f = wo man auf dem Steg steht (mit Blick zur Yacht), yx,yz,yaw = wo die Yacht liegt.
+const BOOT_ISO = '2026-10-31T10:00:00+01:00';
+async function bootSeite(extra, iso = BOOT_ISO, fest = false) {
+  const B = stadtWert('BOOTSHAFEN_AT');
+  return stadtSeite({ where: { x: B.x, z: B.z, f: 0, boat: false }, ...extra }, iso, fest);
+}
+async function bootAuf(page) {
+  await page.locator('#btnCtx:has-text("⛵ Zum Bootshafen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("⛵ Bootshafen")').waitFor();
+}
+const YACHT_KNOPF = '#card .item:has(b:text-is("Luxusyacht")) button';
+const nah = (a, b, d = 0.05) => Math.abs(a - b) < d;
+
+test('Bootshafen: Luxusyacht kaufen', async () => {
+  const H = stadtWert('BERTH_HAFEN');
+  const { ctx, page, errors } = await bootSeite({ ludins: 20050 });
+  await bootAuf(page);
+  assert.match(await page.textContent('#card'), /Offen 8–22 Uhr/);
+  assert.equal((await page.textContent(YACHT_KNOPF)).trim(), '20000 L');
+  assert.ok((await page.locator(YACHT_KNOPF).boundingBox()).height >= 60, 'großer Knopf');
+  assert.equal((await page.evaluate(() => window.__test.luxus())).sichtbar, false, 'vor dem Kauf liegt keine Yacht am Steg');
+  await page.click(YACHT_KNOPF);
+  let s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 50);
+  assert.equal(s.city.luxus, true);
+  assert.equal(s.city.yachtAt, 'hafen');
+  assert.equal((await page.textContent(YACHT_KNOPF)).trim(), 'Hast du');
+  assert.match(await page.textContent('#card .item:has(b:text-is("Luxusyacht"))'), /Sie liegt am Hafen-Steg\./);
+  let y = await page.evaluate(() => window.__test.luxus());
+  assert.equal(y.sichtbar, true, 'jetzt liegt die Yacht am Steg');
+  assert.ok(nah(y.x, H.yx) && nah(y.z, H.yz) && nah(y.yaw, H.yaw), 'am Hafen-Steg: ' + JSON.stringify(y));
+  assert.equal(y.name, 'Testkind', 'der Name steht am Rumpf');
+  await page.click('#card button:has-text("Tschüss")');
+  // neu laden: die Yacht gehört einem immer noch und liegt am Hafen-Steg
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForFunction(() => window.__test.luxus() && window.__test.luxus().sichtbar, null, { timeout: 20000 });
+  y = await page.evaluate(() => window.__test.luxus());
+  assert.ok(nah(y.x, H.yx) && nah(y.z, H.yz), 'nach dem Neuladen am Hafen-Steg');
+  s = await weg(page);
+  assert.equal(s.ludins, 50);
+  assert.equal(s.city.luxus, true);
+  assert.equal(s.city.yachtAt, 'hafen');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Bootshafen: zu wenig Ludins', async () => {
+  const { ctx, page, errors } = await bootSeite({ ludins: 100 });
+  await bootAuf(page);
+  assert.equal((await page.textContent(YACHT_KNOPF)).trim(), 'Noch 19900 L');
+  assert.equal(await page.locator(YACHT_KNOPF).isDisabled(), true, 'grauer Knopf');
+  await page.$eval(YACHT_KNOPF, b => b.onclick()); // auch wenn der Klick doch ankommt: nichts passiert
+  const s = await weg(page);
+  assert.equal(s.ludins, 100);
+  assert.equal(s.city.luxus, false);
+  assert.equal((await page.evaluate(() => window.__test.luxus())).sichtbar, false);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Bootshafen: um 23 Uhr geschlossen', async () => {
+  const { ctx, page, errors } = await bootSeite({ ludins: 20050 }, '2026-10-31T23:00:00+01:00', true);
+  await page.locator('#btnCtx:has-text("Geschlossen")').waitFor({ timeout: 20000 });
+  assert.equal((await page.textContent('#btnCtx')).trim(), '🌙 Geschlossen – öffnet um 8 Uhr');
+  await page.click('#btnCtx');
+  assert.equal(await page.locator('#modal').isVisible(), false, 'der Bootshafen geht nicht auf');
+  assert.equal(await page.textContent('#toast'), 'Der Bootshafen ist zu, bis 8 Uhr. Angeln geht immer. Deine Fische bleiben im Eimer.');
+  const s = await weg(page);
+  assert.equal(s.ludins, 20050);
+  assert.equal(s.city.luxus, false);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Bootshafen: Tür am Gehweg, Liegeplätze im tiefen Wasser, Stege begehbar', async () => {
+  const B = stadtWert('BOOTSHAFEN_AT'), L = meerWert('LUXUS');
+  assert.deepEqual(L, { price: 20000, speed: 14, turn: 1.6, len: 12 });
+  const { ctx, page, errors } = await bootSeite({});
+  await page.locator('#btnCtx:has-text("⛵ Zum Bootshafen")').waitFor({ timeout: 20000 });
+  const r = await page.evaluate(([x, z]) => ({ ...window.__test.stadtPunkt(x, z), hoehe: window.__test.hoehe(x, z) }), [B.x, B.z]);
+  assert.equal(r.walk, true, 'auf dem Gehweg');
+  assert.equal(r.road, false);
+  assert.ok(r.rail > 2.5, 'nicht auf den Schienen: ' + r.rail);
+  assert.equal(r.tueren.filter(d => d > 2.5 && d < 3.5).length, 1, 'genau ein Haus (der Bootshafen) steht vor der Tür');
+  assert.ok(Math.abs(r.hoehe - 1.2) < 0.01, 'ebener Boden');
+  for (const name of ['BERTH_HAFEN', 'BERTH_INSEL']) {
+    const P = stadtWert(name);
+    const d = 0.4 * L.len, sx = Math.sin(P.yaw) * d, sz = Math.cos(P.yaw) * d;
+    const t = await page.evaluate(([P, sx, sz]) => ({
+      yacht: [[P.yx, P.yz], [P.yx + sx, P.yz + sz], [P.yx - sx, P.yz - sz]].map(([x, z]) => window.__test.hoehe(x, z)),
+      steg: window.__test.begehbar(P.x, P.z) }), [P, sx, sz]);
+    assert.ok(t.yacht.every(h => h < -1), name + ': die Yacht liegt im tiefen Wasser ' + t.yacht);
+    assert.equal(t.steg, true, name + ': man steht auf dem Steg');
+    const blick = Math.atan2(P.yx - P.x, P.yz - P.z), diff = Math.abs(Math.atan2(Math.sin(blick - P.f), Math.cos(blick - P.f)));
+    assert.ok(diff < 0.2, name + ': man schaut zur Yacht');
+    const quer = Math.abs((P.x - P.yx) * Math.cos(P.yaw) - (P.z - P.yz) * Math.sin(P.yaw)); // Abstand quer zur Yacht
+    assert.ok(quer > 2 && quer < 5, name + ': die Yacht liegt längs neben dem Steg ' + quer);
+  }
+  // von der Kaimauer (z −3112,4) über den Hafen-Steg bis zum Liegeplatz: alles begehbar
+  const H = stadtWert('BERTH_HAFEN');
+  const steg = await page.evaluate(H => Array.from({ length: 21 }, (_, k) => window.__test.begehbar(H.x, -3112.4 + (H.z + 3112.4) * k / 20)), H);
+  assert.ok(steg.every(Boolean), 'der Hafen-Steg ist durchgehend begehbar ' + steg.join(','));
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Alter Spielstand: luxus und yachtAt bekommen Startwerte; kaputte Werte werden repariert', async () => {
+  const fall = async (city) => {
+    const { ctx, page, errors } = await newPage();
+    await seed(page, { [KEY]: stadtSeed(city === undefined ? {} : { city }) });
+    await startGame(page);
+    await playAndLeave(page);
+    const s = JSON.parse(await read(page));
+    assert.deepEqual(errors, []);
+    await ctx.close();
+    return s.city;
+  };
+  let c = await fall({ visited: true, vehicles: { bike: true, roller: true } });
+  assert.equal(c.luxus, false);
+  assert.equal(c.yachtAt, 'hafen');
+  assert.equal(c.vehicles.roller, true, 'der Rest bleibt');
+  c = await fall({ visited: true, luxus: 'ja', yachtAt: 'mond', garage: { tor: 'rot' } });
+  assert.equal(c.luxus, false, 'nur genau true zählt');
+  assert.equal(c.yachtAt, 'hafen', 'unbekannter Liegeplatz: zurück zum Hafen-Steg');
+  assert.deepEqual(c.garage, { tor: 'rot' }, 'unbekannte city-Felder bleiben');
+  assert.equal(c.visited, true);
+  c = await fall({ visited: true, luxus: 1, yachtAt: 'toString' });
+  assert.equal(c.luxus, false);
+  assert.equal(c.yachtAt, 'hafen', 'nur echte Liegeplätze');
+  c = await fall({ visited: true, luxus: true, yachtAt: 'insel' });
+  assert.equal(c.luxus, true, 'die gekaufte Yacht bleibt');
+  assert.equal(c.yachtAt, 'insel', 'sie bleibt am Insel-Steg');
 });
 
 // Jeden Tag neu: Tagesfisch, Tagesaufgaben, Flaschenpost. dayHash wie in index.html (FNV-1a, 32 Bit).

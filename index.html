@@ -504,7 +504,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
 const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false,muetze:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],fluss:{},flussAt:'',nachbarn:{},aufgaben:[],museum:{},tag:{day:'',flasche:false},heute:{day:'',fische:0,ludins:0,arten:0},
-  city:{visited:false,vehicles:{bike:true,roller:false,skate:false,truck:false},parked:{},riding:''},
+  city:{visited:false,vehicles:{bike:true,roller:false,skate:false,truck:false},parked:{},riding:'',luxus:false,yachtAt:'hafen'},
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
 // Werte aus Dateien (Sicherheitskopie, alter Code) sind fremd: nur echte Zahlen und Farben übernehmen (siehe Sicherheitsprüfung SEC-001)
@@ -559,13 +559,25 @@ if(!isObj(state.fluss))state.fluss={};
 for(const id in state.fluss){if(!isObj(state.fluss[id]))state.fluss[id]={};const p=state.fluss[id];
   p.f=Array.isArray(p.f)?p.f.filter(x=>typeof x==='string'):[];p.q=p.q===true;p.s=p.s===true;p.r=p.r===true;}
 if(typeof state.flussAt!=='string')state.flussAt='';
-// Hafenhausen: welche Fahrzeuge man hat (das Fahrrad immer), wo sie geparkt sind, worauf man gerade fährt
+// Luxusyacht aus dem Bootshafen in Hafenhausen: Preis (Ludins), Tempo (m/s), wie schnell sie dreht, Länge (m)
+const LUXUS={price:20000,speed:14,turn:1.6,len:12};
+// Liegeplätze der Luxusyacht (reine Zahlen, die Tests lesen sie aus dieser Datei):
+// x,z,f = wo man auf dem Steg steht, mit Blick zur Yacht; yx,yz,yaw = wo die Yacht liegt (der Bug zeigt nach yaw).
+// Hafen-Steg (HDOCK) im Hafenbecken vor dem Bootshafen, Insel-Steg (IDOCK) an der Nordseite der Insel. Die Yacht liegt längs neben dem Steg im tiefen Wasser.
+const BERTH_HAFEN={x:83,z:-3126,f:1.5708,yx:86.2,yz:-3126,yaw:3.1416};
+const BERTH_INSEL={x:-119.5,z:-3446,f:1.5708,yx:-116.3,yz:-3446,yaw:0};
+const LUXUS_BERTHS={hafen:BERTH_HAFEN,insel:BERTH_INSEL}; // Schlüssel stehen im Spielstand (state.city.yachtAt): nie ändern
+const LUXUS_ORT={hafen:'Hafen-Steg',insel:'Insel-Steg'};
+// Hafenhausen: welche Fahrzeuge man hat (das Fahrrad immer), wo sie geparkt sind, worauf man gerade fährt,
+// luxus = Luxusyacht gekauft, yachtAt = an welchem Liegeplatz (LUXUS_BERTHS) sie liegt
 const VEHICLE_IDS=['bike','roller','skate','truck'];
-if(!isObj(state.city))state.city={visited:false,vehicles:{bike:true,roller:false,skate:false,truck:false},parked:{},riding:''};
+if(!isObj(state.city))state.city={visited:false,vehicles:{bike:true,roller:false,skate:false,truck:false},parked:{},riding:'',luxus:false,yachtAt:'hafen'};
 {const c=state.city;c.visited=c.visited===true;
   if(!isObj(c.vehicles))c.vehicles={};VEHICLE_IDS.forEach(id=>{c.vehicles[id]=c.vehicles[id]===true;});c.vehicles.bike=true;
   if(!isObj(c.parked))c.parked={}; // unbekannte oder kaputte Einträge bleiben gespeichert (nie löschen), vehicleAt beachtet sie nicht
-  if(!VEHICLE_IDS.includes(c.riding)&&c.riding!=='tram')c.riding='';}
+  if(!VEHICLE_IDS.includes(c.riding)&&c.riding!=='tram')c.riding='';
+  c.luxus=c.luxus===true; // nur genau true heißt: gekauft
+  if(typeof c.yachtAt!=='string'||!Object.prototype.hasOwnProperty.call(LUXUS_BERTHS,c.yachtAt))c.yachtAt='hafen';} // unbekannter Liegeplatz: zurück zum Hafen-Steg
 state.traps=state.traps.filter(t=>isObj(t)&&Number.isFinite(t.x)&&Number.isFinite(t.z));
 state.traps.forEach(t=>{if(!Number.isFinite(t.t))t.t=Date.now();
   if(Array.isArray(t.fish))t.fish=t.fish.filter(isObj).map(f=>Object.assign(f,{cm:num(f.cm,10000),value:num(f.value,1e6)}));});
@@ -705,6 +717,8 @@ function cityHeight(x,z){if(z<SEA.z0||Math.abs(x-CITY.x)>CITY.w||Math.abs(z-CITY
 const CITY_LAND={x:-125,z:-3010,f:1.5708}; // Landeplatz am Flugplatz, man schaut in die Stadt
 const SHOP_AT={x:-103,z:-2991.7}; // auf dem Gehweg vor der Tür vom Fahrzeug-Laden
 const MUSEUM_AT={x:-6.2,z:-2955}; // auf dem Gehweg vor der Tür vom Museum (Haus in Block 1/2, die Tür ist bei x=-9.2)
+const BOOTSHAFEN_AT={x:90,z:-3098.8}; // auf dem Gehweg vor der Tür vom Bootshafen (Haus an der Hafenstraße, die Tür ist 3 m dahinter)
+const HDOCK={x0:81.2,x1:83.8,z0:-3134,z1:-3112.6,y:0.6}; // Hafen-Steg: von der Kaimauer ins Hafenbecken, zwischen den Pollern bei x=75 und x=90
 const TEST_HOUSE={x:-78,z:-2997.2,r:4.3}; // das erste Wohnhaus südlich der Flugplatz-Straße (der Test fährt mit dem Rad dagegen)
 const FOUNTAIN={x:0,z:-2985,r:3.6}; // Brunnen in der Mitte vom Marktplatz (Hindernis mit Radius r)
 // Haltestellen der Straßenbahn, auf dem Ring um die Innenstadt (CITY_RING), Reihenfolge: Flugplatz → Markt → Hafen → Park
@@ -781,7 +795,7 @@ const LDOCK={x0:LAKE.x-1.3,x1:LAKE.x+1.3,z0:LAKE.z-LAKE.b-7,z1:LAKE.z-LAKE.b+12,
 // Steg am deutschen Fluss (wird mit dem Flussplatz neu gesetzt)
 const DDOCK={x0:-1.3,x1:1.3,z0:0,z1:0,y:DOCK.y};
 const inRect=(R,x,z)=>x>=R.x0&&x<=R.x1&&z>=R.z0&&z<=R.z1;
-const onDock=(x,z)=>inRect(DOCK,x,z)||inRect(LDOCK,x,z)||(!!deP&&inRect(DDOCK,x,z))||(cityBuilt&&inRect(IDOCK,x,z));
+const onDock=(x,z)=>inRect(DOCK,x,z)||inRect(LDOCK,x,z)||(!!deP&&inRect(DDOCK,x,z))||(cityBuilt&&(inRect(IDOCK,x,z)||inRect(HDOCK,x,z)));
 // Bauplatz für das eigene Pfahlhaus am Fluss: 5×5 Felder, jedes 2 m groß
 const PLOT={n:5,c:2,x0:riverX(23)+8.5,z0:18};PLOT.x1=PLOT.x0+PLOT.n*PLOT.c;PLOT.z1=PLOT.z0+PLOT.n*PLOT.c;
 PLOT.y=(()=>{let m=-9;for(let i=0;i<=10;i++)for(let j=0;j<=10;j++)m=Math.max(m,heightAt(PLOT.x0+i,PLOT.z0+j));return m+0.25;})();
@@ -836,8 +850,9 @@ const shopOpen=()=>WT.hour>=SHOP_HOURS.auf&&WT.hour<SHOP_HOURS.zu;
 const SHOP_CLOSED_TXT='🌙 Geschlossen – öffnet um '+SHOP_HOURS.auf+' Uhr';
 const SHOP_CLOSED_TOAST='Der Laden ist zu, bis '+SHOP_HOURS.auf+' Uhr. Angeln geht immer. Deine Fische bleiben im Eimer.';
 const MUSEUM_CLOSED_TOAST='Das Museum ist zu, bis '+SHOP_HOURS.auf+' Uhr. Angeln geht immer. Deine Fische bleiben im Eimer.';
+const BOOT_CLOSED_TOAST='Der Bootshafen ist zu, bis '+SHOP_HOURS.auf+' Uhr. Angeln geht immer. Deine Fische bleiben im Eimer.';
 const SHOP_HOURS_TXT=SHOP_HOURS.auf+'–'+SHOP_HOURS.zu+' Uhr';
-const SHOP_CTX=['shop','tiago','hannes','vshop','museum']; // diese Kontext-Knöpfe führen in einen Laden
+const SHOP_CTX=['shop','tiago','hannes','vshop','museum','bootshafen']; // diese Kontext-Knöpfe führen in einen Laden
 // Himmel: Tag hellgrün-blau, Dämmerung rosa-orange, Nacht dunkelblau (nie schwarz)
 const SKY_DAY=new THREE.Color('#a6dccd'),SKY_DUSK=new THREE.Color('#f2a07b'),SKY_NIGHT=new THREE.Color('#22335e');
 function skyColor(e,out){return e>=0?out.copy(SKY_DUSK).lerp(SKY_DAY,smooth(0,8,e)):out.copy(SKY_NIGHT).lerp(SKY_DUSK,smooth(-8,0,e));}
@@ -1331,13 +1346,16 @@ function buildYacht(){const g=new THREE.Group(),white=mat('#f4f6f7'),blue=mat('#
   const ring=new THREE.Mesh(new THREE.TorusGeometry(0.28,0.08,6,14),mat('#f6a623'));ring.position.set(1.42,YACHT_DECK+0.5,-1.2);ring.rotation.y=Math.PI/2;g.add(ring);
   g.position.z=-0.6; // so steht man hinter der Kajüte am Steuer
   return g;}
-function buildYachtName(){if(!boat.yacht)return;if(yachtNameMesh){boat.yacht.remove(yachtNameMesh.a);boat.yacht.remove(yachtNameMesh.b);}
+// Der Avatar-Name auf beiden Seiten vom Rumpf (Yacht am Amazonas, Luxusyacht in Hafenhausen). old = alte Schrift (wird ersetzt).
+// col = Farbe der Schrift, w × h = Größe, (±x, y, z) = Stelle am Rumpf. Gibt {a, b, text} zurück.
+function hullName(g,old,col,w,h,x,y,z){if(old){g.remove(old.a);g.remove(old.b);}
   const name=(state.avatar.name||'Ludina').slice(0,14),cv=document.createElement('canvas');cv.width=512;cv.height=96;const c=cv.getContext('2d');
-  c.fillStyle='#1e4f8a';c.font='italic 800 64px "Trebuchet MS",sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(name,256,50);
+  c.fillStyle=col;c.font='italic 800 64px "Trebuchet MS",sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(name,256,50);
   const m=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),transparent:true});
-  const a=new THREE.Mesh(new THREE.PlaneGeometry(2.2,0.42),m),b=new THREE.Mesh(new THREE.PlaneGeometry(2.2,0.42),m);
-  a.position.set(1.52,YACHT_DECK-0.4,1.4);a.rotation.y=Math.PI/2;b.position.set(-1.52,YACHT_DECK-0.4,1.4);b.rotation.y=-Math.PI/2;
-  boat.yacht.add(a);boat.yacht.add(b);yachtNameMesh={a,b};}
+  const a=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m),b=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m);
+  a.position.set(x,y,z);a.rotation.y=Math.PI/2;b.position.set(-x,y,z);b.rotation.y=-Math.PI/2;
+  g.add(a);g.add(b);return {a,b,text:name};}
+function buildYachtName(){if(!boat.yacht)return;yachtNameMesh=hullName(boat.yacht,yachtNameMesh,'#1e4f8a',2.2,0.42,1.52,YACHT_DECK-0.4,1.4);}
 
 /* ---- Boot ---- */
 const boat={pos:new THREE.Vector3(riverX(3.6)+6.5,0,3.6),yaw:0,mesh:new THREE.Group()};
@@ -2057,13 +2075,13 @@ function showTiago(){
   card.appendChild(buyList(TIAGO.filter(it=>it.tab===tiagoTab),showTiago));
   const bt=el('div','btns');const c=el('button','b alt','Tschüss, Opa Tiago');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);
 }
-// Liste zum Kaufen (Opa Tiago, Fischer Hannes). again = Laden neu zeigen
+// Liste zum Kaufen (Opa Tiago, Fischer Hannes, Fahrzeug-Laden, Bootshafen). again = Laden neu zeigen. have = Text auf dem Knopf, wenn man es schon hat
 function buyList(items,again){
   const l=el('div','list');
   items.forEach(it=>{const owned=it.owned&&it.owned(),lock=it.lock&&it.lock();
     const row=el('div','item shopitem');row.appendChild(el('div','shopicon',it.ico));
     row.appendChild(el('div','t','<b>'+it.name+'</b><span>'+it.desc+(it.count?' <span class="havecount">Du hast '+it.count()+'.</span>':'')+'</span>'));
-    const b=el('button','b',owned?(it.price?'Gekauft':'Hast du'):it.price+' L');
+    const b=el('button','b',owned?(it.have||(it.price?'Gekauft':'Hast du')):it.price+' L');
     if(owned)b.disabled=true;
     else if(lock){b.disabled=true;b.textContent=lock;}
     else if(state.ludins<it.price){b.disabled=true;b.textContent='Noch '+(it.price-state.ludins)+' L';}
@@ -2125,6 +2143,19 @@ function showVehicleShop(){
   card.appendChild(buyList(['roller','skate','truck'].map(id=>{const V=VEHICLES[id];
     return {name:V.name,price:V.price,ico:V.ico,desc:VEH_DESC[id],msg:'Dein '+V.name+' steht vor dem Laden!',
       owned:()=>state.city.vehicles[id],buy:()=>{state.city.vehicles[id]=true;placeVehicles();}};}),showVehicleShop));
+  const bt=el('div','btns');const c=el('button','b alt','Tschüss');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);}
+
+// Bootshafen in Hafenhausen: hier gibt es die Luxusyacht (LUXUS). Gekauft liegt sie an einem Steg (state.city.yachtAt, LUXUS_BERTHS).
+function showBootshafen(){
+  openModal();card.className='card';card.innerHTML='';
+  const head=el('div','rosa');head.appendChild(el('div','shopicon','🛥️'));
+  head.appendChild(el('div',null,'<h2>⛵ Bootshafen</h2><p class="small">Offen '+SHOP_HOURS_TXT+'</p><p>Hallo '+esc(state.avatar.name||'du')+'! Hier gibt es die schönste Yacht vom ganzen Hafen.</p>'));
+  card.appendChild(head);
+  const ort=()=>LUXUS_ORT[state.city.yachtAt]||LUXUS_ORT.hafen;
+  card.appendChild(buyList([{name:'Luxusyacht',price:LUXUS.price,ico:'🛥️',have:'Hast du',
+    desc:'Schwarz mit Gold, mit Sonnendeck und kleinem Pool. Dein Name steht in Gold am Rumpf.'+(state.city.luxus?' Sie liegt am '+ort()+'.':''),
+    msg:'Wow, deine eigene Luxusyacht! Sie liegt am '+ort()+'.',
+    owned:()=>state.city.luxus===true,buy:()=>{state.city.luxus=true;placeLuxus();}}],showBootshafen));
   const bt=el('div','btns');const c=el('button','b alt','Tschüss');c.onclick=closeModal;bt.appendChild(c);card.appendChild(bt);}
 
 // Museum in Hafenhausen: Herr Eugen nimmt von jeder Fischart einen Fisch aus dem Eimer. Die Ausstellung zeigt die Fotos.
@@ -2223,6 +2254,7 @@ function cityCtx(){const st=tramStopNear();if(st&&tramAtStop()===st)return 'tram
   const v=vehicleNear();if(v)return 'mount:'+v;
   if(Math.hypot(player.pos.x-SHOP_AT.x,player.pos.z-SHOP_AT.z)<4)return 'vshop';
   if(Math.hypot(player.pos.x-MUSEUM_AT.x,player.pos.z-MUSEUM_AT.z)<4)return 'museum';
+  if(Math.hypot(player.pos.x-BOOTSHAFEN_AT.x,player.pos.z-BOOTSHAFEN_AT.z)<4)return 'bootshafen';
   const k=talkNear();return k>=0?'talk:'+k:null;} // reden: kein Laden, darum keine Öffnungszeiten
 function updateCtx(){
   let a=null;const p=player.pos;
@@ -2246,10 +2278,10 @@ function updateCtx(){
   const closed=!!a&&SHOP_CTX.includes(a)&&!shopOpen();
   if(a!==ctxAction||closed!==ctxClosed){ctxAction=a;ctxClosed=closed;const b=$('#btnCtx');b.hidden=!a;
     const vm=a&&a.startsWith('mount:')&&VEHICLES[a.slice(6)],tk=a&&a.startsWith('talk:')&&nachbarInfo(+a.slice(5));
-    b.textContent=closed?SHOP_CLOSED_TXT:vm?vm.ico+' '+vm.on:tk?'💬 Reden mit '+tk.name:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='museum'?'🏛️ Ins Museum':a==='tram'?'🚋 Einsteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='flasche'?'🍾 Flaschenpost':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
+    b.textContent=closed?SHOP_CLOSED_TXT:vm?vm.ico+' '+vm.on:tk?'💬 Reden mit '+tk.name:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='museum'?'🏛️ Ins Museum':a==='bootshafen'?'⛵ Zum Bootshafen':a==='tram'?'🚋 Einsteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='flasche'?'🍾 Flaschenpost':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
 $('#btnCtx').onclick=()=>{audio();
-  if(SHOP_CTX.includes(ctxAction)&&!shopOpen()){toast(ctxAction==='museum'?MUSEUM_CLOSED_TOAST:SHOP_CLOSED_TOAST);return;} // Laden zu: nichts öffnet sich
+  if(SHOP_CTX.includes(ctxAction)&&!shopOpen()){toast(ctxAction==='museum'?MUSEUM_CLOSED_TOAST:ctxAction==='bootshafen'?BOOT_CLOSED_TOAST:SHOP_CLOSED_TOAST);return;} // Laden zu: nichts öffnet sich
   if(ctxAction==='shop'){stopFishing();showShop();}
   else if(ctxAction==='tiago'){stopFishing();showTiago();}
   else if(ctxAction==='hannes'){stopFishing();showHannes();}
@@ -2265,6 +2297,7 @@ $('#btnCtx').onclick=()=>{audio();
   else if(ctxAction==='dismount')dismount(); // klappt es nicht, sagt dismount selbst warum
   else if(ctxAction==='vshop'){stopFishing();showVehicleShop();}
   else if(ctxAction==='museum'){stopFishing();showMuseum();}
+  else if(ctxAction==='bootshafen'){stopFishing();showBootshafen();}
   else if(ctxAction==='tram')boardTram();
   else if(ctxAction==='tramoff'){const st=tramAtStop();if(player.ride==='tram'&&st&&st!==tramBoard)tramOff(st);}
   else if(ctxAction==='board'){stopFishing();player.inBoat=true;state.usedBoat=true;save();player.pos.copy(boat.pos);player.facing=boat.yaw;toast('Leinen los! Im tiefen Fluss leben die Riesenfische.');}
@@ -2397,7 +2430,7 @@ function openCreator(){
   mode='creator';$('#hud').hidden=true;$('#creator').hidden=false;$('#modal').hidden=true;buildCreator();creatorSpin=0;updateWorldTime();
   if(player.inBoat){player.inBoat=false;player.pos.set(VX-6,0,2);player.y=groundY(player.pos.x,player.pos.z);}
   faceFreeSide();}
-$('#btnGo').onclick=()=>{audio();if(!state.avatar.name)state.avatar.name='Angler';if(state.hasYacht)buildYachtName();
+$('#btnGo').onclick=()=>{audio();if(!state.avatar.name)state.avatar.name='Angler';if(state.hasYacht)buildYachtName();if(luxusMesh)buildLuxusName();
   if(boardOnStart){boardOnStart=false;player.inBoat=true;player.pos.copy(boat.pos);player.facing=boat.yaw;}
   save();$('#creator').hidden=true;$('#hud').hidden=false;mode='play';updateWorldTime(); // zurück zur echten Tageszeit
   camera.clearViewOffset();player.root.rotation.y=player.facing;refreshHud();updateFishBtn();
@@ -3499,7 +3532,64 @@ function buildCity(){if(cityBuilt)return;
   placeVehicles();
   buildTram(g); // zuletzt: ohne Zufall, und erst jetzt kommt die Bahn zu den Hindernissen (die Häuser stehen schon)
   buildSea(g); // ganz am Ende, mit eigenem Zufall: die Stadt bleibt, wie sie ist
+  buildBootshafen(g); // danach: Bootshafen, Hafen-Steg und Luxusyacht (ohne Zufall)
   cityBuilt=true;}
+// Bootshafen an der Hafenstraße: Haus mit Markise und Schild (die Tür schaut zum Gehweg, BOOTSHAFEN_AT liegt 3 m davor)
+// und der Hafen-Steg (HDOCK, begehbar über onDock) im Hafenbecken. Ohne Zufall, darum braucht es kein eigenes rng.
+// Die Luxusyacht bewegt sich und wird ein- und ausgeblendet: sie kommt erst nach bakeCells dazu.
+function buildBootshafen(g){const bg=new THREE.Group();g.add(bg);const win=[];
+  const w=9,d=7,h=6,x=BOOTSHAFEN_AT.x,z=BOOTSHAFEN_AT.z+3+d/2,front=z-d/2; // ry = 0: die Tür ist auf der −z-Seite (zum Hafen)
+  house(bg,x,z,'#f0efe6','#2c3e58',w,d,h);cityHouses.push({x,z,w,d,ry:0});cityCols.push({x,z,r:w/2+0.3});
+  for(let i=0;i<6;i++)bx(bg,(w-1)/6,0.15,1.4,i%2?'#ffffff':'#1f3f73',-(w-1)/2+(i+0.5)*(w-1)/6+x,3.4,front-0.7); // Markise
+  for(const lx of[-w/4-0.6,w/4+0.6])win.push(part(new THREE.BoxGeometry(2.2,1.6,0.1),'#8fc3dd',M(x+lx,2.3,front-0.06))); // Schaufenster
+  for(const lx of[-3,-1,1,3])win.push(part(new THREE.BoxGeometry(1,1.1,0.1),'#8fc3dd',M(x+lx,5.15,front-0.06)));
+  {const r=new THREE.Mesh(new THREE.TorusGeometry(0.42,0.12,8,18),mat('#f57c1f'));r.position.set(x,4.55,front-0.12);bg.add(r);} // Rettungsring über der Tür
+  makeSign('Bootshafen','Yachten · '+SHOP_HOURS_TXT,x-(w/2+0.5),front-1.5,'#1f3f73',bg,cityCols,Math.PI);
+  // Hafen-Steg: Bretter auf Pfählen, eine Stufe an der Kaimauer, zwei Poller am Ende
+  {const len=HDOCK.z1-HDOCK.z0,cx=(HDOCK.x0+HDOCK.x1)/2;
+    for(let i=0;i<Math.floor(len/0.55);i++)bx(bg,2.7,0.12,0.5,i%3?'#9a7148':'#8a6340',cx,HDOCK.y-0.12,HDOCK.z0+0.3+i*0.55);
+    bx(bg,2.7,0.3,0.6,'#8a8378',cx,HDOCK.y,HDOCK.z1-0.9);
+    for(let i=0;i<=6;i++)for(const sd of[-1,1])cy(bg,0.13,0.13,3.4,'#5e4128',cx+sd*1.3,-2.8,HDOCK.z0+0.4+i*(len-1.6)/6,6);
+    for(const sd of[-1,1]){cy(bg,0.18,0.2,0.5,'#2b2f33',cx+sd*1.05,HDOCK.y,HDOCK.z0+0.6,8);cityCols.push({x:cx+sd*1.05,z:HDOCK.z0+0.6,r:0.25});}}
+  bakeCells(bg,100,CITY.x-CITY.w,CITY.z-CITY.l);
+  bg.add(new THREE.Mesh(merge(win),winMat)); // nachts leuchten die Fenster
+  luxusMesh=buildLuxus();g.add(luxusMesh);buildLuxusName();placeLuxus();}
+// Luxusyacht: schwarzer Rumpf mit Goldstreifen, goldene Reling, Kajüte mit Fenstern (leuchten nachts),
+// oben ein Sonnendeck mit kleinem blauen Pool und Liegen. Kein Logo, keine Marke. Der Bug zeigt nach +z, 12 m lang (LUXUS.len).
+let luxusMesh=null,luxusName=null;
+const LUXUS_B=1.9,LUXUS_TOP=1.3; // halbe Breite und Höhe der Deckkante über dem Wasser
+function luxusShape(s){const B=LUXUS_B*s,L=LUXUS.len/2*s,sh=new THREE.Shape(); // Umriss von oben: hinten gerade, vorne spitz
+  sh.moveTo(-B,L);sh.lineTo(B,L);sh.lineTo(B,-L/3);sh.quadraticCurveTo(B,-L*0.85,0,-L);sh.quadraticCurveTo(-B,-L*0.85,-B,-L/3);sh.closePath();return sh;}
+function luxusHull(s,y0,y1,col){const g=new THREE.ExtrudeGeometry(luxusShape(s),{depth:y1-y0,bevelEnabled:false,curveSegments:10});
+  g.rotateX(-Math.PI/2);g.translate(0,y0,0);return new THREE.Mesh(g,mat(col));} // Umriss-y wird zu −z: der Bug liegt bei +z
+function buildLuxus(){const g=new THREE.Group(),BLACK='#16191f',GOLD='#d9a93a',T=LUXUS_TOP,L=LUXUS.len/2,win=[];
+  g.add(luxusHull(1,-0.9,T,BLACK));                                   // Rumpf
+  g.add(luxusHull(1.012,0.82,0.96,GOLD));g.add(luxusHull(1.016,T-0.08,T+0.02,GOLD)); // Goldstreifen und goldene Deckkante
+  {const dg=new THREE.ShapeGeometry(luxusShape(0.97),10);dg.rotateX(-Math.PI/2);dg.translate(0,T+0.03,0);g.add(new THREE.Mesh(dg,mat('#c79a62')));} // Deck aus Holz
+  bx(g,3.4,0.1,0.7,'#c79a62',0,0.25,-L-0.3);                          // Badeplattform hinten
+  // Reling aus Gold an den Seiten und vorne (hinten offen: dort steigt man ein)
+  {const p=luxusShape(0.95).getPoints(10);for(let i=1;i<p.length;i++){const a=p[i-1],b=p[i];const l=Math.hypot(b.x-a.x,b.y-a.y);if(l<0.01||a.y>L*0.9&&b.y>L*0.9)continue;
+      const r=bx(g,0.06,0.06,l,GOLD,(a.x+b.x)/2,T+0.85,-(a.y+b.y)/2);r.rotation.y=Math.atan2(b.x-a.x,-(b.y-a.y));
+      cy(g,0.03,0.03,0.85,GOLD,a.x,T,-a.y,5);}}
+  // Kajüte (schwarz, mit Goldkante), Fenster rundherum
+  bx(g,3,1.3,5.6,BLACK,0,T,0.4);bx(g,3.12,0.1,5.72,GOLD,0,T+1.25,0.4);
+  for(const sx of[-1,1])win.push(part(new THREE.BoxGeometry(0.06,0.55,4.6),'#8fc3dd',M(sx*1.52,T+0.75,0.4)));
+  win.push(part(new THREE.BoxGeometry(2.5,0.55,0.06),'#8fc3dd',M(0,T+0.75,3.22,-0.25)),part(new THREE.BoxGeometry(1.4,0.9,0.06),'#8fc3dd',M(0,T+0.55,-2.42)));
+  // Sonnendeck auf der Kajüte: Holzboden, kleiner Pool, zwei Liegen, goldene Reling
+  const S=T+1.35;bx(g,2.9,0.06,5.5,'#c79a62',0,S,0.4);
+  bx(g,1.5,0.3,1.7,'#f4f6f7',0,S,-1.2);bx(g,1.24,0.06,1.44,'#2fa8e0',0,S+0.26,-1.2); // Pool: weißer Rand, blaues Wasser
+  for(const sx of[-0.65,0.65]){bx(g,0.62,0.18,1.5,'#f4f6f7',sx,S,1.2);const bk=bx(g,0.62,0.08,0.7,'#f4f6f7',sx,S+0.3,2.05);bk.rotation.x=-0.6;}
+  for(const sx of[-1,1]){bx(g,0.05,0.05,5.4,GOLD,sx*1.42,S+0.7,0.4);for(let k=0;k<5;k++)cy(g,0.025,0.025,0.7,GOLD,sx*1.42,S,-2.2+k*1.3,5);}
+  bx(g,2.9,0.05,0.05,GOLD,0,S+0.7,3.1);bx(g,2.9,0.05,0.05,GOLD,0,S+0.7,-2.3);
+  // Bügel über dem Sonnendeck (schwarz mit Goldkante)
+  for(const sx of[-1,1])bx(g,0.12,1.2,0.3,BLACK,sx*1.3,S,2.6);bx(g,2.72,0.14,0.34,GOLD,0,S+1.2,2.6);
+  bakeKids(g);
+  g.add(new THREE.Mesh(merge(win),winMat)); // nach bakeKids: die Fenster leuchten nachts
+  g.visible=false;return g;}
+function buildLuxusName(){if(luxusMesh)luxusName=hullName(luxusMesh,luxusName,'#e8be4f',3.4,0.64,LUXUS_B+0.03,0.42,-2.4);}
+// Die Luxusyacht an ihren Liegeplatz legen; zu sehen ist sie nur, wenn man sie gekauft hat
+function placeLuxus(){if(!luxusMesh)return;const b=LUXUS_BERTHS[state.city.yachtAt]||BERTH_HAFEN;
+  luxusMesh.position.set(b.yx,0,b.yz);luxusMesh.rotation.y=b.yaw;luxusMesh.visible=state.city.luxus===true;}
 // Das offene Meer: Grund, Ufermauern, Insel mit Steg, Bäumen und Leuchtturm, Sandbank mit Seehunden, Bojen
 const seals=[],buoyList=[]; // Seehunde (ihr Kopf hebt sich ab und zu) und Bojen ({x,z,farbe})
 function buildSea(g){const R=rng(2610),sg=new THREE.Group();g.add(sg);const KM='#8a8378';
@@ -3968,9 +4058,10 @@ function mapMarkers(){const m=[
   {x:ROSA.x,z:ROSA.z,ico:'🐟',name:'Rosa'},{x:TIAGO_AT.x,z:TIAGO_AT.z,ico:'🎣',name:'Opa Tiago'},
   {x:(PLOT.x0+PLOT.x1)/2,z:(PLOT.z0+PLOT.z1)/2,ico:'🏠',name:state.builtOnce?'Dein Haus':'Bauplatz'}];
   PLANES.forEach(p=>{if((p.id!=='de'||deP)&&(p.id!=='city'||cityBuilt))m.push({x:p.x,z:p.z,ico:'✈️',name:'Flugzeug'});});
-  if(cityBuilt){for(const id in STOPS)m.push({x:STOPS[id].x,z:STOPS[id].z,ico:'🚋',name:'Haltestelle'});m.push({x:SHOP_AT.x,z:SHOP_AT.z,ico:'🛒',name:'Fahrzeug-Laden'});m.push({x:MUSEUM_AT.x,z:MUSEUM_AT.z,ico:'🏛️',name:'Museum'});
+  if(cityBuilt){for(const id in STOPS)m.push({x:STOPS[id].x,z:STOPS[id].z,ico:'🚋',name:'Haltestelle'});m.push({x:SHOP_AT.x,z:SHOP_AT.z,ico:'🛒',name:'Fahrzeug-Laden'});m.push({x:MUSEUM_AT.x,z:MUSEUM_AT.z,ico:'🏛️',name:'Museum'});m.push({x:BOOTSHAFEN_AT.x,z:BOOTSHAFEN_AT.z,ico:'⛵',name:'Bootshafen'});
     m.push({x:hannesHafen.x,z:hannesHafen.z,ico:'🐟',name:'Fischer Hannes'});
-    buoyList.forEach(b=>m.push({x:b.x,z:b.z,ico:b.farbe==='rot'?'🔴':'🟢',name:b.farbe==='rot'?'Rote Boje':'Grüne Boje'}));m.push({x:SANDBANK.x,z:SANDBANK.z,ico:'🦭',name:'Seehunde'});
+    buoyList.forEach(b=>m.push({x:b.x,z:b.z,ico:b.farbe==='rot'?'🔴':'🟢',name:b.farbe==='rot'?'Rote Boje':'Grüne Boje'}));m.push({x:SANDBANK.x,z:SANDBANK.z,ico:'🦭',name:'Seehunde'});m.push({x:ISLAND.x,z:ISLAND.z,ico:'🏝️',name:'Insel'});
+    if(state.city.luxus&&luxusMesh)m.push({x:luxusMesh.position.x,z:luxusMesh.position.z,ico:'🛥️',name:'Deine Luxusyacht'});
     VEHICLE_IDS.forEach(id=>{if(!state.city.vehicles[id]||player.ride===id)return;const v=vehicleAt(id);m.push({x:v.x,z:v.z,ico:VEHICLES[id].ico,name:'Dein '+VEHICLES[id].name});});}
   if(deP)m.push({x:hannes.x,z:hannes.z,ico:'🐟',name:'Fischer Hannes'});
   m.push({x:hannesSee.x,z:hannesSee.z,ico:'🐟',name:'Fischer Hannes'});
@@ -4076,8 +4167,8 @@ function showCityMap(sea){if(typeof sea!=='boolean')sea=atSea();
   card.appendChild(el('p',null,(sea?'Vor dem Hafen liegt das <b>Meer</b> mit einer Insel und einer Sandbank.':'Du bist in der Stadt <b>Hafenhausen</b>.')+' Der rote Pfeil bist du. Norden ist oben.'));
   const row=el('div','maprow'),w=el('div','mapwrap'),cv=el('canvas');cv.id='cityMap';w.appendChild(cv);row.appendChild(w);
   const leg=el('div','maplegend');
-  (sea?[['🔴','Rote Boje: links, wenn du in den Hafen fährst'],['🟢','Grüne Boje: rechts, wenn du in den Hafen fährst'],['🦭','Seehunde auf der Sandbank'],['🏝️','Insel mit Steg und Leuchtturm']]
-    :[['🚋','Haltestelle der Straßenbahn'],['🛒','Fahrzeug-Laden'],['🐟','Fischer Hannes (Angeln am Hafen)'],['🚲','Dein Fahrrad'],['✈️','Flugzeug'],['🏛️','Museum'],['🍾','Flaschenpost'],['🟫','Haus']]).forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
+  (sea?[['🔴','Rote Boje: links, wenn du in den Hafen fährst'],['🟢','Grüne Boje: rechts, wenn du in den Hafen fährst'],['🦭','Seehunde auf der Sandbank'],['🏝️','Insel mit Steg und Leuchtturm'],['🛥️','Deine Luxusyacht']]
+    :[['🚋','Haltestelle der Straßenbahn'],['🛒','Fahrzeug-Laden'],['🐟','Fischer Hannes (Angeln am Hafen)'],['🚲','Dein Fahrrad'],['✈️','Flugzeug'],['🏛️','Museum'],['⛵','Bootshafen'],['🛥️','Deine Luxusyacht'],['🍾','Flaschenpost'],['🟫','Haus']]).forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
   row.appendChild(leg);card.appendChild(row);
   card.appendChild(aufgabenList());
   card.appendChild(towList());
@@ -4349,6 +4440,7 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
     fichten:(()=>{const f=[];scene.traverse(o=>{if(o.isInstancedMesh&&o.geometry===FICHTE)f.push(o.material===wieseMat);});return f.length>0&&f.every(Boolean);})(),blueten:bloomOn&&blooms.size>0&&[...blooms].every(p=>p.visible)}),
   hoehe:(x,z)=>heightAt(x,z),
   bojen:()=>buoyList.map(b=>({x:b.x,z:b.z,farbe:b.farbe})), // Bojen auf dem Meer vor dem Hafen
+  luxus:()=>luxusMesh?{sichtbar:luxusMesh.visible,x:luxusMesh.position.x,z:luxusMesh.position.z,yaw:luxusMesh.rotation.y,name:luxusName&&luxusName.text}:null, // Luxusyacht in Hafenhausen
   // Hafenhausen: ist (x,z) auf dem Gehweg / der Straße, wie weit von den Schienen, und wie weit von jeder Haustür (Haus-Mitte + halbe Tiefe in Türrichtung)?
   stadtPunkt:(x,z)=>({walk:onWalk(x,z),road:onRoad(x,z),rail:railDist(x,z),tueren:cityHouses.map(h=>{const [tx,tz]=rotXZ(h.x,h.z,h.ry,0,-h.d/2);return Math.hypot(tx-x,tz-z);})}),
   fischInfo:id=>({fact:FISH_BY[id].fact,anzahl:FISH.length}),
