@@ -242,7 +242,9 @@ test('Fotos: jeder Fisch hat ein echtes Foto, und der Eimer zeigt Fotos', async 
   const fishList = html.slice(html.indexOf('const FISH=['), html.indexOf('];', html.indexOf('const FISH=[')));
   const ids = [...fishList.matchAll(/\{id:'(\w+)'/g)].map(m => m[1]);
   const fotos = html.slice(html.indexOf('const FOTOS={'), html.indexOf('};', html.indexOf('const FOTOS={')));
-  assert.equal(ids.length, 42, '15 Amazonas-Fische, 10 See-Fische, 12 Flussfische und 5 Meeresfische');
+  assert.ok(ids.length > 0);
+  assert.equal(new Set(ids).size, ids.length, 'jede Fisch-id gibt es nur einmal');
+  assert.equal([...fotos.matchAll(/^ (\w+):\{src:'fotos\//gm)].length, ids.length, 'genauso viele Fotos wie Fische');
   for (const id of ids) {
     assert.ok(fotos.includes(` ${id}:{src:'fotos/${id}.jpg'`), `FOTOS-Eintrag für ${id}`);
     assert.ok(fs.existsSync(path.join(root, 'fotos', id + '.jpg')), `fotos/${id}.jpg`);
@@ -371,7 +373,8 @@ test('Fischbuch: nur echte Fotos, keine gemalten Fische', async () => {
   await page.click('#btnBook');
   await page.locator('#card .bk img.bkimg').first().waitFor({ timeout: 5000 });
   assert.equal(await page.locator('#card .bk img.bkimg').count(), 2, 'Piranha und Diskus als Foto');
-  assert.equal(await page.locator('#card .bk .unknown').count(), 40, 'die anderen sind ein Fragezeichen');
+  const anzahl = (await page.evaluate(() => window.__test.fischInfo('piranha'))).anzahl;
+  assert.equal(await page.locator('#card .bk .unknown').count(), anzahl - 2, 'die anderen sind ein Fragezeichen');
   assert.equal(await page.locator('#card canvas').count(), 0, 'kein gemalter Fisch');
   await page.click('#card button.bk:has-text("Piranha")');
   await page.locator('#card .pic img.photo').waitFor();
@@ -454,7 +457,8 @@ test('Bestenliste: Spieler auf diesem iPad, sortiert nach Ludins', async () => {
   assert.match(await rows.nth(0).textContent(), /Papa.*1210 L/);
   assert.match(await rows.nth(1).textContent(), /Testkind.*345 L/);
   await page.click('#card .tabs button:has-text("Fischarten")');
-  assert.match(await page.locator('#card .rankrow').nth(0).textContent(), /Testkind.*2 \/ 42/);
+  const anzahl = (await page.evaluate(() => window.__test.fischInfo('piranha'))).anzahl;
+  assert.match(await page.locator('#card .rankrow').nth(0).textContent(), new RegExp('Testkind.*2 / ' + anzahl + '\\b'));
   await page.click('#card .rankrow:has-text("Papa")');
   assert.match(await page.textContent('#card .catches'), /Hecht.*2× · größter 95 cm/);
   assert.deepEqual(errors, []);
@@ -1136,12 +1140,14 @@ test('Hafenhausen: an der Kaimauer beißen Meeresfische', async () => {
   await page.click('#btnGo');
   await page.click('#btnFish');
   await page.waitForFunction(() => document.querySelector('#fishLbl').textContent === 'ZIEHEN!', null, { timeout: 60000, polling: 200 });
+  const probe = await page.evaluate(() => window.__test.fische(400)); // im Hafen: nur die 5 Hafenfische, kein Hochseefisch
   await page.keyboard.press('Space');
   await page.locator('#card h2:has-text("gefangen")').waitFor();
   const s = JSON.parse(await read(page));
   const ids = Object.keys(s.book);
   assert.equal(ids.length, 1);
   assert.ok(MEERESFISCHE.includes(ids[0]), ids[0] + ' ist ein Meeresfisch');
+  assert.deepEqual(probe.filter(id => !MEERESFISCHE.includes(id)), [], 'im Hafen beißen nur die 5 Hafenfische');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -2177,7 +2183,7 @@ test('Museum: Fisch spenden und ansehen', async () => {
   const n = info.anzahl;
   assert.match(await page.textContent('#card'), new RegExp('1 von ' + n + '\\b'));
   assert.equal(await page.locator('#card .bk .unknown').count(), n - 1, 'alle anderen sind „?“');
-  for (const t of ['Amazonas', 'Heimat-See', 'Flüsse', 'Meer']) assert.ok(await page.locator('#card h3.bookhead:has-text("' + t + '")').count() >= 1, t);
+  for (const t of ['Amazonas', 'Heimat-See', 'Flüsse', 'Meer', 'Offenes Meer']) assert.ok(await page.locator('#card h3.bookhead:has-text("' + t + '")').count() >= 1, t);
   // nach dem Neuladen ist der Hering noch da
   await startGame(page);
   await page.click('#btnGo');
@@ -2476,9 +2482,11 @@ test('Tagesfisch: jeden Tag fest, nie Bootsfisch, seltener Fisch oder Schonzeit'
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8'), RULES = spielRegeln();
   const boot = [...html.matchAll(/\{id:'(\w+)'[^\n]*boat:true/g)].map(m => m[1]);
   assert.deepEqual(boot, ['piraiba', 'arapaima']);
+  const heim = fischHeime();
   tage.forEach(([d, k], i) => {
     const id = ids[i], r = RULES[id];
     assert.ok(!boot.includes(id), k + ': ' + id + ' gibt es nur vom Boot');
+    assert.notEqual(heim[id], 'hochsee', k + ': ' + id + ' ist ein Hochseefisch');
     assert.ok(!(r && r.selten), k + ': ' + id + ' ist ein seltener Fisch');
     assert.ok(!schonzeitAm(r, d), k + ': ' + id + ' hat Schonzeit');
   });
@@ -3125,7 +3133,7 @@ test('Klarere Texte: Spinnfischen sagt „platscht“, Was ist neu v41', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   assert.match(html, /miss:'wenn es am Köder platscht'/);
   assert.doesNotMatch(html, /am Köder spritzt/);
-  const n = newsListe()[0];
+  const n = newsListe().find(n => n.v === 41);
   assert.deepEqual({ v: n.v, day: n.day, ico: n.ico, t: n.t, d: n.d }, { v: 41, day: '27.10.2026', ico: '📅', t: 'Heute für dich',
     d: 'Tipp auf die Uhr oben: Dort steht, was heute für dich ansteht – und was du schon geschafft hast.' });
 });
@@ -3418,4 +3426,74 @@ test('Wasser: nach dem Flug von Hafenhausen zum Amazonas wieder Flusswasser', as
   assert.deepEqual(await page.evaluate(() => window.__test.wasser()), { fluss: true, meer: false }, 'am Amazonas: Flusswasser');
   assert.deepEqual(errors, []);
   await ctx.close();
+});
+
+// Hochseefische (home:'hochsee'): beißen nur draußen auf dem Meer (an Bord der Luxusyacht oder am Ufer der Insel).
+// fischHeime liest aus FISH in index.html, wo jeder Fisch lebt (ohne home = Amazonas).
+function fischHeime() {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const i = html.indexOf('const FISH=['), j = html.indexOf('];', i), h = {};
+  for (const [, id, rest] of html.slice(i, j).matchAll(/\{id:'(\w+)'([^\n]*)/g)) { const m = rest.match(/home:'(\w+)'/); h[id] = m ? m[1] : 'amazonas'; }
+  return h;
+}
+const HOCHSEE = ['seelachs', 'steinbutt', 'thunfisch'];
+const DRAUSSEN = ['meer', 'hochsee'];
+
+test('Hochsee: draußen beißen nur Meeres- und Hochseefische', async () => {
+  const heim = fischHeime();
+  assert.deepEqual(Object.keys(heim).filter(id => heim[id] === 'hochsee'), HOCHSEE, '3 Hochseefische');
+  assert.deepEqual(spielRegeln().thunfisch.selten, true, 'der Rote Thun ist ein seltener Fisch');
+  const { ctx, page, errors } = await yachtSeite({ book: {} });
+  await anBord(page);
+  assert.equal(await page.evaluate(() => window.__test.luxusWarp({ x: 0, z: -3400, yaw: Math.PI })), true, 'mitten auf dem Meer');
+  const w = await wo(page), p = await page.evaluate(() => window.__test.wurf());
+  assert.equal(w.atSea, true);
+  assert.ok(p, 'von Bord aus findet man Wasser');
+  const d = Math.hypot(p.x - w.x, p.z - w.z);
+  assert.ok(d >= 6.9 && d <= 11.1, 'von Bord wirft man weit, über den Bug hinaus: ' + d);
+  const probe = await dreiFaenge(page);
+  const s = JSON.parse(await read(page));
+  const ids = Object.keys(s.book);
+  assert.ok(ids.length >= 1);
+  for (const id of ids) assert.ok(DRAUSSEN.includes(heim[id]), id + ' lebt im Meer');
+  assert.equal(probe.angel.length, 400);
+  for (const id of probe.angel) assert.ok(DRAUSSEN.includes(heim[id]), id + ' lebt im Meer');
+  assert.ok(probe.angel.concat(ids).some(id => heim[id] === 'hochsee'), 'draußen beißen auch Hochseefische');
+  assert.ok(probe.angel.some(id => heim[id] === 'meer'), 'und manchmal ein Fisch aus dem Hafen');
+  assert.equal((await wo(page)).ride, 'luxus', 'man ist noch an Bord');
+  // Fischbuch: neuer Teil „Offenes Meer“ (auf See steht er oben)
+  await page.click('#btnBook');
+  const teile = await page.locator('#card h3.bookhead').allTextContents();
+  assert.match(teile[0], /^Offenes Meer \d von 3$/, 'auf See steht das offene Meer oben: ' + teile);
+  assert.ok(teile.some(t => t.startsWith('Meer (Hafen von Hafenhausen)')), 'der Hafen-Teil bleibt');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hochsee: von der Insel aus beißen sie auch', async () => {
+  const heim = fischHeime(), I = stadtWert('ISLAND');
+  const ufer = { x: I.x, z: I.z - 17, f: Math.PI, boat: false }; // Südufer der Insel, Blick aufs Meer
+  const { ctx, page, errors } = await stadtSeite({ book: {}, where: ufer }, YACHT_ISO);
+  const w = await wo(page);
+  assert.equal(w.atSea, true, 'auf der Insel');
+  assert.equal(await page.evaluate(w => window.__test.begehbar(w.x, w.z), w), true, 'man steht am Ufer');
+  assert.ok(await page.evaluate(() => window.__test.wurf()), 'vor einem ist Wasser');
+  await page.click('#btnFish');
+  await page.waitForFunction(() => document.querySelector('#fishLbl').textContent === 'ZIEHEN!', null, { timeout: 60000, polling: 200 });
+  const probe = await page.evaluate(() => window.__test.fische(400));
+  await page.keyboard.press('Space');
+  await page.locator('#card h2:has-text("gefangen")').waitFor();
+  const ids = Object.keys(JSON.parse(await read(page)).book);
+  assert.equal(ids.length, 1);
+  assert.ok(DRAUSSEN.includes(heim[ids[0]]), ids[0] + ' lebt im Meer');
+  for (const id of probe) assert.ok(DRAUSSEN.includes(heim[id]), id + ' lebt im Meer');
+  assert.ok(probe.some(id => heim[id] === 'hochsee'), 'von der Insel beißen auch Hochseefische');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Was ist neu v42: Luxusyacht', () => {
+  const n = newsListe()[0];
+  assert.deepEqual({ v: n.v, day: n.day, ico: n.ico, t: n.t, d: n.d }, { v: 42, day: '28.10.2026', ico: '🛥️', t: 'Luxusyacht',
+    d: 'Am Hafen gibt es jetzt einen Bootshafen. Kauf dir die schwarz-goldene Luxusyacht und fahr hinaus aufs Meer – zur Insel und zu den Seehunden!' });
 });

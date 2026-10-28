@@ -26,6 +26,7 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [x] Hafenhausen mit Fahrzeugen (Fahrrad, Roller, Skateboard, Cyber-Truck, Straßenbahn)
 - [x] Animal-Crossing-Welt: echte Tageszeit, Jahreszeiten, Fische nach Uhrzeit, Öffnungszeiten, Verkehrsregeln, Nachbarn, Museum, Tagesfisch und Flaschenpost
 - [x] Menschen mit Aufgaben
+- [x] Luxusyacht: Bootshafen, aufs Meer fahren (Insel, Seehunde, Bojen), 3 Hochseefische (Köhler, Steinbutt, Thunfisch)
 
 ## Als Nächstes
 - [ ] Haus: Möbel

@@ -1,7 +1,7 @@
 # Bildnachweis – Fischfotos
 
 Alle Fotos kommen von [Wikimedia Commons](https://commons.wikimedia.org) und stehen unter freien Lizenzen.
-Sie wurden für das Spiel auf 800 × 600 Pixel zugeschnitten und verkleinert. Bei Pfauenbarsch, Arowana, Rotauge, Barsch, Döbel, Karpfen, Hecht, den Flussfischen (außer dem Aland) sowie bei Makrele, Scholle und Hornhecht ist der Rand mit einer unscharfen Kopie des Fotos aufgefüllt, damit der ganze Fisch zu sehen ist. Sonst wurde nichts verändert.
+Sie wurden für das Spiel auf 800 × 600 Pixel zugeschnitten und verkleinert. Bei Pfauenbarsch, Arowana, Rotauge, Barsch, Döbel, Karpfen, Hecht, den Flussfischen (außer dem Aland) sowie bei Makrele, Scholle und Hornhecht ist der Rand mit einer unscharfen Kopie des Fotos aufgefüllt, damit der ganze Fisch zu sehen ist. Sonst wurde nichts verändert. Beim Steinbutt ist das Foto ganz leicht weichgezeichnet, damit die Datei klein bleibt (der Sand hat sehr viele feine Körner).
 Im Spiel steht unter jedem Foto der Name des Fotografen und die Lizenz. Die Links stehen nur hier, damit Kinder im Spiel nicht ins Internet gelangen.
 
 | Fisch | Datei | Foto von | Lizenz |
@@ -48,3 +48,6 @@ Im Spiel steht unter jedem Foto der Name des Fotografen und die Lizenz. Die Link
 | Dorsch | [Atlantic Cod, Atlantischer Kabeljau (Gadus morhua).jpg](https://commons.wikimedia.org/wiki/File:Atlantic_Cod,_Atlantischer_Kabeljau_(Gadus_morhua).jpg) | Wilhelm Thomas Fiege | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
 | Scholle | [Pleuronectidae Pleuronectes platessa 1.jpg](https://commons.wikimedia.org/wiki/File:Pleuronectidae_Pleuronectes_platessa_1.jpg) | NasserHalaweh | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
 | Hornhecht | [Belone belone - Sardegna.JPG](https://commons.wikimedia.org/wiki/File:Belone_belone_-_Sardegna.JPG) | euparkeria | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
+| Köhler (Seelachs) | [Pollachius virens 01.jpg](https://commons.wikimedia.org/wiki/File:Pollachius_virens_01.jpg) | Tino Strauss | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0) |
+| Steinbutt | [Psetta maxima Luc Viatour.jpg](https://commons.wikimedia.org/wiki/File:Psetta_maxima_Luc_Viatour.jpg) | Luc Viatour | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0) |
+| Thunfisch (Roter Thun) | [Group of tuna.jpg](https://commons.wikimedia.org/wiki/File:Group_of_tuna.jpg) | Danilo Cedrone (Ernährungs- und Landwirtschaftsorganisation der Vereinten Nationen, FAO) | Public domain |
