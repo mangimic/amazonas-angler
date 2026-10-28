@@ -50,4 +50,4 @@ Im Spiel steht unter jedem Foto der Name des Fotografen und die Lizenz. Die Link
 | Hornhecht | [Belone belone - Sardegna.JPG](https://commons.wikimedia.org/wiki/File:Belone_belone_-_Sardegna.JPG) | euparkeria | [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0) |
 | Köhler (Seelachs) | [Pollachius virens 01.jpg](https://commons.wikimedia.org/wiki/File:Pollachius_virens_01.jpg) | Tino Strauss | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0) |
 | Steinbutt | [Psetta maxima Luc Viatour.jpg](https://commons.wikimedia.org/wiki/File:Psetta_maxima_Luc_Viatour.jpg) | Luc Viatour | [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0) |
-| Thunfisch (Roter Thun) | [Group of tuna.jpg](https://commons.wikimedia.org/wiki/File:Group_of_tuna.jpg) | Danilo Cedrone (Ernährungs- und Landwirtschaftsorganisation der Vereinten Nationen, FAO) | Public domain |
+| Thunfisch (Roter Thun) | [Group of tuna.jpg](https://commons.wikimedia.org/wiki/File:Group_of_tuna.jpg) | Danilo Cedrone (Ernährungs- und Landwirtschaftsorganisation der Vereinten Nationen, FAO), über die NOAA Photo Library | Public domain (Commons-Vorlage PD-USGov-NOAA) |
