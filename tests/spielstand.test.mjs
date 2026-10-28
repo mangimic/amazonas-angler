@@ -2879,8 +2879,11 @@ test('Heute: ein Fang zählt Fische und neue Arten, ein Verkauf zählt Ludins', 
 
 test('Heute: Fische aus der Reuse zählen, Arten nur beim ersten Mal', async () => {
   const { ctx, page, errors } = await newPage();
+  // Die Uhr im Spiel ist verschoben (heute 11 Uhr). Darum kommt „vor 1 Minute“ von der Uhr der Seite, nicht von Node:
+  // sonst ist die Reuse je nach Uhrzeit Stunden alt (dann schwimmt ein dritter Fisch hinein) oder liegt in der Zukunft.
+  const jetzt = await page.evaluate(() => Date.now());
   await seed(page, { [KEY]: stadtSeed({ visitedLake: true, ludins: 0, book: { ...ALT_V1.book, rotauge: { n: 1, best: 20 } },
-    traps: [{ x: 10, z: -936, t: Date.now() - 60 * 1000, fish: [{ id: 'rotauge', cm: 20, value: 5 }, { id: 'karpfen', cm: 60, value: 25 }] }],
+    traps: [{ x: 10, z: -936, t: jetzt - 60 * 1000, fish: [{ id: 'rotauge', cm: 20, value: 5 }, { id: 'karpfen', cm: 60, value: 25 }] }],
     where: { x: 10, z: -940, f: 0, boat: false } }) });
   await startGame(page);
   await page.click('#btnGo');
@@ -2967,10 +2970,9 @@ test('Spielzeit-Ende zeigt, was du heute geschafft hast', async () => {
     [{ day: HEUTE_TAG, fische: 1, ludins: 0, arten: 2 }, 'Heute geschafft: 🐟 1 Fisch · 📖 2 neue Arten'],
     [{ day: HEUTE_TAG, fische: 0, ludins: 0, arten: 0 }, 'Schön, dass du da warst!']]) {
     const { ctx, page, errors } = await startZeitSeite(HEUTE_ISO);
-    await seed(page, { [KEY]: stadtSeed({ heute, playTime: { day: '2026-10-31', sec: 15 * 60 - 1, extra: 0 } }), [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) });
-    await startGame(page);
-    await page.click('#btnGo');
-    await page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 10000 });
+    await seed(page, { [KEY]: stadtSeed({ heute, playTime: { day: HEUTE_TAG, sec: 15 * 60, extra: 0 } }), [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) }); // Zeit schon ganz aufgebraucht: kein Wettlauf gegen 1 Sekunde
+    await startGame(page); // die Pause kommt gleich beim Laden (die Zeit zählt schon auf dem Startbildschirm), darum kein Klick auf „Los geht's“
+    await page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 30000 }); // großzügig für langsame Rechner
     assert.equal((await page.textContent('#timeup .geschafft')).trim(), soll);
     assert.match(await page.textContent('#timeup'), /Morgen wartet: eine neue Flaschenpost 🍾 und ein neuer Tagesfisch ⭐/);
     assert.equal(await page.isVisible('#btnMoreTime'), true, 'die Knöpfe für Erwachsene bleiben');
