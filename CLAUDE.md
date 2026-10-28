@@ -57,7 +57,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Der Flussplatz liegt in der Welt bei z um −1800 (`DE`) und wird beim Hinfliegen neu gebaut (`buildSpot`). Kartendaten: Natural Earth (gemeinfrei).
   An jedem Flussplatz und am Heimat-See (`hannesSee`) steht der Stand von **Fischer Hannes** (`buildHannes`, `showHannes`): Fische verkaufen (wie bei Rosa, `sellList`)
   und Angelsachen kaufen (Opa Tiagos Waren ohne Boote, `buyList`). Er grüßt wie im Bundesland (`GRUSS`, z. B. „Grüß Gott“, „Moin“).
-- **Stadtwelt Hafenhausen** (Angeln geht dort nur im Hafen): Mit dem Flugzeug erreichbar, liegt in der Welt bei z um −3000
+- **Stadtwelt Hafenhausen** (Angeln geht dort nur im Hafen und draußen auf dem Meer): Mit dem Flugzeug erreichbar, liegt in der Welt bei z um −3000
   (`CITY`, gebaut von `buildCity`). Häuser, Markt mit Brunnen, Hafen, Park, 24 Menschen, die winken. Der **Flugplatz liegt im Osten** der Stadt.
   Fahrzeuge in `VEHICLES`: 🚲 Fahrrad (hat jeder, 11 m/s), 🛴 Roller und 🛹 Skateboard (je 60 Ludins, 8 m/s), ⚡ **Cyber-Truck** mit Hupe
   (800 Ludins, 20 m/s, **ohne Logo/Marke**). Kaufen im Fahrzeug-Laden (`SHOP_AT`). Geparkt wird, wo man absteigt.
@@ -74,6 +74,15 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Stadtplan: Norden oben, Osten rechts (die kleine Karte zeigt wie überall Norden rechts).
   Was sich bewegt oder ein-/ausgeblendet wird, erst nach `bakeCells` bauen. `heightAt` prüft `CITY` vor `DE`.
   Die Stadt wird für weniger Zeichen-Aufrufe zusammengefasst (`bakeCells`, `bakeKids`); in `buildCity` die Reihenfolge der Zufallszahlen nie ändern.
+  **Luxusyacht und Meer**: Südlich vom Hafen liegt das offene Meer (`SEA`, `atSea()`) mit einer **Insel** (`ISLAND`, Steg und Leuchtturm)
+  und einer **Sandbank** mit Seehunden (`SANDBANK`, für Boote zu flach, Abstand halten). Im **Bootshafen** (`BOOTSHAFEN_AT`) kauft man die
+  schwarz-goldene Luxusyacht (`LUXUS`). Sie liegt an einem Steg (`LUXUS_BERTHS`: `hafen`, `insel`). Gefahren wird mit `player.ride==='luxus'`
+  (`updateLuxus`), aussteigen geht nur an einem Steg. Gespeichert wird immer zu Fuß auf dem nächsten Steg: `state.city.luxus` (gekauft),
+  `state.city.yachtAt` (Liegeplatz). **Schlüssel in `LUXUS_BERTHS` nie ändern** (stehen im Spielstand). Bojen an der Fahrrinne wie in Deutschland
+  (IALA A): von See kommend **rot links, grün rechts**. Von Bord darf man angeln (`fishPress`, weiter Wurf über den Bug).
+  Draußen auf dem Meer (an Bord oder am Ufer der Insel) beißen die 3 **Hochseefische** (`home:'hochsee'`: Köhler `seelachs`, Steinbutt, Thunfisch)
+  und die Hafenfische (nur halb so oft). Der Thunfisch (Roter Thun) ist ein seltener Fisch (`RULES`, immer zurücksetzen).
+  Hochseefische sind nie Tagesfisch und nie Aufgaben-Fisch.
 - **Animal-Crossing-Welt** (Fakten-Quellen in `docs/fakten-quellen.md`):
   **Echte Tageszeit**: Uhrzeit und Datum vom iPad (`WT`, `updateWorldTime`, alle 30 s). Himmel, Sonne, Sterne, Mond; Amazonas fast am Äquator, Deutschland bei 51° Nord.
   **Jahreszeiten** in Deutschland (`applySeason`, Farben über `laubMat`/`wieseMat`), am Amazonas immer grün (Tafel `regenzeit`).
@@ -92,7 +101,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
   trägt den Avatar-Namen am Rumpf, Fischtank an Bord = 20 Plätze mehr im Eimer. Werte in `YACHT`.
-- **Echte Fotos** von allen 42 Fischen (15 Amazonas, 10 See, 12 Fluss, 5 Meer), Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`.
+- **Echte Fotos** von allen 45 Fischen (15 Amazonas, 10 See, 12 Fluss, 5 Meer, 3 Hochsee), Wikimedia Commons, Nachweis in `fotos/BILDNACHWEIS.md`.
   Fang, Fischbuch, Eimer, Rosa und Reuse zeigen immer das Foto. Noch nicht gefangene Fische zeigt das Fischbuch als „?“.
 
 ## Technik

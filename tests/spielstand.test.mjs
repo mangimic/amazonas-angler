@@ -1,7 +1,7 @@
 // Prüft, dass der Spielstand nach einem neuen Update erhalten bleibt.
 // Start:  cd tests && npm install && npm test
 // Die Tests öffnen das echte Spiel in einem unsichtbaren Browser.
-import { test, before, after } from 'node:test';
+import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -32,20 +32,28 @@ before(async () => {
   catch { browser = await chromium.launch({ ...opts, executablePath: '/opt/pw-browsers/chromium' }); }
 });
 after(async () => { await browser?.close(); server?.close(); });
+// Nach jedem Test alle Browserfenster schließen, auch wenn der Test vorher abgebrochen ist (Fehler, Zeitüberschreitung).
+// Sonst rechnet das offene Spiel weiter an seinen Bildern (ohne Grafikkarte macht das die CPU), und alle
+// folgenden Tests warten beim Laden so lange darauf, bis sie selbst die Zeit überschreiten.
+afterEach(async () => { for (const c of browser?.contexts() || []) await c.close().catch(() => {}); });
 
 // Neues Browserfenster. Three.js kommt aus npm statt aus dem Internet, Schriften werden übersprungen.
 // Die Uhr im Spiel steht am Anfang immer auf heute, 11 Uhr (Ortszeit dieses Rechners), und läuft dann weiter.
 // So ist im Spiel immer Tag, auch wenn die Tests nachts laufen (Läden zu, Menschen schlafen …).
 // Nur Date wird verschoben. Nicht ctx.clock.setSystemTime: die Playwright-Uhr springt bei langsamen Bildern
 // manchmal viele Sekunden vor (dann ist z. B. der Kunstköder beim Spinnfischen sofort wieder da).
+// Auch nicht ctx.clock.setFixedTime: die Playwright-Uhr ersetzt requestAnimationFrame durch setTimeout. Dann malt
+// das Spiel ohne Pause Bilder, der Grafik-Prozess des Browsers ist voll, und andere Seiten laden 30 s und länger.
+// Eine feste Uhrzeit stellt festeZeit ein (nur Date bleibt stehen).
 // start (ISO-Zeit, z. B. '2026-06-21T23:00:00+02:00'): die Uhr beginnt stattdessen dann und läuft weiter (für Angel-Tests zu einer Uhrzeit).
 async function newPage(opts, start) { // opts: z. B. { viewport: … } (kleineres Fenster = mehr Bilder pro Sekunde)
   const ctx = await browser.newContext(opts);
   const elf = start ? new Date(start) : new Date(); if (!start) elf.setHours(11, 0, 0, 0);
   await ctx.addInitScript(off => {
     const Echt = Date;
-    function Uhr(...a) { if (!new.target) return new Echt(Echt.now() + off).toString(); return a.length ? new Echt(...a) : new Echt(Echt.now() + off); }
-    Uhr.prototype = Echt.prototype; Uhr.now = () => Echt.now() + off; Uhr.UTC = Echt.UTC; Uhr.parse = Echt.parse;
+    const jetzt = () => typeof window.__festeZeit === 'number' ? window.__festeZeit : Echt.now() + off;
+    function Uhr(...a) { if (!new.target) return new Echt(jetzt()).toString(); return a.length ? new Echt(...a) : new Echt(jetzt()); }
+    Uhr.prototype = Echt.prototype; Uhr.now = jetzt; Uhr.UTC = Echt.UTC; Uhr.parse = Echt.parse;
     window.Date = Uhr;
   }, elf.getTime() - Date.now());
   const page = await ctx.newPage();
@@ -242,7 +250,9 @@ test('Fotos: jeder Fisch hat ein echtes Foto, und der Eimer zeigt Fotos', async 
   const fishList = html.slice(html.indexOf('const FISH=['), html.indexOf('];', html.indexOf('const FISH=[')));
   const ids = [...fishList.matchAll(/\{id:'(\w+)'/g)].map(m => m[1]);
   const fotos = html.slice(html.indexOf('const FOTOS={'), html.indexOf('};', html.indexOf('const FOTOS={')));
-  assert.equal(ids.length, 42, '15 Amazonas-Fische, 10 See-Fische, 12 Flussfische und 5 Meeresfische');
+  assert.ok(ids.length > 0);
+  assert.equal(new Set(ids).size, ids.length, 'jede Fisch-id gibt es nur einmal');
+  assert.equal([...fotos.matchAll(/^ (\w+):\{src:'fotos\//gm)].length, ids.length, 'genauso viele Fotos wie Fische');
   for (const id of ids) {
     assert.ok(fotos.includes(` ${id}:{src:'fotos/${id}.jpg'`), `FOTOS-Eintrag für ${id}`);
     assert.ok(fs.existsSync(path.join(root, 'fotos', id + '.jpg')), `fotos/${id}.jpg`);
@@ -371,7 +381,8 @@ test('Fischbuch: nur echte Fotos, keine gemalten Fische', async () => {
   await page.click('#btnBook');
   await page.locator('#card .bk img.bkimg').first().waitFor({ timeout: 5000 });
   assert.equal(await page.locator('#card .bk img.bkimg').count(), 2, 'Piranha und Diskus als Foto');
-  assert.equal(await page.locator('#card .bk .unknown').count(), 40, 'die anderen sind ein Fragezeichen');
+  const anzahl = (await page.evaluate(() => window.__test.fischInfo('piranha'))).anzahl;
+  assert.equal(await page.locator('#card .bk .unknown').count(), anzahl - 2, 'die anderen sind ein Fragezeichen');
   assert.equal(await page.locator('#card canvas').count(), 0, 'kein gemalter Fisch');
   await page.click('#card button.bk:has-text("Piranha")');
   await page.locator('#card .pic img.photo').waitFor();
@@ -454,7 +465,8 @@ test('Bestenliste: Spieler auf diesem iPad, sortiert nach Ludins', async () => {
   assert.match(await rows.nth(0).textContent(), /Papa.*1210 L/);
   assert.match(await rows.nth(1).textContent(), /Testkind.*345 L/);
   await page.click('#card .tabs button:has-text("Fischarten")');
-  assert.match(await page.locator('#card .rankrow').nth(0).textContent(), /Testkind.*2 \/ 42/);
+  const anzahl = (await page.evaluate(() => window.__test.fischInfo('piranha'))).anzahl;
+  assert.match(await page.locator('#card .rankrow').nth(0).textContent(), new RegExp('Testkind.*2 / ' + anzahl + '\\b'));
   await page.click('#card .rankrow:has-text("Papa")');
   assert.match(await page.textContent('#card .catches'), /Hecht.*2× · größter 95 cm/);
   assert.deepEqual(errors, []);
@@ -819,7 +831,7 @@ function stadtWert(name) {
   assert.ok(Number.isFinite(o.x) && Number.isFinite(o.z), name + ' hat x und z als Zahlen');
   return o;
 }
-const STADT_START = { visited: false, vehicles: { bike: true, roller: false, skate: false, truck: false }, parked: {}, riding: '' };
+const STADT_START = { visited: false, vehicles: { bike: true, roller: false, skate: false, truck: false }, parked: {}, riding: '', luxus: false, yachtAt: 'hafen' };
 
 test('Hafenhausen: hinfliegen, Ort bleibt gespeichert, Angeln geht dort nicht', async () => {
   const VX = 10 * Math.sin(1) + 24, L = stadtWert('CITY_LAND'); // wie im Spiel: riverX(0)+24
@@ -1136,12 +1148,14 @@ test('Hafenhausen: an der Kaimauer beißen Meeresfische', async () => {
   await page.click('#btnGo');
   await page.click('#btnFish');
   await page.waitForFunction(() => document.querySelector('#fishLbl').textContent === 'ZIEHEN!', null, { timeout: 60000, polling: 200 });
+  const probe = await page.evaluate(() => window.__test.fische(400)); // im Hafen: nur die 5 Hafenfische, kein Hochseefisch
   await page.keyboard.press('Space');
   await page.locator('#card h2:has-text("gefangen")').waitFor();
   const s = JSON.parse(await read(page));
   const ids = Object.keys(s.book);
   assert.equal(ids.length, 1);
   assert.ok(MEERESFISCHE.includes(ids[0]), ids[0] + ' ist ein Meeresfisch');
+  assert.deepEqual(probe.filter(id => !MEERESFISCHE.includes(id)), [], 'im Hafen beißen nur die 5 Hafenfische');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -1290,11 +1304,104 @@ test('Hafenhausen: in der Straßenbahn wegfliegen geht nicht, speichern setzt an
   await ctx.close();
 });
 
+// Das offene Meer südlich vom Hafen. meerWert liest const NAME={…} mit reinen Zahlen (auch ohne x/z, z. B. SEA).
+function meerWert(name) {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = html.match(new RegExp('const ' + name + '=\\{([^}]*)\\}'));
+  assert.ok(m, name + ' steht in index.html');
+  const o = {};
+  for (const [, k, v] of m[1].matchAll(/(\w+):(-?\d+(?:\.\d+)?)/g)) o[k] = Number(v);
+  return o;
+}
+async function meerSeite(city = {}) {
+  const L = stadtWert('CITY_LAND');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, ...city }, where: { x: L.x, z: L.z, f: L.f, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  return { ctx, page, errors };
+}
+
+test('Meer: tiefes Wasser, Insel und Sandbank', async () => {
+  const SEA = meerWert('SEA'), I = stadtWert('ISLAND'), S = stadtWert('SANDBANK');
+  assert.deepEqual(SEA, { x: 0, z0: -3150, z1: -3650, w: 300 });
+  assert.deepEqual(I, { x: -120, z: -3480, r: 20 });
+  assert.deepEqual(S, { x: 110, z: -3380, rx: 30, rz: 14 });
+  const { ctx, page, errors } = await meerSeite();
+  const h = await page.evaluate(([I, S]) => ({ meer: __test.hoehe(0, -3400), insel: __test.hoehe(I.x, I.z), sand: __test.hoehe(S.x, S.z), hafen: __test.hoehe(0, -3125) }), [I, S]);
+  assert.ok(h.meer < -3, 'auf dem Meer ist es tief: ' + h.meer);
+  assert.ok(h.insel > 1, 'die Insel ist Land: ' + h.insel);
+  assert.ok(h.sand > 0.2, 'die Sandbank schaut aus dem Wasser: ' + h.sand);
+  assert.ok(h.hafen > -3 && h.hafen < -2, 'das Hafenbecken bleibt, wie es ist: ' + h.hafen);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Meer: auf der Insel kann man herumlaufen', async () => {
+  const SEA = meerWert('SEA'), I = stadtWert('ISLAND');
+  // die eigene Luxusyacht liegt am Insel-Steg: nur dann bleibt man nach dem Neuladen auf der Insel
+  const { ctx, page, errors } = await meerSeite({ luxus: true, yachtAt: 'insel' }); // Blick vom Landeplatz nach +x: W läuft nach +x
+  await page.evaluate(([x, z]) => window.__test.warp(x, z), [I.x - 8, I.z]);
+  const vorher = await weg(page);
+  assert.ok(Math.hypot(vorher.where.x - (I.x - 8), vorher.where.z - I.z) < 0.5, 'man steht auf der Insel');
+  await halten(page, 'KeyW', 3000);
+  const nach = await weg(page);
+  assert.ok(Math.hypot(nach.where.x - vorher.where.x, nach.where.z - vorher.where.z) > 2, 'man ist gelaufen');
+  const h = await page.evaluate(w => window.__test.hoehe(w.x, w.z), nach.where);
+  assert.ok(h > 0.3, 'man steht noch an Land: ' + h);
+  assert.ok(nach.where.z < SEA.z0, 'man ist auf dem Meer (Insel)');
+  // neu laden: man steht immer noch auf der Insel
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  const s = await weg(page);
+  assert.ok(s.where.z < SEA.z0, 'nach dem Neuladen noch auf der Insel');
+  assert.ok(Math.hypot(s.where.x - nach.where.x, s.where.z - nach.where.z) < 0.5, 'der Platz bleibt erhalten');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Meer: Bojen rot links, grün rechts', async () => {
+  // Deutsches System (IALA A), von See kommend: rot links, grün rechts. Mit Blick nach Norden (+z) ist links +x.
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = html.match(/const BUOYS=\[([^\]]*)\]/);
+  assert.ok(m, 'BUOYS steht in index.html');
+  const liste = [...m[1].matchAll(/\{x:(-?\d+(?:\.\d+)?),z:(-?\d+(?:\.\d+)?),farbe:'(rot|gruen)'\}/g)].map(([, x, z, farbe]) => ({ x: +x, z: +z, farbe }));
+  assert.equal(liste.length, 6, '3 Paare');
+  for (const z of [-3165, -3205, -3245]) {
+    assert.deepEqual(liste.filter(b => b.z === z).sort((a, b) => a.x - b.x), [{ x: -25, z, farbe: 'gruen' }, { x: 25, z, farbe: 'rot' }]);
+  }
+  const { ctx, page, errors } = await meerSeite();
+  const bojen = await page.evaluate(() => window.__test.bojen());
+  const ordne = l => [...l].sort((a, b) => a.z - b.z || a.x - b.x);
+  assert.deepEqual(ordne(bojen), ordne(liste), 'im Spiel stehen die Bojen aus der Liste');
+  assert.ok(bojen.filter(b => b.farbe === 'rot').every(b => b.x > 0), 'rote Bojen links (x > 0)');
+  assert.ok(bojen.filter(b => b.farbe === 'gruen').every(b => b.x < 0), 'grüne Bojen rechts (x < 0)');
+  // Bojen sind Hindernisse: dort stößt man an (hitsCollider), daneben im freien Wasser nicht
+  const stoss = await page.evaluate(l => l.map(b => [window.__test.kollision(b.x, b.z, 0.1), window.__test.kollision(b.x, b.z + 5, 0.1)]), liste);
+  assert.ok(stoss.every(([an, frei]) => an && !frei), 'an jeder Boje stößt man an, 5 m daneben nicht: ' + JSON.stringify(stoss));
+  // Die 3 Fischerboote im Hafenbecken sind auch Hindernisse: die Luxusyacht fährt nicht hindurch (Mitte, Bug und Heck)
+  const BOOTE = [[-60, -3126, 0.2], [-28, -3136, -0.3], [42, -3128, 0.15]];
+  const boote = await page.evaluate(l => l.map(([x, z, ry]) => [0, 2.5, -2.5].map(d => {
+    const px = x + d * Math.cos(ry), pz = z - d * Math.sin(ry); // entlang vom Rumpf (wie rotXZ im Spiel)
+    return { an: window.__test.kollision(px, pz, 0.1), wasser: window.__test.luxusWasser(px, pz) }; })), BOOTE);
+  assert.ok(boote.flat().every(b => b.an && !b.wasser), 'an jedem Fischerboot stößt man an, die Yacht passt dort nicht hin: ' + JSON.stringify(boote));
+  assert.equal(await page.evaluate(() => window.__test.luxusWasser(0, -3135)), true, 'zwischen den Booten ist freies Wasser');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 // Weltzeit: die Uhr im Spiel steht fest auf iso (deutsche Zeit). Für Tests, die eine bestimmte Tageszeit brauchen.
 async function zeitSeite(iso) {
   const { ctx, page, errors } = await newPage({ timezoneId: 'Europe/Berlin' });
-  await ctx.clock.setFixedTime(new Date(iso));
+  await festeZeit(ctx, iso);
   return { ctx, page, errors };
+}
+// Die Uhr im Spiel bleibt auf iso stehen: gleich in der offenen Seite und nach jedem Neuladen (das zuletzt eingestellte gilt).
+async function festeZeit(ctx, iso) {
+  const t = new Date(iso).getTime();
+  await ctx.addInitScript(t => { window.__festeZeit = t; }, t);
+  for (const p of ctx.pages()) await p.evaluate(t => { window.__festeZeit = t; }, t);
 }
 const SEE_ORT = { x: 4, z: -951, f: 0, boat: false }; // am Heimat-See, da landet das Flugzeug
 const phase = page => page.evaluate(() => document.body.dataset.phase);
@@ -1347,7 +1454,7 @@ test('Weltzeit: Jahreszeit', async () => {
   await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
   for (const [iso, jz] of [['2026-04-15T12:00:00+02:00', 'fruehling'], ['2026-07-15T12:00:00+02:00', 'sommer'],
     ['2026-10-15T12:00:00+02:00', 'herbst'], ['2026-12-15T12:00:00+01:00', 'winter']]) {
-    await ctx.clock.setFixedTime(new Date(iso));
+    await festeZeit(ctx, iso);
     await startGame(page);
     await page.locator('body[data-season]').waitFor({ state: 'attached', timeout: 5000 });
     assert.equal(await page.evaluate(() => document.body.dataset.season), jz, iso);
@@ -1368,7 +1475,7 @@ test('Jahreszeiten: am Heimat-See wechseln Laub und Wiese, am Amazonas bleibt al
   await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
   for (const [iso, jz] of [['2026-04-15T12:00:00+02:00', 'fruehling'], ['2026-07-15T12:00:00+02:00', 'sommer'],
     ['2026-10-15T12:00:00+02:00', 'herbst'], ['2026-12-15T12:00:00+01:00', 'winter']]) {
-    await ctx.clock.setFixedTime(new Date(iso));
+    await festeZeit(ctx, iso);
     await startGame(page);
     await page.click('#btnGo');
     await page.locator('body[data-region="de"][data-season="' + jz + '"]').waitFor({ state: 'attached', timeout: 5000 });
@@ -2098,7 +2205,7 @@ test('Museum: Fisch spenden und ansehen', async () => {
   const n = info.anzahl;
   assert.match(await page.textContent('#card'), new RegExp('1 von ' + n + '\\b'));
   assert.equal(await page.locator('#card .bk .unknown').count(), n - 1, 'alle anderen sind „?“');
-  for (const t of ['Amazonas', 'Heimat-See', 'Flüsse', 'Meer']) assert.ok(await page.locator('#card h3.bookhead:has-text("' + t + '")').count() >= 1, t);
+  for (const t of ['Amazonas', 'Heimat-See', 'Flüsse', 'Meer', 'Offenes Meer']) assert.ok(await page.locator('#card h3.bookhead:has-text("' + t + '")').count() >= 1, t);
   // nach dem Neuladen ist der Hering noch da
   await startGame(page);
   await page.click('#btnGo');
@@ -2193,6 +2300,143 @@ test('Alter Spielstand: museum bekommt Startwert {}', async () => {
   await ctx.close();
 });
 
+// Bootshafen in Hafenhausen: dort gibt es die Luxusyacht. Gekauft liegt sie am Hafen-Steg (BERTH_HAFEN), später auch am Insel-Steg (BERTH_INSEL).
+// Ein Liegeplatz: x,z,f = wo man auf dem Steg steht (mit Blick zur Yacht), yx,yz,yaw = wo die Yacht liegt.
+const BOOT_ISO = '2026-10-31T10:00:00+01:00';
+async function bootSeite(extra, iso = BOOT_ISO, fest = false) {
+  const B = stadtWert('BOOTSHAFEN_AT');
+  return stadtSeite({ where: { x: B.x, z: B.z, f: 0, boat: false }, ...extra }, iso, fest);
+}
+async function bootAuf(page) {
+  await page.locator('#btnCtx:has-text("⛵ Zum Bootshafen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("⛵ Bootshafen")').waitFor();
+}
+const YACHT_KNOPF = '#card .item:has(b:text-is("Luxusyacht")) button';
+const nah = (a, b, d = 0.05) => Math.abs(a - b) < d;
+
+test('Bootshafen: Luxusyacht kaufen', async () => {
+  const H = stadtWert('BERTH_HAFEN');
+  const { ctx, page, errors } = await bootSeite({ ludins: 20050 });
+  await bootAuf(page);
+  assert.match(await page.textContent('#card'), /Offen 8–22 Uhr/);
+  assert.equal((await page.textContent(YACHT_KNOPF)).trim(), '20000 L');
+  assert.ok((await page.locator(YACHT_KNOPF).boundingBox()).height >= 60, 'großer Knopf');
+  assert.equal((await page.evaluate(() => window.__test.luxus())).sichtbar, false, 'vor dem Kauf liegt keine Yacht am Steg');
+  await page.click(YACHT_KNOPF);
+  let s = JSON.parse(await read(page));
+  assert.equal(s.ludins, 50);
+  assert.equal(s.city.luxus, true);
+  assert.equal(s.city.yachtAt, 'hafen');
+  assert.equal((await page.textContent(YACHT_KNOPF)).trim(), 'Hast du');
+  assert.match(await page.textContent('#card .item:has(b:text-is("Luxusyacht"))'), /Sie liegt am Hafen-Steg\./);
+  let y = await page.evaluate(() => window.__test.luxus());
+  assert.equal(y.sichtbar, true, 'jetzt liegt die Yacht am Steg');
+  assert.ok(nah(y.x, H.yx) && nah(y.z, H.yz) && nah(y.yaw, H.yaw), 'am Hafen-Steg: ' + JSON.stringify(y));
+  assert.equal(y.name, 'Testkind', 'der Name steht am Rumpf');
+  await page.click('#card button:has-text("Tschüss")');
+  // neu laden: die Yacht gehört einem immer noch und liegt am Hafen-Steg
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForFunction(() => window.__test.luxus() && window.__test.luxus().sichtbar, null, { timeout: 20000 });
+  y = await page.evaluate(() => window.__test.luxus());
+  assert.ok(nah(y.x, H.yx) && nah(y.z, H.yz), 'nach dem Neuladen am Hafen-Steg');
+  s = await weg(page);
+  assert.equal(s.ludins, 50);
+  assert.equal(s.city.luxus, true);
+  assert.equal(s.city.yachtAt, 'hafen');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Bootshafen: zu wenig Ludins', async () => {
+  const { ctx, page, errors } = await bootSeite({ ludins: 100 });
+  await bootAuf(page);
+  assert.equal((await page.textContent(YACHT_KNOPF)).trim(), 'Noch 19900 L');
+  assert.equal(await page.locator(YACHT_KNOPF).isDisabled(), true, 'grauer Knopf');
+  await page.$eval(YACHT_KNOPF, b => b.onclick()); // auch wenn der Klick doch ankommt: nichts passiert
+  const s = await weg(page);
+  assert.equal(s.ludins, 100);
+  assert.equal(s.city.luxus, false);
+  assert.equal((await page.evaluate(() => window.__test.luxus())).sichtbar, false);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Bootshafen: um 23 Uhr geschlossen', async () => {
+  const { ctx, page, errors } = await bootSeite({ ludins: 20050 }, '2026-10-31T23:00:00+01:00', true);
+  await page.locator('#btnCtx:has-text("Geschlossen")').waitFor({ timeout: 20000 });
+  assert.equal((await page.textContent('#btnCtx')).trim(), '🌙 Geschlossen – öffnet um 8 Uhr');
+  await page.click('#btnCtx');
+  assert.equal(await page.locator('#modal').isVisible(), false, 'der Bootshafen geht nicht auf');
+  assert.equal(await page.textContent('#toast'), 'Der Bootshafen ist zu, bis 8 Uhr. Angeln geht immer. Deine Fische bleiben im Eimer.');
+  const s = await weg(page);
+  assert.equal(s.ludins, 20050);
+  assert.equal(s.city.luxus, false);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Bootshafen: Tür am Gehweg, Liegeplätze im tiefen Wasser, Stege begehbar', async () => {
+  const B = stadtWert('BOOTSHAFEN_AT'), L = meerWert('LUXUS');
+  assert.deepEqual(L, { price: 20000, speed: 14, turn: 1.6, len: 12 });
+  const { ctx, page, errors } = await bootSeite({});
+  await page.locator('#btnCtx:has-text("⛵ Zum Bootshafen")').waitFor({ timeout: 20000 });
+  const r = await page.evaluate(([x, z]) => ({ ...window.__test.stadtPunkt(x, z), hoehe: window.__test.hoehe(x, z) }), [B.x, B.z]);
+  assert.equal(r.walk, true, 'auf dem Gehweg');
+  assert.equal(r.road, false);
+  assert.ok(r.rail > 2.5, 'nicht auf den Schienen: ' + r.rail);
+  assert.equal(r.tueren.filter(d => d > 2.5 && d < 3.5).length, 1, 'genau ein Haus (der Bootshafen) steht vor der Tür');
+  assert.ok(Math.abs(r.hoehe - 1.2) < 0.01, 'ebener Boden');
+  for (const name of ['BERTH_HAFEN', 'BERTH_INSEL']) {
+    const P = stadtWert(name);
+    const d = 0.4 * L.len, sx = Math.sin(P.yaw) * d, sz = Math.cos(P.yaw) * d;
+    const t = await page.evaluate(([P, sx, sz]) => ({
+      yacht: [[P.yx, P.yz], [P.yx + sx, P.yz + sz], [P.yx - sx, P.yz - sz]].map(([x, z]) => window.__test.hoehe(x, z)),
+      steg: window.__test.begehbar(P.x, P.z) }), [P, sx, sz]);
+    assert.ok(t.yacht.every(h => h < -1), name + ': die Yacht liegt im tiefen Wasser ' + t.yacht);
+    assert.equal(t.steg, true, name + ': man steht auf dem Steg');
+    const blick = Math.atan2(P.yx - P.x, P.yz - P.z), diff = Math.abs(Math.atan2(Math.sin(blick - P.f), Math.cos(blick - P.f)));
+    assert.ok(diff < 0.2, name + ': man schaut zur Yacht');
+    const quer = Math.abs((P.x - P.yx) * Math.cos(P.yaw) - (P.z - P.yz) * Math.sin(P.yaw)); // Abstand quer zur Yacht
+    assert.ok(quer > 2 && quer < 5, name + ': die Yacht liegt längs neben dem Steg ' + quer);
+  }
+  // von der Kaimauer (z −3112,4) über den Hafen-Steg bis zum Liegeplatz: alles begehbar
+  const H = stadtWert('BERTH_HAFEN');
+  const steg = await page.evaluate(H => Array.from({ length: 21 }, (_, k) => window.__test.begehbar(H.x, -3112.4 + (H.z + 3112.4) * k / 20)), H);
+  assert.ok(steg.every(Boolean), 'der Hafen-Steg ist durchgehend begehbar ' + steg.join(','));
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Alter Spielstand: luxus und yachtAt bekommen Startwerte; kaputte Werte werden repariert', async () => {
+  const fall = async (city) => {
+    const { ctx, page, errors } = await newPage();
+    await seed(page, { [KEY]: stadtSeed(city === undefined ? {} : { city }) });
+    await startGame(page);
+    await playAndLeave(page);
+    const s = JSON.parse(await read(page));
+    assert.deepEqual(errors, []);
+    await ctx.close();
+    return s.city;
+  };
+  let c = await fall({ visited: true, vehicles: { bike: true, roller: true } });
+  assert.equal(c.luxus, false);
+  assert.equal(c.yachtAt, 'hafen');
+  assert.equal(c.vehicles.roller, true, 'der Rest bleibt');
+  c = await fall({ visited: true, luxus: 'ja', yachtAt: 'mond', garage: { tor: 'rot' } });
+  assert.equal(c.luxus, false, 'nur genau true zählt');
+  assert.equal(c.yachtAt, 'hafen', 'unbekannter Liegeplatz: zurück zum Hafen-Steg');
+  assert.deepEqual(c.garage, { tor: 'rot' }, 'unbekannte city-Felder bleiben');
+  assert.equal(c.visited, true);
+  c = await fall({ visited: true, luxus: 1, yachtAt: 'toString' });
+  assert.equal(c.luxus, false);
+  assert.equal(c.yachtAt, 'hafen', 'nur echte Liegeplätze');
+  c = await fall({ visited: true, luxus: true, yachtAt: 'insel' });
+  assert.equal(c.luxus, true, 'die gekaufte Yacht bleibt');
+  assert.equal(c.yachtAt, 'insel', 'sie bleibt am Insel-Steg');
+});
+
 // Jeden Tag neu: Tagesfisch, Tagesaufgaben, Flaschenpost. dayHash wie in index.html (FNV-1a, 32 Bit).
 function dayHash(s) { let h = 0x811c9dc5; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; }
 // Die drei Orte der Flaschenpost direkt aus index.html lesen: const FLASCHE_SPOTS=[{x:…,z:…,ort:'…'},…]
@@ -2260,9 +2504,11 @@ test('Tagesfisch: jeden Tag fest, nie Bootsfisch, seltener Fisch oder Schonzeit'
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8'), RULES = spielRegeln();
   const boot = [...html.matchAll(/\{id:'(\w+)'[^\n]*boat:true/g)].map(m => m[1]);
   assert.deepEqual(boot, ['piraiba', 'arapaima']);
+  const heim = fischHeime();
   tage.forEach(([d, k], i) => {
     const id = ids[i], r = RULES[id];
     assert.ok(!boot.includes(id), k + ': ' + id + ' gibt es nur vom Boot');
+    assert.notEqual(heim[id], 'hochsee', k + ': ' + id + ' ist ein Hochseefisch');
     assert.ok(!(r && r.selten), k + ': ' + id + ' ist ein seltener Fisch');
     assert.ok(!schonzeitAm(r, d), k + ': ' + id + ' hat Schonzeit');
   });
@@ -2463,7 +2709,7 @@ test('Nachbarn: Tipps zu Tagesfisch, Museum und Fisch-Zeiten', async () => {
   ids.a = [a, await page.evaluate(k => window.__test.tagesfisch(k), a)];
   assert.ok(ids.b, 'ein Tag mit anderem Tagesfisch');
   for (const [k, id] of [ids.a, ids.b]) {
-    if (k !== a) await ctx.clock.setFixedTime(new Date(k + 'T10:00:00+01:00'));
+    if (k !== a) await festeZeit(ctx, k + 'T10:00:00+01:00');
     const tipps = await page.evaluate(() => window.__test.tipps());
     assert.ok(tipps.every(t => typeof t === 'string' && t.length > 10), 'alle Tipps sind Text');
     const t = tipps.find(t => /doppelt/.test(t));
@@ -2755,7 +3001,7 @@ test('Heute: ein neuer Tag setzt die Zähler zurück und speichert gleich', asyn
   await startGame(page);
   await page.click('#btnGo');
   assert.deepEqual(JSON.parse(await read(page)).heute, { day: HEUTE_TAG, fische: 6, ludins: 84, arten: 1 }, 'heute zählt noch');
-  await ctx.clock.setFixedTime(new Date('2026-11-01T00:01:00+01:00'));
+  await festeZeit(ctx, '2026-11-01T00:01:00+01:00');
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); // wie der Uhr-Takt alle 30 s
   assert.deepEqual(JSON.parse(await read(page)).heute, { day: '2026-11-01', fische: 0, ludins: 0, arten: 0 }, 'ohne Schließen gespeichert');
   assert.deepEqual(errors, []);
@@ -2803,8 +3049,11 @@ test('Heute: ein Fang zählt Fische und neue Arten, ein Verkauf zählt Ludins', 
 
 test('Heute: Fische aus der Reuse zählen, Arten nur beim ersten Mal', async () => {
   const { ctx, page, errors } = await newPage();
+  // Die Uhr im Spiel ist verschoben (heute 11 Uhr). Darum kommt „vor 1 Minute“ von der Uhr der Seite, nicht von Node:
+  // sonst ist die Reuse je nach Uhrzeit Stunden alt (dann schwimmt ein dritter Fisch hinein) oder liegt in der Zukunft.
+  const jetzt = await page.evaluate(() => Date.now());
   await seed(page, { [KEY]: stadtSeed({ visitedLake: true, ludins: 0, book: { ...ALT_V1.book, rotauge: { n: 1, best: 20 } },
-    traps: [{ x: 10, z: -936, t: Date.now() - 60 * 1000, fish: [{ id: 'rotauge', cm: 20, value: 5 }, { id: 'karpfen', cm: 60, value: 25 }] }],
+    traps: [{ x: 10, z: -936, t: jetzt - 60 * 1000, fish: [{ id: 'rotauge', cm: 20, value: 5 }, { id: 'karpfen', cm: 60, value: 25 }] }],
     where: { x: 10, z: -940, f: 0, boat: false } }) });
   await startGame(page);
   await page.click('#btnGo');
@@ -2891,10 +3140,9 @@ test('Spielzeit-Ende zeigt, was du heute geschafft hast', async () => {
     [{ day: HEUTE_TAG, fische: 1, ludins: 0, arten: 2 }, 'Heute geschafft: 🐟 1 Fisch · 📖 2 neue Arten'],
     [{ day: HEUTE_TAG, fische: 0, ludins: 0, arten: 0 }, 'Schön, dass du da warst!']]) {
     const { ctx, page, errors } = await startZeitSeite(HEUTE_ISO);
-    await seed(page, { [KEY]: stadtSeed({ heute, playTime: { day: '2026-10-31', sec: 15 * 60 - 1, extra: 0 } }), [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) });
-    await startGame(page);
-    await page.click('#btnGo');
-    await page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 10000 });
+    await seed(page, { [KEY]: stadtSeed({ heute, playTime: { day: HEUTE_TAG, sec: 15 * 60, extra: 0 } }), [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) }); // Zeit schon ganz aufgebraucht: kein Wettlauf gegen 1 Sekunde
+    await startGame(page); // die Pause kommt gleich beim Laden (die Zeit zählt schon auf dem Startbildschirm), darum kein Klick auf „Los geht's“
+    await page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 30000 }); // großzügig für langsame Rechner
     assert.equal((await page.textContent('#timeup .geschafft')).trim(), soll);
     assert.match(await page.textContent('#timeup'), /Morgen wartet: eine neue Flaschenpost 🍾 und ein neuer Tagesfisch ⭐/);
     assert.equal(await page.isVisible('#btnMoreTime'), true, 'die Knöpfe für Erwachsene bleiben');
@@ -2907,7 +3155,475 @@ test('Klarere Texte: Spinnfischen sagt „platscht“, Was ist neu v41', () => {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   assert.match(html, /miss:'wenn es am Köder platscht'/);
   assert.doesNotMatch(html, /am Köder spritzt/);
-  const n = newsListe()[0];
+  const n = newsListe().find(n => n.v === 41);
   assert.deepEqual({ v: n.v, day: n.day, ico: n.ico, t: n.t, d: n.d }, { v: 41, day: '27.10.2026', ico: '📅', t: 'Heute für dich',
     d: 'Tipp auf die Uhr oben: Dort steht, was heute für dich ansteht – und was du schon geschafft hast.' });
+});
+
+// Mit der Luxusyacht fahren: an Bord gehen, aus dem Hafen fahren, an einem Steg aussteigen.
+// Die Yacht liegt am Hafen-Steg, man steht auf dem Steg daneben (BERTH_HAFEN x/z/f).
+const YACHT_ISO = '2026-10-31T10:00:00+01:00';
+async function yachtSeite(extra = {}, iso = YACHT_ISO, fest = false) {
+  const H = stadtWert('BERTH_HAFEN');
+  const { city, ...rest } = extra;
+  return stadtSeite({ ludins: 50, where: { x: H.x, z: H.z, f: H.f, boat: false }, ...rest,
+    city: { visited: true, luxus: true, yachtAt: 'hafen', ...(city || {}) } }, iso, fest);
+}
+const wo = page => page.evaluate(() => window.__test.wo());
+const winkel = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))); // Unterschied zweier Richtungen (0 bis π)
+async function anBord(page) {
+  await page.locator('#btnCtx:has-text("⛵ An Bord gehen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.waitForFunction(() => window.__test.wo().ride === 'luxus', null, { timeout: 5000 });
+}
+
+test('Yacht: einsteigen, aus dem Hafen fahren, an der Insel aussteigen', async () => {
+  const H = stadtWert('BERTH_HAFEN'), I = stadtWert('BERTH_INSEL'), SEA = meerWert('SEA');
+  const { ctx, page, errors } = await yachtSeite();
+  assert.ok(await page.locator('#btnHorn').isHidden(), 'zu Fuß gibt es keine Hupe');
+  await anBord(page);
+  let w = await wo(page);
+  assert.ok(nah(w.x, H.yx) && nah(w.z, H.yz), 'man fährt von dort los, wo die Yacht liegt: ' + JSON.stringify(w));
+  assert.equal(w.atSea, false, 'noch im Hafen');
+  await page.locator('#btnHorn').waitFor({ state: 'visible', timeout: 5000 });
+  assert.ok((await page.locator('#btnHorn').boundingBox()).height >= 60, 'die Hupe ist ein großer Knopf');
+  await page.click('#btnHorn');
+  // mit den Tasten aus dem Hafen fahren (kein Warp): der Bug zeigt schon zur Hafenausfahrt
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction(() => window.__test.wo().atSea, null, { timeout: 90000, polling: 100 });
+  await page.keyboard.up('KeyW');
+  w = await wo(page);
+  assert.ok(w.z < SEA.z0, 'auf dem Meer: ' + w.z);
+  assert.equal(w.ride, 'luxus');
+  assert.ok(w.nebel >= 400, 'auf dem Meer sieht man weit (Nebel ' + w.nebel + ')');
+  // Testhilfe: die fahrende Yacht vor den Insel-Steg setzen
+  assert.equal(await page.evaluate(I => window.__test.luxusWarp(I), I), true);
+  await page.locator('#btnCtx:has-text("⚓ Aussteigen")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.waitForFunction(() => window.__test.wo().ride === '', null, { timeout: 5000 });
+  await page.locator('#btnHorn').waitFor({ state: 'hidden', timeout: 5000 });
+  let s = await weg(page);
+  assert.equal(s.city.yachtAt, 'insel');
+  assert.equal(s.city.riding, '');
+  assert.ok(Math.hypot(s.where.x - I.x, s.where.z - I.z) < 0.5, 'man steht auf dem Insel-Steg: ' + JSON.stringify(s.where));
+  assert.deepEqual(s.city.parked, {}, 'die Yacht ist kein geparktes Fahrzeug');
+  assert.deepEqual(s.city.vehicles, STADT_START.vehicles, 'die Fahrzeuge bleiben, wie sie sind');
+  let y = await page.evaluate(() => window.__test.luxus());
+  assert.ok(nah(y.x, I.yx) && nah(y.z, I.yz) && nah(y.yaw, I.yaw), 'die Yacht liegt genau am Insel-Steg: ' + JSON.stringify(y));
+  // neu laden: man steht auf der Insel, die Yacht liegt dort
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForFunction(() => window.__test.luxus() && window.__test.luxus().sichtbar, null, { timeout: 20000 });
+  w = await wo(page);
+  assert.equal(w.ride, '');
+  assert.equal(w.atSea, true, 'auf der Insel (vor dem Hafen)');
+  assert.ok(Math.hypot(w.x - I.x, w.z - I.z) < 0.5, 'auf dem Insel-Steg: ' + JSON.stringify(w));
+  assert.equal(await page.evaluate(w => window.__test.begehbar(w.x, w.z), w), true, 'man steht auf dem Steg');
+  y = await page.evaluate(() => window.__test.luxus());
+  assert.ok(nah(y.x, I.yx) && nah(y.z, I.yz), 'die Yacht liegt am Insel-Steg');
+  await page.locator('#btnCtx:has-text("⛵ An Bord gehen")').waitFor({ timeout: 5000 });
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: Speichern auf See', async () => {
+  const I = stadtWert('BERTH_INSEL');
+  const { ctx, page, errors } = await yachtSeite();
+  await anBord(page);
+  assert.equal(await page.evaluate(() => window.__test.luxusWarp({ x: 0, z: -3400, yaw: 0 })), true, 'mitten auf dem Meer');
+  await page.waitForFunction(() => window.__test.wo().nebel >= 400, null, { timeout: 5000 });
+  const s = await weg(page);
+  assert.equal(s.city.riding, '');
+  assert.equal(s.city.yachtAt, 'insel', 'der Insel-Steg ist am nächsten');
+  assert.ok(Math.hypot(s.where.x - I.x, s.where.z - I.z) < 0.5, 'gespeichert auf dem Insel-Steg: ' + JSON.stringify(s.where));
+  assert.equal(s.where.boat, false);
+  assert.equal((await wo(page)).ride, 'luxus', 'im Spiel fährt man weiter');
+  // neu laden: man steht auf dem Steg, die Yacht liegt daneben
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForFunction(() => window.__test.luxus() && window.__test.luxus().sichtbar, null, { timeout: 20000 });
+  const w = await wo(page);
+  assert.equal(w.ride, '');
+  const h = await page.evaluate(w => ({ hoehe: window.__test.hoehe(w.x, w.z), steg: window.__test.begehbar(w.x, w.z) }), w);
+  assert.ok(h.hoehe > 0 || h.steg, 'man steht an Land oder auf dem Steg');
+  assert.ok(Math.hypot(w.x - I.x, w.z - I.z) < 0.5, 'auf dem Insel-Steg');
+  const y = await page.evaluate(() => window.__test.luxus());
+  assert.ok(nah(y.x, I.yx) && nah(y.z, I.yz), 'die Yacht liegt am Insel-Steg');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: Werkstatt öffnen auf See legt am Steg an', async () => {
+  const H = stadtWert('BERTH_HAFEN');
+  const { ctx, page, errors } = await yachtSeite();
+  await anBord(page);
+  assert.equal(await page.evaluate(() => window.__test.luxusWarp({ x: 60, z: -3300, yaw: 0 })), true);
+  await page.click('#btnAvatar');
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 5000 });
+  const s = JSON.parse(await read(page));
+  assert.equal(s.city.riding, '');
+  assert.equal(s.city.yachtAt, 'hafen', 'der Hafen-Steg ist am nächsten');
+  assert.ok(Math.hypot(s.where.x - H.x, s.where.z - H.z) < 0.5, 'gespeichert auf dem Hafen-Steg: ' + JSON.stringify(s.where));
+  let w = await wo(page);
+  assert.equal(w.ride, '', 'in der Werkstatt ist man zu Fuß');
+  assert.ok(Math.hypot(w.x - H.x, w.z - H.z) < 0.5, 'man steht auf dem Hafen-Steg');
+  const y = await page.evaluate(() => window.__test.luxus());
+  assert.ok(nah(y.x, H.yx) && nah(y.z, H.yz) && nah(y.yaw, H.yaw), 'die Yacht liegt am Hafen-Steg: ' + JSON.stringify(y));
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("⛵ An Bord gehen")').waitFor({ timeout: 5000 });
+  w = await wo(page);
+  assert.equal(await page.evaluate(w => window.__test.begehbar(w.x, w.z), w), true, 'man steht auf dem Steg');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: Spielzeit-Pause auf See legt am Steg an', async () => {
+  const I = stadtWert('BERTH_INSEL');
+  const { ctx, page, errors } = await startZeitSeite(YACHT_ISO);
+  const H = stadtWert('BERTH_HAFEN');
+  await seed(page, { [KEY]: stadtSeed({ ludins: 50, city: { visited: true, luxus: true, yachtAt: 'hafen' }, where: { x: H.x, z: H.z, f: H.f, boat: false },
+    playTime: { day: '2026-10-31', sec: 15 * 60 - 40, extra: 0 } }), [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) }); // noch 40 s Spielzeit
+  await startGame(page);
+  await page.click('#btnGo');
+  await anBord(page);
+  assert.equal(await page.evaluate(() => window.__test.luxusWarp({ x: -60, z: -3420, yaw: 0 })), true, 'auf dem Meer');
+  await page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 60000 });
+  const s = JSON.parse(await read(page));
+  assert.equal(s.city.riding, '');
+  assert.equal(s.city.yachtAt, 'insel', 'die Yacht legt am nächsten Steg an');
+  assert.ok(Math.hypot(s.where.x - I.x, s.where.z - I.z) < 0.5, 'man steht auf dem Insel-Steg: ' + JSON.stringify(s.where));
+  assert.equal((await wo(page)).ride, '', 'in der Pause ist man zu Fuß');
+  const y = await page.evaluate(() => window.__test.luxus());
+  assert.ok(nah(y.x, I.yx) && nah(y.z, I.yz), 'die Yacht liegt am Insel-Steg');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: nachts einsteigen geht, der Laden ist zu', async () => {
+  const B = stadtWert('BOOTSHAFEN_AT'), H = stadtWert('BERTH_HAFEN');
+  const { ctx, page, errors } = await yachtSeite({ where: { x: B.x, z: B.z, f: 0, boat: false } }, '2026-10-31T23:00:00+01:00', true);
+  await page.locator('#btnCtx:has-text("Geschlossen")').waitFor({ timeout: 20000 });
+  assert.equal((await page.textContent('#btnCtx')).trim(), '🌙 Geschlossen – öffnet um 8 Uhr');
+  await page.evaluate(H => window.__test.warp(H.x, H.z, H.f), H);
+  await anBord(page);
+  assert.equal((await wo(page)).ride, 'luxus', 'die eigene Yacht geht auch nachts');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: an beiden Stegen wenden', async () => {
+  // Am Hafen-Steg liegt der Steg gleich daneben: erst ein Stück vorfahren, dann drehen
+  const I = stadtWert('BERTH_INSEL');
+  const { ctx, page, errors } = await yachtSeite();
+  await anBord(page);
+  for (const ort of ['Hafen-Steg', 'Insel-Steg']) {
+    if (ort === 'Insel-Steg') assert.equal(await page.evaluate(I => window.__test.luxusWarp(I), I), true);
+    await halten(page, 'KeyW', 2000);
+    const vorher = (await wo(page)).facing;
+    await halten(page, 'KeyA', 3000);
+    const nach = (await wo(page)).facing;
+    assert.ok(winkel(nach, vorher) > 1, ort + ': die Yacht hat gewendet (' + vorher + ' → ' + nach + ')');
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: Sandbank ist Hindernis und die Seehunde mögen Abstand', async () => {
+  const S = stadtWert('SANDBANK');
+  const { ctx, page, errors } = await yachtSeite();
+  await anBord(page);
+  const start = { x: S.x, z: S.z + S.rz + 30, yaw: Math.PI }; // 30 m nördlich vor der Sandbank, Blick zu ihr
+  assert.equal(await page.evaluate(p => window.__test.luxusWarp(p), start), true);
+  await page.keyboard.down('KeyW');
+  await toastIst(page, 'Abstand halten!');
+  assert.equal(await page.textContent('#toast'), 'Abstand halten! Die Seehunde ruhen sich aus.');
+  await page.waitForTimeout(4000);
+  await page.keyboard.up('KeyW');
+  const w = await wo(page);
+  assert.ok(start.z - w.z > 5, 'die Yacht ist gefahren: ' + JSON.stringify(w));
+  assert.ok(Math.hypot(w.x - S.x, w.z - S.z) > S.rz, 'die Yacht bleibt vor der Sandbank: ' + JSON.stringify(w));
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: Angeln vom Hafen-Steg trifft nicht die Yacht', async () => {
+  const H = stadtWert('BERTH_HAFEN');
+  const { ctx, page, errors } = await yachtSeite();
+  await page.waitForFunction(() => window.__test.luxus() && window.__test.luxus().sichtbar, null, { timeout: 20000 });
+  const p = await page.evaluate(() => window.__test.wurf()); // man steht auf dem Steg und schaut zur Yacht
+  assert.ok(p, 'hinter der Yacht ist Wasser zum Angeln');
+  {
+    const dx = p.x - H.yx, dz = p.z - H.yz, laengs = dx * Math.sin(H.yaw) + dz * Math.cos(H.yaw), quer = dx * Math.cos(H.yaw) - dz * Math.sin(H.yaw);
+    assert.ok(Math.abs(quer) >= 2.2 || Math.abs(laengs) >= 6.3, 'der Köder landet nicht im Rumpf: ' + JSON.stringify(p));
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: aus einer Ecke kommt man rückwärts wieder heraus', async () => {
+  const { ctx, page, errors } = await yachtSeite();
+  await anBord(page);
+  // in die Nordwest-Ecke des Hafenbeckens (−98,85 | −3113,7) fahren, bis es nicht mehr weitergeht
+  const ecke = { x: -90, z: -3122, yaw: Math.atan2(-98.85 + 90, -3113.7 + 3122) };
+  assert.equal(await page.evaluate(p => window.__test.luxusWarp(p), ecke), true);
+  await page.keyboard.down('KeyW');
+  await toastIst(page, 'Zieh nach hinten, dann fährt die Yacht rückwärts.');
+  await page.keyboard.up('KeyW');
+  const fest = await wo(page);
+  // zurücksetzen und dabei lenken: das Heck geht nach hinten links, die Yacht dreht sich
+  await page.keyboard.down('KeyS');
+  await page.keyboard.down('KeyA');
+  await page.waitForTimeout(3000);
+  await page.keyboard.up('KeyA');
+  await page.keyboard.up('KeyS');
+  const raus = await wo(page);
+  assert.ok(Math.hypot(raus.x - fest.x, raus.z - fest.z) > 3, 'die Yacht ist rückwärts aus der Ecke gefahren: ' + JSON.stringify([fest, raus]));
+  assert.ok(winkel(raus.facing, fest.facing) > 0.1, 'und hat sich dabei gedreht');
+  // nur nach hinten ziehen: gerade zurück, kein Kreisen
+  await halten(page, 'KeyS', 2000);
+  const gerade = await wo(page);
+  assert.ok(winkel(gerade.facing, raus.facing) < 0.2, 'gerade zurück: ' + raus.facing + ' → ' + gerade.facing);
+  assert.ok(Math.hypot(gerade.x - raus.x, gerade.z - raus.z) > 1, 'und fährt dabei rückwärts');
+  const s = await weg(page);
+  assert.equal(s.ludins, 50, 'kein Strafzettel');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: ein Fahrrad auf dem Steg kann herunterfahren', async () => {
+  const { ctx, page, errors } = await yachtSeite({ where: { x: 82.5, z: -3121.6, f: 0, boat: false },
+    city: { parked: { bike: { x: 82.5, z: -3120, yaw: 0 } } } }); // so stand es früher nach dem Abschleppen manchmal
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Absteigen")').waitFor({ timeout: 5000 });
+  await page.keyboard.down('KeyW');
+  const runter = await page.waitForFunction(() => window.__test.wo().z > -3112, null, { timeout: 20000, polling: 100 }).then(() => true, () => false);
+  await page.keyboard.up('KeyW');
+  assert.ok(runter, 'das Rad ist vom Steg auf die Kaimauer gefahren: ' + JSON.stringify(await wo(page)));
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: Fahrrad fährt nicht auf den Hafen-Steg', async () => {
+  const D = { x: 82.5, z: -3109.5 };
+  const { ctx, page, errors } = await yachtSeite({ where: { x: D.x - 1.6, z: D.z, f: Math.PI, boat: false },
+    city: { parked: { bike: { x: D.x, z: D.z, yaw: Math.PI } } } });
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Absteigen")').waitFor({ timeout: 5000 });
+  await halten(page, 'KeyW', 2500);
+  const w = await wo(page);
+  assert.equal(w.ride, 'bike');
+  assert.ok(w.z > -3112.6, 'das Rad bleibt auf der Kaimauer: ' + JSON.stringify(w));
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Karte: 🛥️ steht erst nach dem Kauf in der Legende', async () => {
+  for (const luxus of [false, true]) {
+    const { ctx, page, errors } = await yachtSeite({ city: { luxus } });
+    await page.waitForTimeout(500);
+    await page.click('#btnMap');
+    await page.locator('#card .maplegend').waitFor();
+    assert.equal((await page.textContent('#card .maplegend')).includes('Deine Luxusyacht'), luxus, 'Stadtplan, luxus ' + luxus);
+    await page.click('#btnSeaMap');
+    await page.locator('#card h2:has-text("Meer vor Hafenhausen")').waitFor();
+    assert.equal((await page.textContent('#card .maplegend')).includes('Deine Luxusyacht'), luxus, 'Meer, luxus ' + luxus);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Wasser: nach dem Flug von Hafenhausen zum Amazonas wieder Flusswasser', async () => {
+  const { ctx, page, errors } = await meerSeite();
+  await page.waitForFunction(() => window.__test.wasser().meer, null, { timeout: 20000 });
+  assert.deepEqual(await page.evaluate(() => window.__test.wasser()), { fluss: false, meer: true }, 'in Hafenhausen: Meerwasser');
+  await page.evaluate(() => window.__test.warp(-130, -3013)); // neben das Flugzeug am Flugplatz
+  await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#deMap').waitFor();
+  await page.click('[data-dest="amazonas"]');
+  await page.locator('#flight').waitFor({ state: 'hidden', timeout: 15000 });
+  await page.waitForFunction(() => window.__test.wasser().fluss, null, { timeout: 5000 });
+  assert.deepEqual(await page.evaluate(() => window.__test.wasser()), { fluss: true, meer: false }, 'am Amazonas: Flusswasser');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Hochseefische (home:'hochsee'): beißen nur draußen auf dem Meer (an Bord der Luxusyacht oder am Ufer der Insel).
+// fischHeime liest aus FISH in index.html, wo jeder Fisch lebt (ohne home = Amazonas).
+test('Alter Spielstand: Fahrrad im neuen Bootshafen-Haus kommt an seinen Startplatz', async () => {
+  // Früher war dort, wo jetzt der Bootshafen steht, freies Land. Ein Fahrrad, das dort geparkt wurde, stünde jetzt im Haus.
+  const L = stadtWert('CITY_LAND');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, parked: { bike: { x: 88, z: -3092, yaw: 0 }, rakete: { x: 88, z: -3092, yaw: 0 } } },
+    where: { x: L.x, z: L.z, f: L.f, boat: false } }) });
+  await startGame(page);
+  let s = JSON.parse(await read(page));
+  let p = s.city.parked.bike;
+  assert.ok(Math.hypot(p.x - (L.x + 2), p.z - L.z) < 0.05 && Math.abs(p.yaw - L.f) < 0.01, 'gleich gespeichert: das Fahrrad steht am Startplatz: ' + JSON.stringify(p));
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 }); // man steht am Landeplatz, das Fahrrad gleich daneben
+  s = await weg(page);
+  p = s.city.parked.bike;
+  assert.ok(Math.hypot(p.x - (L.x + 2), p.z - L.z) < 0.05, 'das Fahrrad steht am Startplatz: ' + JSON.stringify(p));
+  assert.deepEqual(s.city.parked.rakete, { x: 88, z: -3092, yaw: 0 }, 'unbekannte Einträge bleiben gespeichert');
+  assert.equal(s.city.vehicles.bike, true);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Alter Spielstand: auf der Insel oder auf See ohne Yacht dort steht man nach dem Laden am Hafen-Steg', async () => {
+  const H = stadtWert('BERTH_HAFEN'), I = stadtWert('ISLAND');
+  const faelle = [
+    { where: { x: I.x - 8, z: I.z }, city: { visited: true, luxus: false } },                  // auf der Insel, ohne Luxusyacht
+    { where: { x: I.x - 8, z: I.z }, city: { visited: true, luxus: true, yachtAt: 'hafen' } },   // auf der Insel, die Yacht liegt im Hafen
+    { where: { x: 0, z: -3400 }, city: { visited: true, luxus: false } },                       // mitten auf dem Meer
+  ];
+  for (const f of faelle) {
+    const { ctx, page, errors } = await newPage();
+    await seed(page, { [KEY]: stadtSeed({ city: f.city, where: { ...f.where, f: 0, boat: false } }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.waitForTimeout(300);
+    const w = await wo(page);
+    assert.ok(Math.hypot(w.x - H.x, w.z - H.z) < 0.5, 'am Hafen-Steg: ' + JSON.stringify(f) + ' → ' + JSON.stringify(w));
+    assert.equal(w.atSea, false);
+    const s = await weg(page);
+    assert.ok(Math.hypot(s.where.x - H.x, s.where.z - H.z) < 0.5, 'so gespeichert: ' + JSON.stringify(s.where));
+    assert.equal(s.city.luxus, f.city.luxus, 'die Yacht bleibt, wie sie war');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Yacht: auf die Insel und aufs Meer kommt kein Abschleppdienst', async () => {
+  const I = stadtWert('BERTH_INSEL');
+  const MSG = 'Auf die Insel kann der Abschleppdienst nicht fahren.', BOX = '#card .towbox:has(h3:has-text("Abschleppdienst"))';
+  const { ctx, page, errors } = await yachtSeite({ ludins: 50, where: { x: I.x, z: I.z, f: I.f, boat: false }, city: { yachtAt: 'insel' } });
+  assert.equal((await wo(page)).atSea, true, 'zu Fuß auf dem Insel-Steg');
+  await page.click('#btnMap');
+  await page.locator(BOX).waitFor();
+  assert.ok((await page.locator(BOX).textContent()).includes(MSG), 'auf der Insel: ' + await page.locator(BOX).textContent());
+  assert.equal(await page.locator('#card button[data-tow]').count(), 0, 'keine Knöpfe für den Abschleppdienst');
+  await page.click('#card .btns button:has-text("Fertig")');
+  await anBord(page);
+  assert.equal(await page.evaluate(() => window.__test.luxusWarp({ x: 0, z: -3400, yaw: 0 })), true, 'mitten auf dem Meer');
+  await page.click('#btnMap');
+  await page.locator(BOX).waitFor();
+  assert.ok((await page.locator(BOX).textContent()).includes(MSG), 'auf dem Meer: ' + await page.locator(BOX).textContent());
+  assert.equal(await page.locator('#card button[data-tow]').count(), 0);
+  assert.equal(JSON.parse(await read(page)).ludins, 50);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: kein Fahrrad-Tipp am Yacht-Steg und an Bord', async () => {
+  const L = stadtWert('CITY_LAND');
+  const tipp = page => page.evaluate(() => document.querySelector('#tip').textContent);
+  // Gegenprobe: am Landeplatz, das Fahrrad wurde nie bewegt, dann kommt der Tipp
+  const a = await stadtSeite({ where: { x: L.x, z: L.z, f: L.f, boat: false } }, YACHT_ISO);
+  await a.page.waitForFunction(() => /Fahrrad am Flugplatz/.test(document.querySelector('#tip').textContent), null, { timeout: 5000 });
+  await a.ctx.close();
+  const { ctx, page, errors } = await yachtSeite(); // zu Fuß auf dem Hafen-Steg
+  await page.waitForTimeout(800);
+  assert.doesNotMatch(await tipp(page), /Fahrrad am Flugplatz/, 'auf dem Hafen-Steg');
+  await anBord(page);
+  await page.waitForTimeout(800);
+  assert.doesNotMatch(await tipp(page), /Fahrrad am Flugplatz/, 'an Bord im Hafen');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: Name am Rumpf nur bei neuem Namen neu, das alte Schild wird freigegeben', async () => {
+  const { ctx, page, errors } = await yachtSeite();
+  await page.waitForFunction(() => window.__test.luxus() && window.__test.luxus().sichtbar, null, { timeout: 20000 });
+  const vorher = await page.evaluate(() => window.__test.luxus());
+  assert.equal(await page.evaluate(() => window.__test.luxusNameWatch()), true);
+  // Werkstatt öffnen und mit demselben Namen wieder los: nichts wird neu gemacht
+  await page.click('#btnAvatar');
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 5000 });
+  await page.click('#btnGo');
+  let y = await page.evaluate(() => window.__test.luxus());
+  assert.equal(y.nameId, vorher.nameId, 'gleicher Name: dasselbe Schild');
+  assert.equal(await page.evaluate(() => window.__test.frei), 0);
+  // neuer Name: neues Schild, das alte (Bild, Material, 2 Flächen) wird freigegeben
+  await page.click('#btnAvatar');
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 5000 });
+  await page.fill('#nameIn', 'Kapitänin');
+  await page.click('#btnGo');
+  y = await page.evaluate(() => window.__test.luxus());
+  assert.equal(y.name, 'Kapitänin');
+  assert.notEqual(y.nameId, vorher.nameId, 'neues Schild');
+  assert.equal(await page.evaluate(() => window.__test.frei), 4, 'das alte Schild ist freigegeben');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+function fischHeime() {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const i = html.indexOf('const FISH=['), j = html.indexOf('];', i), h = {};
+  for (const [, id, rest] of html.slice(i, j).matchAll(/\{id:'(\w+)'([^\n]*)/g)) { const m = rest.match(/home:'(\w+)'/); h[id] = m ? m[1] : 'amazonas'; }
+  return h;
+}
+const HOCHSEE = ['seelachs', 'steinbutt', 'thunfisch'];
+const DRAUSSEN = ['meer', 'hochsee'];
+
+test('Hochsee: draußen beißen nur Meeres- und Hochseefische', async () => {
+  const heim = fischHeime();
+  assert.deepEqual(Object.keys(heim).filter(id => heim[id] === 'hochsee'), HOCHSEE, '3 Hochseefische');
+  assert.deepEqual(spielRegeln().thunfisch.selten, true, 'der Rote Thun ist ein seltener Fisch');
+  const { ctx, page, errors } = await yachtSeite({ book: {} });
+  await anBord(page);
+  assert.equal(await page.evaluate(() => window.__test.luxusWarp({ x: 0, z: -3400, yaw: Math.PI })), true, 'mitten auf dem Meer');
+  const w = await wo(page), p = await page.evaluate(() => window.__test.wurf());
+  assert.equal(w.atSea, true);
+  assert.ok(p, 'von Bord aus findet man Wasser');
+  const d = Math.hypot(p.x - w.x, p.z - w.z);
+  assert.ok(d >= 6.9 && d <= 11.1, 'von Bord wirft man weit, über den Bug hinaus: ' + d);
+  const probe = await dreiFaenge(page);
+  const s = JSON.parse(await read(page));
+  const ids = Object.keys(s.book);
+  assert.ok(ids.length >= 1);
+  for (const id of ids) assert.ok(DRAUSSEN.includes(heim[id]), id + ' lebt im Meer');
+  assert.equal(probe.angel.length, 400);
+  for (const id of probe.angel) assert.ok(DRAUSSEN.includes(heim[id]), id + ' lebt im Meer');
+  assert.ok(probe.angel.concat(ids).some(id => heim[id] === 'hochsee'), 'draußen beißen auch Hochseefische');
+  assert.ok(probe.angel.some(id => heim[id] === 'meer'), 'und manchmal ein Fisch aus dem Hafen');
+  assert.equal((await wo(page)).ride, 'luxus', 'man ist noch an Bord');
+  // Fischbuch: neuer Teil „Offenes Meer“ (auf See steht er oben)
+  await page.click('#btnBook');
+  const teile = await page.locator('#card h3.bookhead').allTextContents();
+  assert.match(teile[0], /^Offenes Meer \d von 3$/, 'auf See steht das offene Meer oben: ' + teile);
+  assert.ok(teile.some(t => t.startsWith('Meer (Hafen von Hafenhausen)')), 'der Hafen-Teil bleibt');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hochsee: von der Insel aus beißen sie auch', async () => {
+  const heim = fischHeime(), I = stadtWert('ISLAND');
+  const ufer = { x: I.x, z: I.z - 17, f: Math.PI, boat: false }; // Südufer der Insel, Blick aufs Meer
+  const { ctx, page, errors } = await stadtSeite({ book: {}, where: ufer, city: { visited: true, luxus: true, yachtAt: 'insel' } }, YACHT_ISO); // hergekommen mit der Yacht
+  const w = await wo(page);
+  assert.equal(w.atSea, true, 'auf der Insel');
+  assert.equal(await page.evaluate(w => window.__test.begehbar(w.x, w.z), w), true, 'man steht am Ufer');
+  assert.ok(await page.evaluate(() => window.__test.wurf()), 'vor einem ist Wasser');
+  await page.click('#btnFish');
+  await page.waitForFunction(() => document.querySelector('#fishLbl').textContent === 'ZIEHEN!', null, { timeout: 60000, polling: 200 });
+  const probe = await page.evaluate(() => window.__test.fische(400));
+  await page.keyboard.press('Space');
+  await page.locator('#card h2:has-text("gefangen")').waitFor();
+  const ids = Object.keys(JSON.parse(await read(page)).book);
+  assert.equal(ids.length, 1);
+  assert.ok(DRAUSSEN.includes(heim[ids[0]]), ids[0] + ' lebt im Meer');
+  for (const id of probe) assert.ok(DRAUSSEN.includes(heim[id]), id + ' lebt im Meer');
+  assert.ok(probe.some(id => heim[id] === 'hochsee'), 'von der Insel beißen auch Hochseefische');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Was ist neu v42: Luxusyacht', () => {
+  const n = newsListe()[0];
+  assert.deepEqual({ v: n.v, day: n.day, ico: n.ico, t: n.t, d: n.d }, { v: 42, day: '28.10.2026', ico: '🛥️', t: 'Luxusyacht',
+    d: 'Am Hafen gibt es jetzt einen Bootshafen. Kauf dir die schwarz-goldene Luxusyacht und fahr hinaus aufs Meer – zur Insel und zu den Seehunden!' });
 });

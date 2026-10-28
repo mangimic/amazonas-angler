@@ -61,3 +61,17 @@ Weitere Quellen (Pegel Rio Negro und Regenzeit), der Spieltext bleibt ohne Zahl:
   Vergleich der INMET-Normalen 1961–1990 / 1991–2007: https://revistas.ufpr.br/revistaabclima/article/view/50484 ;
   INMET-Monatsbilanz (Normal 1991–2020, z. B. August nur 56,1 mm, Trockenzeit):
   https://portal.inmet.gov.br/noticias/balan%C3%A7o-manaus-am-teve-chuva-abaixo-e-temperaturas-acima-da-m%C3%A9dia-em-agosto-2023
+
+## Hochseefische (`home:'hochsee'`, offenes Meer vor Hafenhausen)
+
+Gesammelt beim Einbau (Stand Oktober 2026). Keiner der drei Fische hat `zeit`: Für keinen wurde ein klarer Beleg gefunden,
+ob er nur tags oder nur nachts beißt.
+
+| Fisch | Spieltext | Belege |
+|---|---|---|
+| Köhler (*Pollachius virens*), id `seelachs` | Heißt im Laden Seelachs, ist aber kein Lachs, sondern ein Verwandter vom Dorsch. Schwimmt gern in Schwärmen. | EU-Datenbank der Handelsnamen, FAO-Code POK: in Deutschland „Seelachs“ und „Köhler“ (https://fish-commercial-names.ec.europa.eu/fish-names/species_de?sn=29500). Familie Dorsche (Gadidae): FishBase (https://www.fishbase.se/summary/1343). „Active, gregarious fish“ (gesellig, in Gruppen): FishBase und MarLIN (https://www.marlin.ac.uk/species/detail/84); Schwarmverhalten beobachtet vom norwegischen Meeresforschungsinstitut (https://imr.brage.unit.no/imr-xmlui/handle/11250/103903). Wie groß die Schwärme sind, ist nicht belegt, darum nur „in Schwärmen“. |
+| Steinbutt (*Scophthalmus maximus*) | Plattfisch, rund wie ein Teller. Beide Augen links (bei der Scholle rechts). Passt seine Farbe dem Meeresboden an. | MarLIN (https://www.marlin.ac.uk/species/detail/1917): Augen auf der linken Seite, liegt auf der rechten Seite, kann die Farbe dem Untergrund anpassen. Mr Goodfish (https://www.mrgoodfish.com/en/species/turbot/): „left-eyed“, Färbung passt sich dem Boden an. FishBase (https://www.fishbase.se/summary/1348): „Body almost circular“, Augenseite ohne Schuppen, mit Knochenhöckern. Sea Angler (https://www.seaangler.co.uk/fishing-tips/species/know-your-fish-turbot/): „almost circular – resembling a large dinner plate“. Scholle (*Pleuronectes platessa*) gehört zu den rechtsäugigen Plattfischen (Pleuronectidae, „righteye flounders“): FishBase. |
+| Thunfisch = Roter Thun (*Thunnus thynnus*), selten | Riese, schwimmt sehr schnell. Körper wärmer als das Wasser. War lange aus der Nordsee verschwunden, kommt langsam zurück. | Wärmer als das Wasser: Kent Wildlife Trust (https://kentwildlifetrust.org.uk/wildlife-explorer/marine/fish-including-sharks-skates-and-rays/atlantic-bluefin-tuna); Muskeln im Mittel 27,6 °C bei 18,9 °C Wassertemperatur (Studie im Mittelmeer, https://iris.unica.it/handle/11584/101262); Wärmetauscher im Blut: NOAA Fishery Bulletin 1975 (https://fisherybulletin.nmfs.noaa.gov/sites/default/files/pdf-content/1975/732/graham.pdf). Rückkehr: DTU Aqua (https://www.aqua.dtu.dk/english/newsarchive/2025/12/tuna-and-diet) und ICCAT-GBYP-Berichte von DTU/SLU (https://www.iccat.int/GBYP/DOCS/Tagging_Phase_10_DTU.pdf): fast sechs Jahrzehnte so gut wie weg, seit knapp zehn Jahren wieder in Skagerrak, Kattegat und Nordsee; bioRxiv-Preprint „Improved management facilitates return of an iconic fish species“ (https://www.biorxiv.org/content/10.1101/197780.full.pdf). Frühere Forschung in der Nordsee: Tiews 1957. Im Spiel ist er ein seltener Fisch (`RULES`, immer zurücksetzen), weil der Bestand sich gerade erst erholt. |
+
+Größen im Spiel (`cm`) bewusst im üblichen Bereich, nicht beim Rekord: Köhler 40–90 cm, Steinbutt 30–70 cm, Roter Thun 100–250 cm
+(er kann noch viel größer werden).
