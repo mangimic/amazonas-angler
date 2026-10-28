@@ -1290,6 +1290,82 @@ test('Hafenhausen: in der Straßenbahn wegfliegen geht nicht, speichern setzt an
   await ctx.close();
 });
 
+// Das offene Meer südlich vom Hafen. meerWert liest const NAME={…} mit reinen Zahlen (auch ohne x/z, z. B. SEA).
+function meerWert(name) {
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = html.match(new RegExp('const ' + name + '=\\{([^}]*)\\}'));
+  assert.ok(m, name + ' steht in index.html');
+  const o = {};
+  for (const [, k, v] of m[1].matchAll(/(\w+):(-?\d+(?:\.\d+)?)/g)) o[k] = Number(v);
+  return o;
+}
+async function meerSeite() {
+  const L = stadtWert('CITY_LAND');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true }, where: { x: L.x, z: L.z, f: L.f, boat: false } }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  return { ctx, page, errors };
+}
+
+test('Meer: tiefes Wasser, Insel und Sandbank', async () => {
+  const SEA = meerWert('SEA'), I = stadtWert('ISLAND'), S = stadtWert('SANDBANK');
+  assert.deepEqual(SEA, { x: 0, z0: -3150, z1: -3650, w: 300 });
+  assert.deepEqual(I, { x: -120, z: -3480, r: 20 });
+  assert.deepEqual(S, { x: 110, z: -3380, rx: 30, rz: 14 });
+  const { ctx, page, errors } = await meerSeite();
+  const h = await page.evaluate(([I, S]) => ({ meer: __test.hoehe(0, -3400), insel: __test.hoehe(I.x, I.z), sand: __test.hoehe(S.x, S.z), hafen: __test.hoehe(0, -3125) }), [I, S]);
+  assert.ok(h.meer < -3, 'auf dem Meer ist es tief: ' + h.meer);
+  assert.ok(h.insel > 1, 'die Insel ist Land: ' + h.insel);
+  assert.ok(h.sand > 0.2, 'die Sandbank schaut aus dem Wasser: ' + h.sand);
+  assert.ok(h.hafen > -3 && h.hafen < -2, 'das Hafenbecken bleibt, wie es ist: ' + h.hafen);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Meer: auf der Insel kann man herumlaufen', async () => {
+  const SEA = meerWert('SEA'), I = stadtWert('ISLAND');
+  const { ctx, page, errors } = await meerSeite(); // Blick vom Landeplatz nach +x: W läuft nach +x
+  await page.evaluate(([x, z]) => window.__test.warp(x, z), [I.x - 8, I.z]);
+  const vorher = await weg(page);
+  assert.ok(Math.hypot(vorher.where.x - (I.x - 8), vorher.where.z - I.z) < 0.5, 'man steht auf der Insel');
+  await halten(page, 'KeyW', 3000);
+  const nach = await weg(page);
+  assert.ok(Math.hypot(nach.where.x - vorher.where.x, nach.where.z - vorher.where.z) > 2, 'man ist gelaufen');
+  const h = await page.evaluate(w => window.__test.hoehe(w.x, w.z), nach.where);
+  assert.ok(h > 0.3, 'man steht noch an Land: ' + h);
+  assert.ok(nach.where.z < SEA.z0, 'man ist auf dem Meer (Insel)');
+  // neu laden: man steht immer noch auf der Insel
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  const s = await weg(page);
+  assert.ok(s.where.z < SEA.z0, 'nach dem Neuladen noch auf der Insel');
+  assert.ok(Math.hypot(s.where.x - nach.where.x, s.where.z - nach.where.z) < 0.5, 'der Platz bleibt erhalten');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Meer: Bojen rot links, grün rechts', async () => {
+  // Deutsches System (IALA A), von See kommend: rot links, grün rechts. Mit Blick nach Norden (+z) ist links +x.
+  const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  const m = html.match(/const BUOYS=\[([^\]]*)\]/);
+  assert.ok(m, 'BUOYS steht in index.html');
+  const liste = [...m[1].matchAll(/\{x:(-?\d+(?:\.\d+)?),z:(-?\d+(?:\.\d+)?),farbe:'(rot|gruen)'\}/g)].map(([, x, z, farbe]) => ({ x: +x, z: +z, farbe }));
+  assert.equal(liste.length, 6, '3 Paare');
+  for (const z of [-3165, -3205, -3245]) {
+    assert.deepEqual(liste.filter(b => b.z === z).sort((a, b) => a.x - b.x), [{ x: -25, z, farbe: 'gruen' }, { x: 25, z, farbe: 'rot' }]);
+  }
+  const { ctx, page, errors } = await meerSeite();
+  const bojen = await page.evaluate(() => window.__test.bojen());
+  const ordne = l => [...l].sort((a, b) => a.z - b.z || a.x - b.x);
+  assert.deepEqual(ordne(bojen), ordne(liste), 'im Spiel stehen die Bojen aus der Liste');
+  assert.ok(bojen.filter(b => b.farbe === 'rot').every(b => b.x > 0), 'rote Bojen links (x > 0)');
+  assert.ok(bojen.filter(b => b.farbe === 'gruen').every(b => b.x < 0), 'grüne Bojen rechts (x < 0)');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 // Weltzeit: die Uhr im Spiel steht fest auf iso (deutsche Zeit). Für Tests, die eine bestimmte Tageszeit brauchen.
 async function zeitSeite(iso) {
   const { ctx, page, errors } = await newPage({ timezoneId: 'Europe/Berlin' });

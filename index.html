@@ -679,9 +679,26 @@ const CITY={x:0,z:-3000,zone:-2400,w:150,l:150};
 let cityBuilt=false,cityGroup=null;
 const cityCols=[],peopleCols=[]; // Hindernisse in der Stadt: Häuser, Bäume, Schilder … und die Menschen (bewegen sich)
 const atCity=()=>player.pos.z<CITY.zone;
+// Das offene Meer südlich vom Hafen (mit der Luxusyacht erreichbar). Reine Zahlen, die Tests lesen sie aus dieser Datei.
+const SEA={x:0,z0:-3150,z1:-3650,w:300}; // Meer von z −3150 bis −3650, |x−SEA.x| < 300
+const ISLAND={x:-120,z:-3480,r:20}; // Insel: Strand, Wiese, Bäume und ein kleiner Leuchtturm
+const SANDBANK={x:110,z:-3380,rx:30,rz:14}; // Sandbank mit Seehunden: für Boote zu flach
+const IDOCK={x0:-121.3,x1:-118.7,z0:-3466,z1:-3442,y:0.6}; // Steg an der Nordseite der Insel, er zeigt zum Hafen
+// Bojen an der Fahrrinne vor der Hafeneinfahrt. Deutsches System (IALA A), von See kommend: rot links, grün rechts.
+// Mit Blick nach Norden (+z, in den Hafen hinein) ist links +x (Westen): rote Bojen bei x > 0, grüne bei x < 0.
+const BUOYS=[{x:25,z:-3165,farbe:'rot'},{x:-25,z:-3165,farbe:'gruen'},{x:25,z:-3205,farbe:'rot'},{x:-25,z:-3205,farbe:'gruen'},{x:25,z:-3245,farbe:'rot'},{x:-25,z:-3245,farbe:'gruen'}];
+const atSea=()=>atCity()&&player.pos.z<SEA.z0;
+// Meer: überall 4 m tief. Die Insel steigt mit Strand und Wiese bis 1,6 m, die Sandbank schaut 0,4 m aus dem Wasser.
+function seaHeight(x,z){let h=-4;const r=ISLAND.r,d=Math.hypot(x-ISLAND.x,z-ISLAND.z);
+  if(d<1.6*r)h=Math.max(h,1.6-1.2*smooth(0.3*r,0.95*r,d)-4.4*smooth(0.925*r,1.5*r,d));
+  const e=Math.hypot((x-SANDBANK.x)/SANDBANK.rx,(z-SANDBANK.z)/SANDBANK.rz);
+  if(e<1.4)h=Math.max(h,-4+4.4*(1-smooth(0.7,1.25,e)));
+  return h;}
 // Straßen, Plätze und Häuser liegen bei 1,2. Im Süden fällt das Land am Hafen steil (Kaimauer) ins Hafenbecken ab (−2,6).
-// Das Becken liegt ganz innerhalb |x|<99, denn die Wasserfläche ist nur 240 m breit.
-function cityHeight(x,z){const q=CITY.z-112.5-z,s=Math.abs(x-CITY.x);
+// Das Becken liegt ganz innerhalb |x|<99. Das Wasser darüber ist in Hafenhausen die Fläche seaWater (Hafen und Meer).
+// Hinter der Kaimauer (und rund um die Stadt) beginnt das Meer.
+function cityHeight(x,z){if(z<SEA.z0||Math.abs(x-CITY.x)>CITY.w||Math.abs(z-CITY.z)>CITY.l)return seaHeight(x,z);
+  const q=CITY.z-112.5-z,s=Math.abs(x-CITY.x);
   if(q<=1||s>=99)return 1.2;
   return 1.2-3.8*smooth(1,1.3,q)*(1-smooth(98.7,99,s));}
 // Feste Stellen in der Stadt (reine Zahlen, die Tests lesen sie aus dieser Datei)
@@ -764,7 +781,7 @@ const LDOCK={x0:LAKE.x-1.3,x1:LAKE.x+1.3,z0:LAKE.z-LAKE.b-7,z1:LAKE.z-LAKE.b+12,
 // Steg am deutschen Fluss (wird mit dem Flussplatz neu gesetzt)
 const DDOCK={x0:-1.3,x1:1.3,z0:0,z1:0,y:DOCK.y};
 const inRect=(R,x,z)=>x>=R.x0&&x<=R.x1&&z>=R.z0&&z<=R.z1;
-const onDock=(x,z)=>inRect(DOCK,x,z)||inRect(LDOCK,x,z)||(!!deP&&inRect(DDOCK,x,z));
+const onDock=(x,z)=>inRect(DOCK,x,z)||inRect(LDOCK,x,z)||(!!deP&&inRect(DDOCK,x,z))||(cityBuilt&&inRect(IDOCK,x,z));
 // Bauplatz für das eigene Pfahlhaus am Fluss: 5×5 Felder, jedes 2 m groß
 const PLOT={n:5,c:2,x0:riverX(23)+8.5,z0:18};PLOT.x1=PLOT.x0+PLOT.n*PLOT.c;PLOT.z1=PLOT.z0+PLOT.n*PLOT.c;
 PLOT.y=(()=>{let m=-9;for(let i=0;i<=10;i++)for(let j=0;j<=10;j++)m=Math.max(m,heightAt(PLOT.x0+i,PLOT.z0+j));return m+0.25;})();
@@ -951,6 +968,11 @@ const waterTex=(function(){
 })();
 const water=new THREE.Mesh(new THREE.PlaneGeometry(WORLD,480),new THREE.MeshPhongMaterial({color:'#7aae95',map:waterTex,transparent:true,opacity:0.9,shininess:70,specular:'#445555'}));
 water.rotation.x=-Math.PI/2;scene.add(water);
+// Wasser bei Hafenhausen (Hafen und Meer): eigene Fläche, 600 × 520 m, gleiches Material und gleich großes Muster.
+// Sie folgt dir in Schritten von 8 m (so groß ist ein Muster-Feld), darum sieht man nie ihren Rand und das Muster bleibt still.
+const seaWater=(function(){const g=new THREE.PlaneGeometry(600,520),uv=g.attributes.uv;
+  for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*600/WORLD,uv.getY(i)*520/480);
+  const m=new THREE.Mesh(g,water.material);m.rotation.x=-Math.PI/2;m.visible=false;scene.add(m);return m;})();
 
 /* ---- Pflanzen ---- */
 const colliders=[],deCols=[]; // deCols: Hindernisse am deutschen Fluss (werden mit dem Flussplatz neu gebaut)
@@ -1436,7 +1458,9 @@ addEventListener('keyup',e=>{input.keys[e.code]=false;});
 
 /* =================== Bewegung =================== */
 const inBounds=(x,z)=>(Math.abs(x)<BOUND&&z>Z_MIN+8&&z<Z_MAX-8)||(Math.abs(x-LAKE.x)<LAKE.w&&Math.abs(z-LAKE.z)<LAKE.l)||
-  (!!deP&&Math.abs(x)<DE.w-6&&Math.abs(z-DE.z)<DE.l-6)||(cityBuilt&&Math.abs(x-CITY.x)<CITY.w-6&&Math.abs(z-CITY.z)<CITY.l-6);
+  (!!deP&&Math.abs(x)<DE.w-6&&Math.abs(z-DE.z)<DE.l-6)||(cityBuilt&&Math.abs(x-CITY.x)<CITY.w-6&&Math.abs(z-CITY.z)<CITY.l-6)||
+  // Meer: bis 40 m in den Hafen hinein (dort nur so breit wie die Stadt, daneben ist kein Land)
+  (cityBuilt&&z>SEA.z1+6&&(z<SEA.z0?Math.abs(x-SEA.x)<SEA.w-6:z<SEA.z0+40&&Math.abs(x-CITY.x)<CITY.w-6));
 function hitsList(list,x,z,r){for(const c of list){const rr=c.r+r;if((c.x-x)**2+(c.z-z)**2<rr*rr)return true;}return false;}
 function hitsCollider(x,z,r){if(hitsList(colliders,x,z,r))return true;if(z<CITY.zone)return hitsList(cityCols,x,z,r)||hitsList(peopleCols,x,z,r);if(z<DE.zone)return hitsList(deCols,x,z,r);const k=chunkOf(z);
   for(let i=k-1;i<=k+1;i++){const ch=chunks[i];if(ch&&hitsList(ch.cols,x,z,r))return true;}return false;}
@@ -2313,7 +2337,7 @@ let lastTip='';
 function tipText(){
   const found=Object.keys(state.book).length;
   if(fishing.state!=='idle')return '';
-  if(atCity())return parkedOk(state.city.parked.bike)?'':'Willkommen in Hafenhausen! Steig auf dein Fahrrad am Flugplatz.';
+  if(atCity())return atSea()||parkedOk(state.city.parked.bike)?'':'Willkommen in Hafenhausen! Steig auf dein Fahrrad am Flugplatz.';
   if(found===0)return 'Lauf über den Holzsteg bis ans Wasser. Dann tippe auf „Angeln“.';
   if(state.bucket.length>=bucketMax())return sellTo()==='Rosa'?'Dein Eimer ist voll! Bring die Fische zu Rosa an die Hütte.':'Dein Eimer ist voll! Verkaufe die Fische bei Fischer Hannes am Stand.';
   if(atLake()&&!Object.keys(state.book).some(id=>FISH_BY[id]&&fishHome(FISH_BY[id])==='see'))return 'Lauf über den Steg bis ans Wasser und wirf die Angel aus!';
@@ -3474,7 +3498,68 @@ function buildCity(){if(cityBuilt)return;
   VEHICLE_IDS.forEach(id=>{vehMesh[id]=buildVehicleMesh(id);bakeKids(vehMesh[id]);g.add(vehMesh[id]);}); // ohne Zufall, damit die Häuser bleiben, wo sie sind
   placeVehicles();
   buildTram(g); // zuletzt: ohne Zufall, und erst jetzt kommt die Bahn zu den Hindernissen (die Häuser stehen schon)
+  buildSea(g); // ganz am Ende, mit eigenem Zufall: die Stadt bleibt, wie sie ist
   cityBuilt=true;}
+// Das offene Meer: Grund, Ufermauern, Insel mit Steg, Bäumen und Leuchtturm, Sandbank mit Seehunden, Bojen
+const seals=[],buoyList=[]; // Seehunde (ihr Kopf hebt sich ab und zu) und Bojen ({x,z,farbe})
+function buildSea(g){const R=rng(2610),sg=new THREE.Group();g.add(sg);const KM='#8a8378';
+  // Meeresgrund: eine flache Fläche ganz unten (unter der Stadt sieht man sie nicht)
+  {const sb=new THREE.Mesh(new THREE.PlaneGeometry(1400,1400),mat('#4c6466'));sb.rotation.x=-Math.PI/2;sb.position.set(SEA.x,-4.08,CITY.z-250);g.add(sb);}
+  // Ufermauern rund um die Stadt (vom Meer aus sieht man sonst unter den Boden)
+  for(const s of[-1,1]){bx(sg,50.5,5.35,1,KM,s*124.75,-4.1,SEA.z0-0.5);bx(sg,1,5.35,2*CITY.l+1,KM,CITY.x+s*(CITY.w+0.5),-4.1,CITY.z);}
+  bx(sg,2*CITY.w+2,5.35,1,KM,CITY.x,-4.1,CITY.z+CITY.l+0.5);
+  // Boden von Insel und Sandbank: Farben nach Höhe (Wasser, Sand, Wiese), Wiese mit Jahreszeiten (wieseMat)
+  const ground=(cx,cz,w,l,n,col)=>{const tg=new THREE.PlaneGeometry(w,l,Math.round(w/n),Math.round(l/n));tg.rotateX(-Math.PI/2);tg.translate(cx,0,cz);
+    const tp=tg.attributes.position;for(let i=0;i<tp.count;i++)tp.setY(i,seaHeight(tp.getX(i),tp.getZ(i)));
+    const geo=tg.toNonIndexed();tg.dispose();geo.computeVertexNormals();
+    const P=geo.attributes.position,cols=new Float32Array(P.count*3),c=new THREE.Color();
+    for(let i=0;i<P.count;i+=3){c.set(col((P.getX(i)+P.getX(i+1)+P.getX(i+2))/3,(P.getZ(i)+P.getZ(i+1)+P.getZ(i+2))/3,(P.getY(i)+P.getY(i+1)+P.getY(i+2))/3));
+      for(let q=0;q<3;q++){cols[(i+q)*3]=c.r;cols[(i+q)*3+1]=c.g;cols[(i+q)*3+2]=c.b;}}
+    geo.setAttribute('color',new THREE.BufferAttribute(cols,3));g.add(new THREE.Mesh(geo,wieseMat));};
+  ground(ISLAND.x,ISLAND.z,4*ISLAND.r,4*ISLAND.r,2,(x,z,y)=>y<-1.5?'#4c6466':y<-0.2?'#b8a678':y<0.95?'#e3cf98':hash(Math.round(x/2.5),Math.round(z/2.5))<0.5?'#5a8f3a':'#609540');
+  ground(SANDBANK.x,SANDBANK.z,3*SANDBANK.rx,3*SANDBANK.rz,2.5,(x,z,y)=>y<-1.5?'#4c6466':y<0.05?'#c4b183':'#e6d6a6');
+  // Steg an der Nordseite der Insel (begehbar: IDOCK in onDock)
+  {const len=IDOCK.z1-IDOCK.z0,cx=(IDOCK.x0+IDOCK.x1)/2;
+    for(let i=0;i<Math.floor(len/0.55);i++)bx(sg,2.7,0.12,0.5,i%3?'#9a7148':'#8a6340',cx,IDOCK.y-0.12,IDOCK.z0+0.3+i*0.55);
+    for(let i=0;i<=6;i++)for(const sd of[-1,1])cy(sg,0.13,0.13,4.6,'#5e4128',cx+sd*1.3,-4,IDOCK.z0+2+i*(len-2.2)/6,6);
+    for(const sd of[-1,1]){cy(sg,0.18,0.2,0.5,'#2b2f33',cx+sd*1.05,IDOCK.y,IDOCK.z1-0.6,8);cityCols.push({x:cx+sd*1.05,z:IDOCK.z1-0.6,r:0.25});}} // Poller zum Festmachen
+  // Kleiner Leuchtturm im Süden der Insel (das Licht oben leuchtet nachts, siehe unten)
+  const LT={x:ISLAND.x+6,z:ISLAND.z-7,s:0.6};
+  {const t=lighthouse(sg,LT.x,LT.z);t.scale.setScalar(LT.s);LT.y=t.position.y;cityCols.push({x:LT.x,z:LT.z,r:2.3*LT.s});}
+  // Bäume: Kiefern (Fichten-Form) und Laubbäume, nicht auf dem Weg zum Steg und nicht zu nah am Leuchtturm
+  const sets=[[],[]],geos=[FICHTE,treeC];
+  for(let k=0;k<300&&sets[0].length+sets[1].length<8;k++){const a=R()*Math.PI*2,d=3+R()*9,x=ISLAND.x+Math.cos(a)*d,z=ISLAND.z+Math.sin(a)*d;
+    if(Math.abs(z-ISLAND.z)<3||(z>ISLAND.z&&Math.abs(x-ISLAND.x)<3.5)||Math.hypot(x-LT.x,z-LT.z)<4.5||hitsList(cityCols,x,z,2.6))continue;
+    const t=R()<0.6?0:1,sc=0.85+R()*0.35;sets[t].push(M(x,heightAt(x,z)-0.1,z,0,R()*6.28,0,sc,sc*(0.9+R()*0.3),sc));cityCols.push({x,z,r:0.6*sc});}
+  // Bojen: rot = Stumpftonne (Zylinder), grün = Spitztonne (Kegel), oben das Toppzeichen in derselben Form
+  BUOYS.forEach(b=>{const col=b.farbe==='rot'?'#d23a2a':'#2f9e5b',o=new THREE.Group();o.position.set(b.x,0,b.z);sg.add(o);
+    cy(o,0.8,0.8,0.55,col,0,-0.35,0,14);
+    if(b.farbe==='rot'){cy(o,0.55,0.6,1.5,col,0,0.2,0,14);cy(o,0.05,0.05,0.5,'#2b2f33',0,1.7,0,6);cy(o,0.24,0.24,0.42,col,0,2.2,0,10);}
+    else{cn(o,0.62,1.75,col,0,0.2,0,14);cy(o,0.05,0.05,0.35,'#2b2f33',0,1.85,0,6);cn(o,0.26,0.5,col,0,2.2,0,10);}
+    cityCols.push({x:b.x,z:b.z,r:0.8});buoyList.push({x:b.x,z:b.z,farbe:b.farbe});});
+  // Seehunde: liegen auf der Sandbank, grau mit dunklen Flecken
+  const spots=[];
+  for(let k=0;k<200&&spots.length<5;k++){const x=SANDBANK.x+(R()*2-1)*SANDBANK.rx*0.5,z=SANDBANK.z+(R()*2-1)*SANDBANK.rz*0.45;
+    if(Math.hypot((x-SANDBANK.x)/SANDBANK.rx,(z-SANDBANK.z)/SANDBANK.rz)>0.5||spots.some(p=>Math.hypot(p.x-x,p.z-z)<3.4))continue;
+    const p={x,z,ry:R()*6.28,y:seaHeight(x,z),fl:[]};for(let i=0;i<7;i++)p.fl.push([R()*1.1-0.6,R()*0.5-0.25,0.5+R()*0.5]);
+    p.ph=R()*20;p.per=9+R()*7;p.dir=R()<0.5?-1:1;spots.push(p);}
+  spots.forEach(p=>{const b=new THREE.Group();b.position.set(p.x,p.y,p.z);b.rotation.y=p.ry;sg.add(b);
+    ball(b,0.42,'#8f969c',0,0.3,0,1.9,0.72,1);ball(b,0.3,'#9aa0a6',-0.8,0.22,0,1.3,0.62,0.9); // Körper
+    for(const s of[-1,1]){ball(b,0.16,'#6f767c',-1.2,0.1,s*0.13,1.4,0.32,0.8);ball(b,0.13,'#6f767c',0.3,0.1,s*0.4,1.5,0.32,0.7);} // Flossen
+    p.fl.forEach(([lx,lz,s])=>{const top=0.3+0.3*Math.sqrt(Math.max(0,1-(lx/0.8)**2-(lz/0.42)**2));ball(b,0.08*s,'#5d646a',lx,top-0.02,lz,1.5,0.4,1.2);});});
+  bakeCells(sg,100,SEA.x-SEA.w,SEA.z1); // feste Teile zu wenigen Meshes (ohne Zufall)
+  // Erst jetzt: was sich bewegt oder nachts leuchtet, und die Bäume (Jahreszeiten über treeMat)
+  geos.forEach((tg2,i)=>{const im=new THREE.InstancedMesh(tg2,treeMat(tg2),sets[i].length);im.userData.shared=true;sets[i].forEach((m,q)=>im.setMatrixAt(q,m));g.add(im);});
+  makeBloom(sets[1],g); // Blüten im Frühling auf den Laubbäumen
+  {const lamp=new THREE.Mesh(new THREE.CylinderGeometry(1.13*LT.s,1.13*LT.s,1.7*LT.s,12),lampMat);lamp.position.set(LT.x,LT.y+17.2*LT.s,LT.z);g.add(lamp);} // Licht im Leuchtturm
+  spots.forEach(p=>{const pv=new THREE.Group();pv.position.set(p.x,p.y,p.z);pv.rotation.y=p.ry;g.add(pv);
+    const h=new THREE.Group();h.position.set(0.68,0.42,0);pv.add(h);
+    ball(h,0.26,'#9aa0a6',0.2,0.06,0);ball(h,0.15,'#b4b9bd',0.42,0,0,1.1,0.85,1.1); // Kopf und Schnauze
+    ball(h,0.05,'#2a2a2a',0.56,0.04,0);for(const s of[-1,1])ball(h,0.05,'#1e1e1e',0.36,0.16,s*0.13); // Nase und Augen
+    bakeKids(h);seals.push({head:h,ph:p.ph,per:p.per,dir:p.dir});});}
+// Seehunde heben ab und zu langsam den Kopf und schauen sich um
+function updateSea(t){if(!seaWater.visible)return;
+  for(const s of seals){const c=((t+s.ph)%s.per)/s.per,k=c<0.3?Math.sin(Math.PI*c/0.3):0;s.head.rotation.z=0.5*k;s.head.rotation.y=0.35*k*s.dir;}}
 // 24 Menschen laufen auf den Gehwegen rund um die Blöcke (1 m neben dem Straßenrand)
 function buildPeople(g,R){const pick=a=>a[Math.floor(R()*a.length)],order=[];
   for(let i=0;i<4;i++)for(let j=0;j<4;j++)order.push([i,j]);
@@ -3885,6 +3970,7 @@ function mapMarkers(){const m=[
   PLANES.forEach(p=>{if((p.id!=='de'||deP)&&(p.id!=='city'||cityBuilt))m.push({x:p.x,z:p.z,ico:'✈️',name:'Flugzeug'});});
   if(cityBuilt){for(const id in STOPS)m.push({x:STOPS[id].x,z:STOPS[id].z,ico:'🚋',name:'Haltestelle'});m.push({x:SHOP_AT.x,z:SHOP_AT.z,ico:'🛒',name:'Fahrzeug-Laden'});m.push({x:MUSEUM_AT.x,z:MUSEUM_AT.z,ico:'🏛️',name:'Museum'});
     m.push({x:hannesHafen.x,z:hannesHafen.z,ico:'🐟',name:'Fischer Hannes'});
+    buoyList.forEach(b=>m.push({x:b.x,z:b.z,ico:b.farbe==='rot'?'🔴':'🟢',name:b.farbe==='rot'?'Rote Boje':'Grüne Boje'}));m.push({x:SANDBANK.x,z:SANDBANK.z,ico:'🦭',name:'Seehunde'});
     VEHICLE_IDS.forEach(id=>{if(!state.city.vehicles[id]||player.ride===id)return;const v=vehicleAt(id);m.push({x:v.x,z:v.z,ico:VEHICLES[id].ico,name:'Dein '+VEHICLES[id].name});});}
   if(deP)m.push({x:hannes.x,z:hannes.z,ico:'🐟',name:'Fischer Hannes'});
   m.push({x:hannesSee.x,z:hannesSee.z,ico:'🐟',name:'Fischer Hannes'});
@@ -3902,7 +3988,7 @@ function drawMe(c,x,y,ang,r){c.save();c.translate(x,y);c.rotate(ang);
 function paintTerrain(c,w,h,step,toWorld){c.fillStyle=MAPC.land;c.fillRect(0,0,w,h);
   for(let py=0;py<h;py+=step)for(let px=0;px<w;px+=step){const [x,z]=toWorld(px+step/2,py+step/2),hh=heightAt(x,z);
     if(hh<-0.35){c.fillStyle=MAPC.water;c.fillRect(px,py,step+0.5,step+0.5);}else if(hh<0.25){c.fillStyle=MAPC.sand;c.fillRect(px,py,step+0.5,step+0.5);}
-    else if(z<CITY.zone){const cc=inRect(MARKET,x,z)?MAPC.plaza:onRoad(x,z)?MAPC.road:inRect(AIRFIELD,x,z)?MAPC.air:null; // Stadt: Straßen und Plätze
+    else if(z<CITY.zone){const cc=inRect(MARKET,x,z)?MAPC.plaza:onRoad(x,z)?MAPC.road:inRect(AIRFIELD,x,z)?MAPC.air:z<SEA.z0&&hh<0.95?MAPC.sand:null; // Stadt: Straßen und Plätze, Meer: Strand und Sandbank
       if(cc){c.fillStyle=cc;c.fillRect(px,py,step+0.5,step+0.5);}}}}
 
 // Kleine Karte: 60 m um dich herum
@@ -3930,7 +4016,7 @@ function lakeTerrain(){if(lakeImg)return lakeImg;const W=380,H=Math.round(W*LAKE
   const cv=document.createElement('canvas');cv.width=W;cv.height=H;const c=cv.getContext('2d');
   paintTerrain(c,W,H,2,(px,py)=>[LAKE.x+LAKE.w-py/H*2*LAKE.w,LAKE.z-LAKE.l+px/W*2*LAKE.l]);return lakeImg=cv;}
 function label(c,t,x,y,size,align){c.font='800 '+size+'px system-ui,sans-serif';c.textAlign=align||'center';c.textBaseline='middle';
-  c.lineWidth=4;c.strokeStyle='rgba(251,243,223,.95)';c.strokeText(t,x,y);c.fillStyle='#1b2a20';c.fillText(t,x,y);}
+  c.lineWidth=4;c.lineJoin='round';c.strokeStyle='rgba(251,243,223,.95)';c.strokeText(t,x,y);c.fillStyle='#1b2a20';c.fillText(t,x,y);}
 function showMap(){
   if(atCity()){showCityMap();return;}
   if(atDE()){showGermany('view');return;}
@@ -3983,24 +4069,28 @@ function towList(){const box=el('div','towbox');box.appendChild(el('h3',null,'�
       b.dataset.tow=id;b.onclick=()=>{audio();callTow(id);};bt.appendChild(b);});
     box.appendChild(bt);}
   return box;}
-function showCityMap(){
+// sea: das Meer vor dem Hafen zeigen (Insel, Sandbank, Bojen) statt der Stadt. Ohne Angabe: Meer, wenn man auf dem Meer ist.
+function showCityMap(sea){if(typeof sea!=='boolean')sea=atSea();
   stopFishing();openModal();card.className='card mapcard';card.innerHTML='';
-  card.appendChild(el('h2',null,'🗺️ Stadtplan Hafenhausen'));
-  card.appendChild(el('p',null,'Du bist in der Stadt <b>Hafenhausen</b>. Der rote Pfeil bist du. Norden ist oben.'));
+  card.appendChild(el('h2',null,sea?'🗺️ Meer vor Hafenhausen':'🗺️ Stadtplan Hafenhausen'));
+  card.appendChild(el('p',null,(sea?'Vor dem Hafen liegt das <b>Meer</b> mit einer Insel und einer Sandbank.':'Du bist in der Stadt <b>Hafenhausen</b>.')+' Der rote Pfeil bist du. Norden ist oben.'));
   const row=el('div','maprow'),w=el('div','mapwrap'),cv=el('canvas');cv.id='cityMap';w.appendChild(cv);row.appendChild(w);
   const leg=el('div','maplegend');
-  [['🚋','Haltestelle der Straßenbahn'],['🛒','Fahrzeug-Laden'],['🐟','Fischer Hannes (Angeln am Hafen)'],['🚲','Dein Fahrrad'],['✈️','Flugzeug'],['🏛️','Museum'],['🍾','Flaschenpost'],['🟫','Haus']].forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
+  (sea?[['🔴','Rote Boje: links, wenn du in den Hafen fährst'],['🟢','Grüne Boje: rechts, wenn du in den Hafen fährst'],['🦭','Seehunde auf der Sandbank'],['🏝️','Insel mit Steg und Leuchtturm']]
+    :[['🚋','Haltestelle der Straßenbahn'],['🛒','Fahrzeug-Laden'],['🐟','Fischer Hannes (Angeln am Hafen)'],['🚲','Dein Fahrrad'],['✈️','Flugzeug'],['🏛️','Museum'],['🍾','Flaschenpost'],['🟫','Haus']]).forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
   row.appendChild(leg);card.appendChild(row);
   card.appendChild(aufgabenList());
   card.appendChild(towList());
-  const bt=el('div','btns'),cl=el('button','b','Fertig');cl.onclick=closeModal;bt.appendChild(cl);card.appendChild(bt);
+  const bt=el('div','btns'),sw=el('button','b alt',sea?'🏙️ Stadt zeigen':'🌊 Meer zeigen'),cl=el('button','b','Fertig');sw.id='btnSeaMap';sw.onclick=()=>showCityMap(!sea);cl.onclick=closeModal;bt.append(sw,cl);card.appendChild(bt);
   const W=Math.round(Math.min((card.clientWidth||600)-36,Math.max(260,innerHeight*0.6),560));w.style.width=W+'px';
-  const c=hiDPI(cv,W,W),k=W/(2*CITY.w);
-  const w2s=(x,z)=>[(CITY.x+CITY.w-x)*k,(CITY.z+CITY.l-z)*k];
-  paintTerrain(c,W,W,2,(px,py)=>[CITY.x+CITY.w-px/k,CITY.z+CITY.l-py/k]);
+  const V=sea?{x:SEA.x,z:-3310,h:210}:{x:CITY.x,z:CITY.z,h:CITY.w}; // Mitte und halbe Breite des Ausschnitts (quadratisch)
+  const c=hiDPI(cv,W,W),k=W/(2*V.h);
+  const w2s=(x,z)=>[(V.x+V.h-x)*k,(V.z+V.h-z)*k];
+  paintTerrain(c,W,W,2,(px,py)=>[V.x+V.h-px/k,V.z+V.h-py/k]);
   {const [sx,sy]=w2s(POND.x,POND.z);c.fillStyle=MAPC.water;c.beginPath();c.arc(sx,sy,POND.r*k,0,7);c.fill();}
   c.fillStyle='#b5704f';cityHouses.forEach(h=>{const q=Math.abs(Math.sin(h.ry))>0.5,hx=(q?h.d:h.w)/2,hz=(q?h.w:h.d)/2,[sx,sy]=w2s(h.x+hx,h.z+hz);c.fillRect(sx,sy,2*hx*k,2*hz*k);});
-  [['Markt',0,-2972],['Hafen',0,-3132],['Park',90,-2874],['Flugplatz',-145,-2968]].forEach(([t,x,z])=>{const [sx,sy]=w2s(x,z);label(c,t,Math.min(sx,W-4),sy,14,sx>W-40?'right':'center');});
+  (sea?[['Insel',ISLAND.x,ISLAND.z+ISLAND.r+9],['Sandbank',SANDBANK.x,SANDBANK.z+SANDBANK.rz+7],['Hafen',0,-3128],['Meer',0,-3420]]
+    :[['Markt',0,-2972],['Hafen',0,-3132],['Park',90,-2874],['Flugplatz',-145,-2968]]).forEach(([t,x,z])=>{const [sx,sy]=w2s(x,z);label(c,t,Math.min(sx,W-4),sy,14,sx>W-40?'right':'center');});
   mapMarkers().filter(m=>m.z<CITY.zone).forEach(m=>{const [sx,sy]=w2s(m.x,m.z);drawIcon(c,m.ico,sx,sy,16,'rgba(251,243,223,.9)');});
   const [mx,my]=w2s(player.pos.x,player.pos.z),f=player.facing;drawMe(c,mx,my,Math.atan2(-Math.cos(f),-Math.sin(f)),11);
   const nx=W-22,ny=28;c.fillStyle='#1b2a20';c.beginPath();c.moveTo(nx,ny-14);c.lineTo(nx+7,ny+6);c.lineTo(nx,ny+1);c.lineTo(nx-7,ny+6);c.closePath();c.fill();label(c,'N',nx,ny+17,13);
@@ -4195,7 +4285,10 @@ function loop(){
   tickPlayTime();
   updateSonar(dt);
   const focusZ=mode==='build'?PLOT.z0:player.pos.z;updateChunks(focusZ,false);
-  water.position.z=Math.round(focusZ/8)*8;{const fd=focusZ<DE.zone;scene.fog.near=fd?70:45;scene.fog.far=fd?260:150;} // am Fluss sieht man weiter
+  water.position.z=Math.round(focusZ/8)*8;
+  {const sea=cityBuilt&&focusZ<CITY.zone;water.visible=!sea;seaWater.visible=sea; // in Hafenhausen: Wasser von Hafen und Meer
+    if(sea)seaWater.position.set(Math.round(player.pos.x/8)*8,0.04*Math.sin(t*0.7),Math.round(focusZ/8)*8);} // ganz sanfte Wellen
+  {const fd=focusZ<DE.zone;scene.fog.near=fd?70:45;scene.fog.far=fd?260:150;} // am Fluss sieht man weiter
 updateFoam(dt,t);updateTraps(t);updateDeShip(dt);updatePeople(dt,t);rapidSound(player.pos.x,player.pos.z);
   if(mode==='play'){updateTram(dt);updatePlayer(dt,t);updateFishing(dt,t);updateTow(dt,t);
     slowT+=dt;if(slowT>0.2){slowT=0;updateCtx();updateTip();drawMini();}
@@ -4241,7 +4334,7 @@ updateFoam(dt,t);updateTraps(t);updateDeShip(dt);updatePeople(dt,t);rapidSound(p
     if(k>=1){jumper.visible=false;splash(jumper.position.x,jumper.position.z);jump.t=-1;}}
   updateCamera(dt);
   if(stars.visible){stars.position.copy(camera.position);moon.position.copy(camera.position).addScaledVector(moonDir,280);moon.lookAt(camera.position);}
-  updateFlies(t);
+  updateFlies(t);updateSea(t);
   renderer.render(scene,camera);
 }
 $('#loading').remove();
@@ -4255,6 +4348,7 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
   welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible,region:WT.region,laub:'#'+laubMat.color.getHexString(),wiese:'#'+wieseMat.color.getHexString(),laubFade:laubMat.userData.fade.value,wieseFade:wieseMat.userData.fade.value,
     fichten:(()=>{const f=[];scene.traverse(o=>{if(o.isInstancedMesh&&o.geometry===FICHTE)f.push(o.material===wieseMat);});return f.length>0&&f.every(Boolean);})(),blueten:bloomOn&&blooms.size>0&&[...blooms].every(p=>p.visible)}),
   hoehe:(x,z)=>heightAt(x,z),
+  bojen:()=>buoyList.map(b=>({x:b.x,z:b.z,farbe:b.farbe})), // Bojen auf dem Meer vor dem Hafen
   // Hafenhausen: ist (x,z) auf dem Gehweg / der Straße, wie weit von den Schienen, und wie weit von jeder Haustür (Haus-Mitte + halbe Tiefe in Türrichtung)?
   stadtPunkt:(x,z)=>({walk:onWalk(x,z),road:onRoad(x,z),rail:railDist(x,z),tueren:cityHouses.map(h=>{const [tx,tz]=rotXZ(h.x,h.z,h.ry,0,-h.d/2);return Math.hypot(tx-x,tz-z);})}),
   fischInfo:id=>({fact:FISH_BY[id].fact,anzahl:FISH.length}),
