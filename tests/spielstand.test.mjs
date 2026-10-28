@@ -1,7 +1,7 @@
 // Prüft, dass der Spielstand nach einem neuen Update erhalten bleibt.
 // Start:  cd tests && npm install && npm test
 // Die Tests öffnen das echte Spiel in einem unsichtbaren Browser.
-import { test, before, after } from 'node:test';
+import { test, before, after, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import fs from 'node:fs';
@@ -32,20 +32,28 @@ before(async () => {
   catch { browser = await chromium.launch({ ...opts, executablePath: '/opt/pw-browsers/chromium' }); }
 });
 after(async () => { await browser?.close(); server?.close(); });
+// Nach jedem Test alle Browserfenster schließen, auch wenn der Test vorher abgebrochen ist (Fehler, Zeitüberschreitung).
+// Sonst rechnet das offene Spiel weiter an seinen Bildern (ohne Grafikkarte macht das die CPU), und alle
+// folgenden Tests warten beim Laden so lange darauf, bis sie selbst die Zeit überschreiten.
+afterEach(async () => { for (const c of browser?.contexts() || []) await c.close().catch(() => {}); });
 
 // Neues Browserfenster. Three.js kommt aus npm statt aus dem Internet, Schriften werden übersprungen.
 // Die Uhr im Spiel steht am Anfang immer auf heute, 11 Uhr (Ortszeit dieses Rechners), und läuft dann weiter.
 // So ist im Spiel immer Tag, auch wenn die Tests nachts laufen (Läden zu, Menschen schlafen …).
 // Nur Date wird verschoben. Nicht ctx.clock.setSystemTime: die Playwright-Uhr springt bei langsamen Bildern
 // manchmal viele Sekunden vor (dann ist z. B. der Kunstköder beim Spinnfischen sofort wieder da).
+// Auch nicht ctx.clock.setFixedTime: die Playwright-Uhr ersetzt requestAnimationFrame durch setTimeout. Dann malt
+// das Spiel ohne Pause Bilder, der Grafik-Prozess des Browsers ist voll, und andere Seiten laden 30 s und länger.
+// Eine feste Uhrzeit stellt festeZeit ein (nur Date bleibt stehen).
 // start (ISO-Zeit, z. B. '2026-06-21T23:00:00+02:00'): die Uhr beginnt stattdessen dann und läuft weiter (für Angel-Tests zu einer Uhrzeit).
 async function newPage(opts, start) { // opts: z. B. { viewport: … } (kleineres Fenster = mehr Bilder pro Sekunde)
   const ctx = await browser.newContext(opts);
   const elf = start ? new Date(start) : new Date(); if (!start) elf.setHours(11, 0, 0, 0);
   await ctx.addInitScript(off => {
     const Echt = Date;
-    function Uhr(...a) { if (!new.target) return new Echt(Echt.now() + off).toString(); return a.length ? new Echt(...a) : new Echt(Echt.now() + off); }
-    Uhr.prototype = Echt.prototype; Uhr.now = () => Echt.now() + off; Uhr.UTC = Echt.UTC; Uhr.parse = Echt.parse;
+    const jetzt = () => typeof window.__festeZeit === 'number' ? window.__festeZeit : Echt.now() + off;
+    function Uhr(...a) { if (!new.target) return new Echt(jetzt()).toString(); return a.length ? new Echt(...a) : new Echt(jetzt()); }
+    Uhr.prototype = Echt.prototype; Uhr.now = jetzt; Uhr.UTC = Echt.UTC; Uhr.parse = Echt.parse;
     window.Date = Uhr;
   }, elf.getTime() - Date.now());
   const page = await ctx.newPage();
@@ -1386,8 +1394,14 @@ test('Meer: Bojen rot links, grün rechts', async () => {
 // Weltzeit: die Uhr im Spiel steht fest auf iso (deutsche Zeit). Für Tests, die eine bestimmte Tageszeit brauchen.
 async function zeitSeite(iso) {
   const { ctx, page, errors } = await newPage({ timezoneId: 'Europe/Berlin' });
-  await ctx.clock.setFixedTime(new Date(iso));
+  await festeZeit(ctx, iso);
   return { ctx, page, errors };
+}
+// Die Uhr im Spiel bleibt auf iso stehen: gleich in der offenen Seite und nach jedem Neuladen (das zuletzt eingestellte gilt).
+async function festeZeit(ctx, iso) {
+  const t = new Date(iso).getTime();
+  await ctx.addInitScript(t => { window.__festeZeit = t; }, t);
+  for (const p of ctx.pages()) await p.evaluate(t => { window.__festeZeit = t; }, t);
 }
 const SEE_ORT = { x: 4, z: -951, f: 0, boat: false }; // am Heimat-See, da landet das Flugzeug
 const phase = page => page.evaluate(() => document.body.dataset.phase);
@@ -1440,7 +1454,7 @@ test('Weltzeit: Jahreszeit', async () => {
   await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
   for (const [iso, jz] of [['2026-04-15T12:00:00+02:00', 'fruehling'], ['2026-07-15T12:00:00+02:00', 'sommer'],
     ['2026-10-15T12:00:00+02:00', 'herbst'], ['2026-12-15T12:00:00+01:00', 'winter']]) {
-    await ctx.clock.setFixedTime(new Date(iso));
+    await festeZeit(ctx, iso);
     await startGame(page);
     await page.locator('body[data-season]').waitFor({ state: 'attached', timeout: 5000 });
     assert.equal(await page.evaluate(() => document.body.dataset.season), jz, iso);
@@ -1461,7 +1475,7 @@ test('Jahreszeiten: am Heimat-See wechseln Laub und Wiese, am Amazonas bleibt al
   await seed(page, { [KEY]: stadtSeed({ visitedLake: true, where: SEE_ORT }) });
   for (const [iso, jz] of [['2026-04-15T12:00:00+02:00', 'fruehling'], ['2026-07-15T12:00:00+02:00', 'sommer'],
     ['2026-10-15T12:00:00+02:00', 'herbst'], ['2026-12-15T12:00:00+01:00', 'winter']]) {
-    await ctx.clock.setFixedTime(new Date(iso));
+    await festeZeit(ctx, iso);
     await startGame(page);
     await page.click('#btnGo');
     await page.locator('body[data-region="de"][data-season="' + jz + '"]').waitFor({ state: 'attached', timeout: 5000 });
@@ -2695,7 +2709,7 @@ test('Nachbarn: Tipps zu Tagesfisch, Museum und Fisch-Zeiten', async () => {
   ids.a = [a, await page.evaluate(k => window.__test.tagesfisch(k), a)];
   assert.ok(ids.b, 'ein Tag mit anderem Tagesfisch');
   for (const [k, id] of [ids.a, ids.b]) {
-    if (k !== a) await ctx.clock.setFixedTime(new Date(k + 'T10:00:00+01:00'));
+    if (k !== a) await festeZeit(ctx, k + 'T10:00:00+01:00');
     const tipps = await page.evaluate(() => window.__test.tipps());
     assert.ok(tipps.every(t => typeof t === 'string' && t.length > 10), 'alle Tipps sind Text');
     const t = tipps.find(t => /doppelt/.test(t));
@@ -2987,7 +3001,7 @@ test('Heute: ein neuer Tag setzt die Zähler zurück und speichert gleich', asyn
   await startGame(page);
   await page.click('#btnGo');
   assert.deepEqual(JSON.parse(await read(page)).heute, { day: HEUTE_TAG, fische: 6, ludins: 84, arten: 1 }, 'heute zählt noch');
-  await ctx.clock.setFixedTime(new Date('2026-11-01T00:01:00+01:00'));
+  await festeZeit(ctx, '2026-11-01T00:01:00+01:00');
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange'))); // wie der Uhr-Takt alle 30 s
   assert.deepEqual(JSON.parse(await read(page)).heute, { day: '2026-11-01', fische: 0, ludins: 0, arten: 0 }, 'ohne Schließen gespeichert');
   assert.deepEqual(errors, []);
