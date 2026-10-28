@@ -1362,6 +1362,9 @@ test('Meer: Bojen rot links, grün rechts', async () => {
   assert.deepEqual(ordne(bojen), ordne(liste), 'im Spiel stehen die Bojen aus der Liste');
   assert.ok(bojen.filter(b => b.farbe === 'rot').every(b => b.x > 0), 'rote Bojen links (x > 0)');
   assert.ok(bojen.filter(b => b.farbe === 'gruen').every(b => b.x < 0), 'grüne Bojen rechts (x < 0)');
+  // Bojen sind Hindernisse: dort stößt man an (hitsCollider), daneben im freien Wasser nicht
+  const stoss = await page.evaluate(l => l.map(b => [window.__test.kollision(b.x, b.z, 0.1), window.__test.kollision(b.x, b.z + 5, 0.1)]), liste);
+  assert.ok(stoss.every(([an, frei]) => an && !frei), 'an jeder Boje stößt man an, 5 m daneben nicht: ' + JSON.stringify(stoss));
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -3125,4 +3128,248 @@ test('Klarere Texte: Spinnfischen sagt „platscht“, Was ist neu v41', () => {
   const n = newsListe()[0];
   assert.deepEqual({ v: n.v, day: n.day, ico: n.ico, t: n.t, d: n.d }, { v: 41, day: '27.10.2026', ico: '📅', t: 'Heute für dich',
     d: 'Tipp auf die Uhr oben: Dort steht, was heute für dich ansteht – und was du schon geschafft hast.' });
+});
+
+// Mit der Luxusyacht fahren: an Bord gehen, aus dem Hafen fahren, an einem Steg aussteigen.
+// Die Yacht liegt am Hafen-Steg, man steht auf dem Steg daneben (BERTH_HAFEN x/z/f).
+const YACHT_ISO = '2026-10-31T10:00:00+01:00';
+async function yachtSeite(extra = {}, iso = YACHT_ISO, fest = false) {
+  const H = stadtWert('BERTH_HAFEN');
+  const { city, ...rest } = extra;
+  return stadtSeite({ ludins: 50, where: { x: H.x, z: H.z, f: H.f, boat: false }, ...rest,
+    city: { visited: true, luxus: true, yachtAt: 'hafen', ...(city || {}) } }, iso, fest);
+}
+const wo = page => page.evaluate(() => window.__test.wo());
+async function anBord(page) {
+  await page.locator('#btnCtx:has-text("⛵ An Bord gehen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.waitForFunction(() => window.__test.wo().ride === 'luxus', null, { timeout: 5000 });
+}
+
+test('Yacht: einsteigen, aus dem Hafen fahren, an der Insel aussteigen', async () => {
+  const H = stadtWert('BERTH_HAFEN'), I = stadtWert('BERTH_INSEL'), SEA = meerWert('SEA');
+  const { ctx, page, errors } = await yachtSeite();
+  assert.ok(await page.locator('#btnHorn').isHidden(), 'zu Fuß gibt es keine Hupe');
+  await anBord(page);
+  let w = await wo(page);
+  assert.ok(nah(w.x, H.yx) && nah(w.z, H.yz), 'man fährt von dort los, wo die Yacht liegt: ' + JSON.stringify(w));
+  assert.equal(w.atSea, false, 'noch im Hafen');
+  await page.locator('#btnHorn').waitFor({ state: 'visible', timeout: 5000 });
+  assert.ok((await page.locator('#btnHorn').boundingBox()).height >= 60, 'die Hupe ist ein großer Knopf');
+  await page.click('#btnHorn');
+  // mit den Tasten aus dem Hafen fahren (kein Warp): der Bug zeigt schon zur Hafenausfahrt
+  await page.keyboard.down('KeyW');
+  await page.waitForFunction(() => window.__test.wo().atSea, null, { timeout: 90000, polling: 100 });
+  await page.keyboard.up('KeyW');
+  w = await wo(page);
+  assert.ok(w.z < SEA.z0, 'auf dem Meer: ' + w.z);
+  assert.equal(w.ride, 'luxus');
+  assert.ok(w.nebel >= 400, 'auf dem Meer sieht man weit (Nebel ' + w.nebel + ')');
+  // Testhilfe: die fahrende Yacht vor den Insel-Steg setzen
+  assert.equal(await page.evaluate(I => window.__test.luxusWarp(I), I), true);
+  await page.locator('#btnCtx:has-text("⚓ Aussteigen")').waitFor({ timeout: 5000 });
+  await page.click('#btnCtx');
+  await page.waitForFunction(() => window.__test.wo().ride === '', null, { timeout: 5000 });
+  await page.locator('#btnHorn').waitFor({ state: 'hidden', timeout: 5000 });
+  let s = await weg(page);
+  assert.equal(s.city.yachtAt, 'insel');
+  assert.equal(s.city.riding, '');
+  assert.ok(Math.hypot(s.where.x - I.x, s.where.z - I.z) < 0.5, 'man steht auf dem Insel-Steg: ' + JSON.stringify(s.where));
+  assert.deepEqual(s.city.parked, {}, 'die Yacht ist kein geparktes Fahrzeug');
+  assert.deepEqual(s.city.vehicles, STADT_START.vehicles, 'die Fahrzeuge bleiben, wie sie sind');
+  let y = await page.evaluate(() => window.__test.luxus());
+  assert.ok(nah(y.x, I.yx) && nah(y.z, I.yz) && nah(y.yaw, I.yaw), 'die Yacht liegt genau am Insel-Steg: ' + JSON.stringify(y));
+  // neu laden: man steht auf der Insel, die Yacht liegt dort
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForFunction(() => window.__test.luxus() && window.__test.luxus().sichtbar, null, { timeout: 20000 });
+  w = await wo(page);
+  assert.equal(w.ride, '');
+  assert.equal(w.atSea, true, 'auf der Insel (vor dem Hafen)');
+  assert.ok(Math.hypot(w.x - I.x, w.z - I.z) < 0.5, 'auf dem Insel-Steg: ' + JSON.stringify(w));
+  assert.equal(await page.evaluate(w => window.__test.begehbar(w.x, w.z), w), true, 'man steht auf dem Steg');
+  y = await page.evaluate(() => window.__test.luxus());
+  assert.ok(nah(y.x, I.yx) && nah(y.z, I.yz), 'die Yacht liegt am Insel-Steg');
+  await page.locator('#btnCtx:has-text("⛵ An Bord gehen")').waitFor({ timeout: 5000 });
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: Speichern auf See', async () => {
+  const I = stadtWert('BERTH_INSEL');
+  const { ctx, page, errors } = await yachtSeite();
+  await anBord(page);
+  assert.equal(await page.evaluate(() => window.__test.luxusWarp({ x: 0, z: -3400, yaw: 0 })), true, 'mitten auf dem Meer');
+  await page.waitForFunction(() => window.__test.wo().nebel >= 400, null, { timeout: 5000 });
+  const s = await weg(page);
+  assert.equal(s.city.riding, '');
+  assert.equal(s.city.yachtAt, 'insel', 'der Insel-Steg ist am nächsten');
+  assert.ok(Math.hypot(s.where.x - I.x, s.where.z - I.z) < 0.5, 'gespeichert auf dem Insel-Steg: ' + JSON.stringify(s.where));
+  assert.equal(s.where.boat, false);
+  assert.equal((await wo(page)).ride, 'luxus', 'im Spiel fährt man weiter');
+  // neu laden: man steht auf dem Steg, die Yacht liegt daneben
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForFunction(() => window.__test.luxus() && window.__test.luxus().sichtbar, null, { timeout: 20000 });
+  const w = await wo(page);
+  assert.equal(w.ride, '');
+  const h = await page.evaluate(w => ({ hoehe: window.__test.hoehe(w.x, w.z), steg: window.__test.begehbar(w.x, w.z) }), w);
+  assert.ok(h.hoehe > 0 || h.steg, 'man steht an Land oder auf dem Steg');
+  assert.ok(Math.hypot(w.x - I.x, w.z - I.z) < 0.5, 'auf dem Insel-Steg');
+  const y = await page.evaluate(() => window.__test.luxus());
+  assert.ok(nah(y.x, I.yx) && nah(y.z, I.yz), 'die Yacht liegt am Insel-Steg');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: Werkstatt öffnen auf See legt am Steg an', async () => {
+  const H = stadtWert('BERTH_HAFEN');
+  const { ctx, page, errors } = await yachtSeite();
+  await anBord(page);
+  assert.equal(await page.evaluate(() => window.__test.luxusWarp({ x: 60, z: -3300, yaw: 0 })), true);
+  await page.click('#btnAvatar');
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 5000 });
+  const s = JSON.parse(await read(page));
+  assert.equal(s.city.riding, '');
+  assert.equal(s.city.yachtAt, 'hafen', 'der Hafen-Steg ist am nächsten');
+  assert.ok(Math.hypot(s.where.x - H.x, s.where.z - H.z) < 0.5, 'gespeichert auf dem Hafen-Steg: ' + JSON.stringify(s.where));
+  let w = await wo(page);
+  assert.equal(w.ride, '', 'in der Werkstatt ist man zu Fuß');
+  assert.ok(Math.hypot(w.x - H.x, w.z - H.z) < 0.5, 'man steht auf dem Hafen-Steg');
+  const y = await page.evaluate(() => window.__test.luxus());
+  assert.ok(nah(y.x, H.yx) && nah(y.z, H.yz) && nah(y.yaw, H.yaw), 'die Yacht liegt am Hafen-Steg: ' + JSON.stringify(y));
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("⛵ An Bord gehen")').waitFor({ timeout: 5000 });
+  w = await wo(page);
+  assert.equal(await page.evaluate(w => window.__test.begehbar(w.x, w.z), w), true, 'man steht auf dem Steg');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: Spielzeit-Pause auf See legt am Steg an', async () => {
+  const I = stadtWert('BERTH_INSEL');
+  const { ctx, page, errors } = await startZeitSeite(YACHT_ISO);
+  const H = stadtWert('BERTH_HAFEN');
+  await seed(page, { [KEY]: stadtSeed({ ludins: 50, city: { visited: true, luxus: true, yachtAt: 'hafen' }, where: { x: H.x, z: H.z, f: H.f, boat: false },
+    playTime: { day: '2026-10-31', sec: 15 * 60 - 40, extra: 0 } }), [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) }); // noch 40 s Spielzeit
+  await startGame(page);
+  await page.click('#btnGo');
+  await anBord(page);
+  assert.equal(await page.evaluate(() => window.__test.luxusWarp({ x: -60, z: -3420, yaw: 0 })), true, 'auf dem Meer');
+  await page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 60000 });
+  const s = JSON.parse(await read(page));
+  assert.equal(s.city.riding, '');
+  assert.equal(s.city.yachtAt, 'insel', 'die Yacht legt am nächsten Steg an');
+  assert.ok(Math.hypot(s.where.x - I.x, s.where.z - I.z) < 0.5, 'man steht auf dem Insel-Steg: ' + JSON.stringify(s.where));
+  assert.equal((await wo(page)).ride, '', 'in der Pause ist man zu Fuß');
+  const y = await page.evaluate(() => window.__test.luxus());
+  assert.ok(nah(y.x, I.yx) && nah(y.z, I.yz), 'die Yacht liegt am Insel-Steg');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: nachts einsteigen geht, der Laden ist zu', async () => {
+  const B = stadtWert('BOOTSHAFEN_AT'), H = stadtWert('BERTH_HAFEN');
+  const { ctx, page, errors } = await yachtSeite({ where: { x: B.x, z: B.z, f: 0, boat: false } }, '2026-10-31T23:00:00+01:00', true);
+  await page.locator('#btnCtx:has-text("Geschlossen")').waitFor({ timeout: 20000 });
+  assert.equal((await page.textContent('#btnCtx')).trim(), '🌙 Geschlossen – öffnet um 8 Uhr');
+  await page.evaluate(H => window.__test.warp(H.x, H.z, H.f), H);
+  await anBord(page);
+  assert.equal((await wo(page)).ride, 'luxus', 'die eigene Yacht geht auch nachts');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: an beiden Stegen wenden', async () => {
+  // Am Hafen-Steg liegt der Steg gleich daneben: erst ein Stück vorfahren, dann drehen
+  const I = stadtWert('BERTH_INSEL');
+  const { ctx, page, errors } = await yachtSeite();
+  await anBord(page);
+  for (const ort of ['Hafen-Steg', 'Insel-Steg']) {
+    if (ort === 'Insel-Steg') assert.equal(await page.evaluate(I => window.__test.luxusWarp(I), I), true);
+    await halten(page, 'KeyW', 2000);
+    const vorher = (await wo(page)).facing;
+    await halten(page, 'KeyA', 3000);
+    const nach = (await wo(page)).facing;
+    assert.ok(Math.abs(nach - vorher) > 1, ort + ': die Yacht hat gewendet (' + vorher + ' → ' + nach + ')');
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: Sandbank ist Hindernis und die Seehunde mögen Abstand', async () => {
+  const S = stadtWert('SANDBANK');
+  const { ctx, page, errors } = await yachtSeite();
+  await anBord(page);
+  const start = { x: S.x, z: S.z + S.rz + 30, yaw: Math.PI }; // 30 m nördlich vor der Sandbank, Blick zu ihr
+  assert.equal(await page.evaluate(p => window.__test.luxusWarp(p), start), true);
+  await page.keyboard.down('KeyW');
+  await toastIst(page, 'Abstand halten!');
+  assert.equal(await page.textContent('#toast'), 'Abstand halten! Die Seehunde ruhen sich aus.');
+  await page.waitForTimeout(4000);
+  await page.keyboard.up('KeyW');
+  const w = await wo(page);
+  assert.ok(start.z - w.z > 5, 'die Yacht ist gefahren: ' + JSON.stringify(w));
+  assert.ok(Math.hypot(w.x - S.x, w.z - S.z) > S.rz, 'die Yacht bleibt vor der Sandbank: ' + JSON.stringify(w));
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: Angeln vom Hafen-Steg trifft nicht die Yacht', async () => {
+  const H = stadtWert('BERTH_HAFEN');
+  const { ctx, page, errors } = await yachtSeite();
+  await page.waitForFunction(() => window.__test.luxus() && window.__test.luxus().sichtbar, null, { timeout: 20000 });
+  const p = await page.evaluate(() => window.__test.wurf()); // man steht auf dem Steg und schaut zur Yacht
+  if (p) {
+    const dx = p.x - H.yx, dz = p.z - H.yz, laengs = dx * Math.sin(H.yaw) + dz * Math.cos(H.yaw), quer = dx * Math.cos(H.yaw) - dz * Math.sin(H.yaw);
+    assert.ok(Math.abs(quer) >= 2.2 || Math.abs(laengs) >= 6.3, 'der Köder landet nicht im Rumpf: ' + JSON.stringify(p));
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: Fahrrad fährt nicht auf den Hafen-Steg', async () => {
+  const D = { x: 82.5, z: -3109.5 };
+  const { ctx, page, errors } = await yachtSeite({ where: { x: D.x - 1.6, z: D.z, f: Math.PI, boat: false },
+    city: { parked: { bike: { x: D.x, z: D.z, yaw: Math.PI } } } });
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Absteigen")').waitFor({ timeout: 5000 });
+  await halten(page, 'KeyW', 2500);
+  const w = await wo(page);
+  assert.equal(w.ride, 'bike');
+  assert.ok(w.z > -3112.6, 'das Rad bleibt auf der Kaimauer: ' + JSON.stringify(w));
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Karte: 🛥️ steht erst nach dem Kauf in der Legende', async () => {
+  for (const luxus of [false, true]) {
+    const { ctx, page, errors } = await yachtSeite({ city: { luxus } });
+    await page.waitForTimeout(500);
+    await page.click('#btnMap');
+    await page.locator('#card .maplegend').waitFor();
+    assert.equal((await page.textContent('#card .maplegend')).includes('Deine Luxusyacht'), luxus, 'Stadtplan, luxus ' + luxus);
+    await page.click('#btnSeaMap');
+    await page.locator('#card h2:has-text("Meer vor Hafenhausen")').waitFor();
+    assert.equal((await page.textContent('#card .maplegend')).includes('Deine Luxusyacht'), luxus, 'Meer, luxus ' + luxus);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Wasser: nach dem Flug von Hafenhausen zum Amazonas wieder Flusswasser', async () => {
+  const { ctx, page, errors } = await meerSeite();
+  await page.waitForFunction(() => window.__test.wasser().meer, null, { timeout: 20000 });
+  assert.deepEqual(await page.evaluate(() => window.__test.wasser()), { fluss: false, meer: true }, 'in Hafenhausen: Meerwasser');
+  await page.evaluate(() => window.__test.warp(-130, -3013)); // neben das Flugzeug am Flugplatz
+  await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#deMap').waitFor();
+  await page.click('[data-dest="amazonas"]');
+  await page.locator('#flight').waitFor({ state: 'hidden', timeout: 15000 });
+  await page.waitForFunction(() => window.__test.wasser().fluss, null, { timeout: 5000 });
+  assert.deepEqual(await page.evaluate(() => window.__test.wasser()), { fluss: true, meer: false }, 'am Amazonas: Flusswasser');
+  assert.deepEqual(errors, []);
+  await ctx.close();
 });

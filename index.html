@@ -983,10 +983,11 @@ const waterTex=(function(){
 })();
 const water=new THREE.Mesh(new THREE.PlaneGeometry(WORLD,480),new THREE.MeshPhongMaterial({color:'#7aae95',map:waterTex,transparent:true,opacity:0.9,shininess:70,specular:'#445555'}));
 water.rotation.x=-Math.PI/2;scene.add(water);
-// Wasser bei Hafenhausen (Hafen und Meer): eigene Fläche, 600 × 520 m, gleiches Material und gleich großes Muster.
-// Sie folgt dir in Schritten von 8 m (so groß ist ein Muster-Feld), darum sieht man nie ihren Rand und das Muster bleibt still.
-const seaWater=(function(){const g=new THREE.PlaneGeometry(600,520),uv=g.attributes.uv;
-  for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*600/WORLD,uv.getY(i)*520/480);
+// Wasser bei Hafenhausen (Hafen und Meer): eigene Fläche, 1000 × 1000 m, gleiches Material und gleich großes Muster.
+// Sie folgt dir in Schritten von 8 m (so groß ist ein Muster-Feld). Ihr Rand (500 m weit) liegt hinter dem Nebel (420 m auf dem Meer),
+// darum sieht man ihn nie, und das Muster bleibt still.
+const seaWater=(function(){const g=new THREE.PlaneGeometry(1000,1000),uv=g.attributes.uv;
+  for(let i=0;i<uv.count;i++)uv.setXY(i,uv.getX(i)*1000/WORLD,uv.getY(i)*1000/480);
   const m=new THREE.Mesh(g,water.material);m.rotation.x=-Math.PI/2;m.visible=false;scene.add(m);return m;})();
 
 /* ---- Pflanzen ---- */
@@ -1519,6 +1520,73 @@ function crash(kind,who){const f=Math.min(Math.max(0,state.ludins),FINE[player.r
   if(f>0){state.ludins-=f;save();refreshHud(true);}
   if(kind==='mensch'&&who)who.wave=1.5; // der Mensch dreht sich zu dir um (updatePeople)
   toast((kind==='mensch'?'„Hey, pass doch auf!“ ':'')+'🚨 Strafzettel! '+CRASH_TXT[kind]+(f>0?' −'+f+' Ludins.':'')+' '+CRASH_TIPP);}
+/* ---- Mit der Luxusyacht fahren (player.ride==='luxus') ----
+   Die Yacht ist 12 m lang: Mitte, Bug und Heck (je 0,4 × LUXUS.len vor und hinter der Mitte) müssen im tiefen Wasser sein,
+   nicht auf oder gleich neben einem Steg und nicht an einem Hindernis (Bojen, Leuchtturm, Fischerboote). Die Sandbank ist zu flach.
+   Die Yacht ist kein Fahrzeug aus VEHICLES: sie wird nie geparkt, Strafzettel gibt es nicht (FINE hat keinen Eintrag luxus).
+   Aussteigen geht nur an einem Steg (LUXUS_BERTHS). Beim Speichern, Fliegen, in der Werkstatt und in der Spielzeit-Pause
+   legt sie am nächsten Steg an, und man steht auf dem Steg. */
+const LUXUS_R=1.4,LUXUS_HELM=3.6,LUXUS_NEAR=18; // Abstand zu Hindernissen, Steuer-Platz hinter der Mitte, so nah muss ein Steg zum Aussteigen sein
+const SEAL_TXT='Abstand halten! Die Seehunde ruhen sich aus.',SEAL_DIST=25;
+const nearYachtDock=(x,z)=>[HDOCK,IDOCK].some(d=>x>d.x0-1&&x<d.x1+1&&z>d.z0-1&&z<d.z1+1);
+const luxusWater=(x,z)=>inBounds(x,z)&&heightAt(x,z)<-1&&!onDock(x,z)&&!nearYachtDock(x,z)&&!hitsList(cityCols,x,z,LUXUS_R);
+const luxusFits=(x,z,yaw)=>{const d=LUXUS.len*0.4,sx=Math.sin(yaw)*d,sz=Math.cos(yaw)*d;
+  return luxusWater(x,z)&&luxusWater(x+sx,z+sz)&&luxusWater(x-sx,z-sz);};
+// Der Steg, an dem die fahrende Yacht gerade aussteigen kann (Platz der Yacht yx/yz näher als 18 m), sonst ''
+function luxusBerthNear(){let best='',bd=LUXUS_NEAR;
+  for(const k of Object.keys(LUXUS_BERTHS)){const b=LUXUS_BERTHS[k],d=Math.hypot(player.pos.x-b.yx,player.pos.z-b.yz);if(d<bd){bd=d;best=k;}}
+  return best;}
+// Der nächste Steg, egal wie weit (zum Anlegen beim Speichern, Fliegen, in der Werkstatt und in der Pause)
+function luxusNearest(){let best='hafen',bd=1e9;
+  for(const k of Object.keys(LUXUS_BERTHS)){const b=LUXUS_BERTHS[k],d=Math.hypot(player.pos.x-b.yx,player.pos.z-b.yz);if(d<bd){bd=d;best=k;}}
+  return best;}
+// An Bord gehen: zu Fuß auf dem Steg, an dem die eigene Yacht liegt (geht auch nachts, die Yacht ist kein Laden)
+const luxusBoardable=()=>!player.ride&&!player.inBoat&&state.city.luxus===true&&!!luxusMesh&&
+  Math.hypot(player.pos.x-(LUXUS_BERTHS[state.city.yachtAt]||BERTH_HAFEN).x,player.pos.z-(LUXUS_BERTHS[state.city.yachtAt]||BERTH_HAFEN).z)<3;
+let luxusStill=0,luxusTipT=0,sealT=0,luxusStuckTold=false;
+function boardLuxus(){if(!luxusBoardable())return;const b=LUXUS_BERTHS[state.city.yachtAt]||BERTH_HAFEN;stopFishing();
+  player.ride='luxus';state.city.riding='luxus';player.pos.set(b.yx,0,b.yz);player.facing=b.yaw;camYaw=b.yaw+Math.PI;camHold=0;
+  luxusStill=0;luxusStuckTold=false;rideStuck=0;player.av.legs.forEach(l=>l.rotation.x=0);
+  saveWhere();toast('Leinen los! Aussteigen kannst du an jedem Steg.');}
+// Am Steg k anlegen: die Yacht liegt genau auf ihrem Platz, man steht auf dem Steg daneben (und ist zu Fuß). Wird gleich gespeichert.
+function luxusDock(k){if(!LUXUS_BERTHS[k])k='hafen';const b=LUXUS_BERTHS[k];
+  parkHere(); // zu Fuß (die Yacht wird dabei nicht geparkt: parked bleibt, wie es ist)
+  state.city.yachtAt=k;placeLuxus();
+  player.pos.set(b.x,0,b.z);player.facing=b.f;player.y=groundY(b.x,b.z);camYaw=b.f+Math.PI;
+  player.root.position.set(b.x,player.y,b.z);player.root.rotation.y=b.f;
+  state.where={x:b.x,z:b.z,f:b.f,boat:false};save();}
+function updateLuxus(dt,t,jx,jy,mag){const p=player.pos,av=player.av;let moving=false,turned=false;
+  if(mag>0.12){
+    if(fishing.state!=='idle')stopFishing();
+    const fx=-Math.sin(camYaw),fz=-Math.cos(camYaw),rx=Math.cos(camYaw),rz=-Math.sin(camYaw);
+    const target=Math.atan2(fx*(-jy)+rx*jx,fz*(-jy)+rz*jx),nf=angleLerp(player.facing,target,1-Math.exp(-dt*LUXUS.turn));
+    if(Math.abs(nf-player.facing)>0.002&&luxusFits(p.x,p.z,nf)){player.facing=nf;turned=true;} // drehen nur, wenn Bug und Heck frei bleiben
+    const sp=LUXUS.speed*mag*dt,dx=Math.sin(player.facing)*sp,dz=Math.cos(player.facing)*sp;
+    if(luxusFits(p.x+dx,p.z+dz,player.facing)){p.x+=dx;p.z+=dz;moving=true;}} // kein Rutschen: frei, oder die Yacht bleibt stehen
+  // Die Yacht hängt, obwohl man lenkt: nach 1,5 s einmal ein Tipp
+  rideHint=Math.max(0,rideHint-dt);rideStuck=mag>0.12&&!moving&&!turned?rideStuck+dt:0;if(rideStuck<=0)luxusStuckTold=false;
+  if(rideStuck>1.5&&rideHint<=0&&!luxusStuckTold){luxusStuckTold=true;rideHint=8;toast('Lenk in eine andere Richtung.');}
+  // Seehunde: zu nah dran (näher als 25 m), dann ein Hinweis (höchstens alle 20 s), und der nächste Seehund hebt den Kopf
+  sealT=Math.max(0,sealT-dt);
+  if(sealT<=0&&seals.length){const d=LUXUS.len*0.4,sx=Math.sin(player.facing)*d,sz=Math.cos(player.facing)*d;let best=null,bd=SEAL_DIST;
+    for(const s of seals)for(const k of[-1,0,1]){const e=Math.hypot(s.x-p.x-k*sx,s.z-p.z-k*sz);if(e<bd){bd=e;best=s;}}
+    if(best){sealT=20;best.lookUntil=t+5;rideHint=Math.max(rideHint,4);toast(SEAL_TXT);}}
+  // Weit weg von jedem Steg und man steht still: Tipp, wo man aussteigen kann (höchstens alle 20 s)
+  luxusTipT=Math.max(0,luxusTipT-dt);luxusStill=moving||turned||mag>0.12||luxusBerthNear()?0:luxusStill+dt;
+  if(luxusStill>2&&luxusTipT<=0){luxusTipT=20;toast('Fahr zu einem Steg, um auszusteigen.');}
+  player.speed=moving?mag:0;
+  // Man steht hinten an Deck am Steuer und schaukelt mit der Yacht (rockLuxus)
+  player.y=LUXUS_TOP+0.03+luxusBob(t);
+  player.root.position.set(p.x-Math.sin(player.facing)*LUXUS_HELM,player.y,p.z-Math.cos(player.facing)*LUXUS_HELM);player.root.rotation.y=player.facing;
+  av.group.position.y=0;av.group.visible=true;blob.visible=false;av.legs.forEach(l=>l.rotation.x=0);
+  if(fishing.state==='idle')av.arms.forEach(a=>a.rotation.x=-0.7);
+  // Die Kamera bleibt weich hinter der Yacht (wie in der Bahn: nach eigenem Umschauen wartet sie 3 s)
+  if(camHold>0)camHold-=dt;else camYaw=angleLerp(camYaw,player.facing+Math.PI,1-Math.exp(-dt*1.5));}
+// Sanftes Schaukeln: Hub ±0,1 m, Neigung ±2°, langsam
+const luxusBob=t=>0.1*Math.sin(t*0.8);
+function rockLuxus(t){const m=luxusMesh;if(!m||!m.visible)return;
+  if(player.ride==='luxus'){m.position.x=player.pos.x;m.position.z=player.pos.z;m.rotation.y=player.facing;}
+  m.position.y=luxusBob(t);m.rotation.x=0.035*Math.sin(t*0.6);m.rotation.z=0.035*Math.sin(t*0.75+1);}
 function updatePlayer(dt,t){
   if(player.ride==='tram'){ // in der Straßenbahn fährt man mit: Wischen bewegt nichts, Kamera und Karte folgen der Bahn
     const p=tramPos(tram.s);player.pos.set(p.x,0,p.z);player.facing=p.yaw;player.y=groundY(p.x,p.z);player.speed=0;
@@ -1530,6 +1598,7 @@ function updatePlayer(dt,t){
   let jx=input.jx,jy=input.jy;const k=input.keys;
   if(k.KeyW||k.ArrowUp)jy-=1;if(k.KeyS||k.ArrowDown)jy+=1;if(k.KeyA||k.ArrowLeft)jx-=1;if(k.KeyD||k.ArrowRight)jx+=1;
   const mag=Math.min(1,Math.hypot(jx,jy));
+  if(player.ride==='luxus'){updateLuxus(dt,t,jx,jy,mag);return;}
   let moving=false;const V=VEHICLES[player.ride]; // V = Fahrzeug, auf dem man gerade fährt (sonst undefined)
   if(mag>0.12){
     if(fishing.state!=='idle')stopFishing();
@@ -1542,7 +1611,10 @@ function updatePlayer(dt,t){
     const yachtOk=(x,z)=>boatable(x,z)&&boatable(x+Math.sin(player.facing)*YACHT.len,z+Math.cos(player.facing)*YACHT.len);
     // Steht das Fahrzeug schon in einem geparkten (z. B. nach dem Kauf oder Abschleppen), zählt dieses nicht: man kann herausfahren.
     const under=V?parkedUnderMe():0;
-    const ok=V?(player.ride==='truck'?(x,z)=>truckFits(x,z,player.facing,under):(x,z)=>walkable(x,z)&&!hitsParked(x,z,0.35,under)):player.inBoat?(state.hasYacht?yachtOk:boatable):walkable;
+    // Fahrzeuge fahren nicht auf die Stege der Luxusyacht (dort geht man nur zu Fuß), der Truck auch nicht mit Nase oder Heck
+    const offDocks=(x,z)=>!(cityBuilt&&(inRect(HDOCK,x,z)||inRect(IDOCK,x,z))),tsx=Math.sin(player.facing)*2,tsz=Math.cos(player.facing)*2;
+    const ok=V?(player.ride==='truck'?(x,z)=>offDocks(x,z)&&offDocks(x+tsx,z+tsz)&&offDocks(x-tsx,z-tsz)&&truckFits(x,z,player.facing,under)
+      :(x,z)=>offDocks(x,z)&&walkable(x,z)&&!hitsParked(x,z,0.35,under)):player.inBoat?(state.hasYacht?yachtOk:boatable):walkable;
     let dx=mx*sp,dz=mz*sp;
     if(player.inBoat||V){dx=Math.sin(player.facing)*sp;dz=Math.cos(player.facing)*sp;} // Boot und Fahrzeuge fahren dorthin, wohin sie zeigen
     const p=player.pos;
@@ -1601,10 +1673,14 @@ const schoolAt=(x,z)=>schools.find(sc=>sc.n>0&&Math.hypot(sc.x-x,sc.z-z)<SCHOOL_
 
 /* =================== Angeln =================== */
 const fishing={state:'idle',t:0,target:new THREE.Vector3(),from:new THREE.Vector3(),biteAt:0,win:0,missedFlash:0};
+// Die Luxusyacht am Steg: dort landet der Köder nicht im Rumpf (2,2 m quer und 6,3 m längs um ihre Mitte)
+function inLuxus(x,z){const m=luxusMesh;if(!m||!m.visible||player.ride==='luxus')return false;
+  const dx=x-m.position.x,dz=z-m.position.z,y=m.rotation.y;
+  return Math.abs(dx*Math.cos(y)-dz*Math.sin(y))<2.2&&Math.abs(dx*Math.sin(y)+dz*Math.cos(y))<6.3;}
 function findWater(){
   const dx=Math.sin(player.facing),dz=Math.cos(player.facing);
   const ds=player.inBoat?[4,5.5,3]:[3.5,5,6.5,8];
-  for(const d of ds){const x=player.pos.x+dx*d,z=player.pos.z+dz*d;if(heightAt(x,z)<-0.35&&!onDock(x,z)&&!nearPlot(x,z,0.3)&&inBounds(x,z))return new THREE.Vector3(x,0.05,z);}
+  for(const d of ds){const x=player.pos.x+dx*d,z=player.pos.z+dz*d;if(heightAt(x,z)<-0.35&&!onDock(x,z)&&!nearPlot(x,z,0.3)&&inBounds(x,z)&&!inLuxus(x,z))return new THREE.Vector3(x,0.05,z);}
   return null;
 }
 // Köder für einen Wurf nehmen (Früchte werden weniger, Blinker und Würmer bleiben)
@@ -2246,11 +2322,14 @@ function dismount(quiet){const id=player.ride;if(!VEHICLES[id])return false;
   const e=exitFor(id);if(!e){if(!quiet)toast('Hier ist kein Platz zum Absteigen. Fahr ein Stück weiter.');return false;}parkHere();
   player.pos.x=e.x;player.pos.z=e.z;player.y=groundY(e.x,e.z);save();return true;}
 // In der Stadt zu Fuß: aufsteigen (nächstes eigenes Fahrzeug) oder zum Fahrzeug-Laden. Sonst null.
-// Hupe im Truck: zwei Töne, Menschen in 10 m Nähe winken 1,5 s lang
-function horn(){if(player.ride!=='truck')return;tone(523,0.15,'square',0.08);tone(659,0.15,'square',0.08,0.15);
-  for(const p of people)if(p.awake&&Math.hypot(p.g.position.x-player.pos.x,p.g.position.z-player.pos.z)<10)p.wave=1.5;}
+// Hupe im Truck: zwei Töne, Menschen in 10 m Nähe winken 1,5 s lang.
+// Auf der Luxusyacht: ein tiefer Ton. Am Kai stehen die Menschen weiter weg, darum winken dort alle in 25 m Nähe.
+function horn(){const lx=player.ride==='luxus';if(player.ride!=='truck'&&!lx)return;
+  if(lx)tone(110,0.6,'sine',0.1);else{tone(523,0.15,'square',0.08);tone(659,0.15,'square',0.08,0.15);}
+  for(const p of people)if(p.awake&&Math.hypot(p.g.position.x-player.pos.x,p.g.position.z-player.pos.z)<(lx?25:10))p.wave=1.5;}
 $('#btnHorn').onclick=()=>{audio();horn();};
 function cityCtx(){const st=tramStopNear();if(st&&tramAtStop()===st)return 'tram'; // die Bahn ist da: das geht vor dem eigenen Fahrzeug
+  if(luxusBoardable())return 'luxus_an'; // auf dem Steg neben der eigenen Yacht
   const v=vehicleNear();if(v)return 'mount:'+v;
   if(Math.hypot(player.pos.x-SHOP_AT.x,player.pos.z-SHOP_AT.z)<4)return 'vshop';
   if(Math.hypot(player.pos.x-MUSEUM_AT.x,player.pos.z-MUSEUM_AT.z)<4)return 'museum';
@@ -2259,7 +2338,8 @@ function cityCtx(){const st=tramStopNear();if(st&&tramAtStop()===st)return 'tram
 function updateCtx(){
   let a=null;const p=player.pos;
   if(player.ride){if(VEHICLES[player.ride]){exitSpot=exitFor(player.ride);if(exitSpot)a='dismount';}
-    else if(player.ride==='tram'){const st=tramAtStop();if(st&&st!==tramBoard)a='tramoff';}} // in der Bahn: nur Aussteigen (kein Fliegen)
+    else if(player.ride==='tram'){const st=tramAtStop();if(st&&st!==tramBoard)a='tramoff';} // in der Bahn: nur Aussteigen (kein Fliegen)
+    else if(player.ride==='luxus'&&luxusBerthNear())a='luxus_ab';} // auf der Yacht: aussteigen nur an einem Steg
   else if(!player.inBoat){
     const city=atCity()&&!planeNear()?cityCtx():null; // am Flugzeug gewinnt „Fliegen“
     if(flascheNear())a='flasche'; // die Flaschenpost liegt nicht bei Läden oder Flugzeugen
@@ -2274,11 +2354,11 @@ function updateCtx(){
     else if(state.hasBoat&&Math.hypot(p.x-boat.pos.x,p.z-boat.pos.z)<BOAT_REACH+(state.hasYacht?3:0))a='board';
   }else{exitSpot=findExit();if(exitSpot)a='exit';else if(trapNear())a='trap';}
   if(!a&&state.reusen>0&&fishing.state==='idle'&&!atDE()&&!atCity()&&trapSpot())a='placetrap';
-  const hb=$('#btnHorn'),noHorn=player.ride!=='truck';if(hb.hidden!==noHorn)hb.hidden=noHorn;
+  const hb=$('#btnHorn'),noHorn=player.ride!=='truck'&&player.ride!=='luxus';if(hb.hidden!==noHorn)hb.hidden=noHorn;
   const closed=!!a&&SHOP_CTX.includes(a)&&!shopOpen();
   if(a!==ctxAction||closed!==ctxClosed){ctxAction=a;ctxClosed=closed;const b=$('#btnCtx');b.hidden=!a;
     const vm=a&&a.startsWith('mount:')&&VEHICLES[a.slice(6)],tk=a&&a.startsWith('talk:')&&nachbarInfo(+a.slice(5));
-    b.textContent=closed?SHOP_CLOSED_TXT:vm?vm.ico+' '+vm.on:tk?'💬 Reden mit '+tk.name:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='museum'?'🏛️ Ins Museum':a==='bootshafen'?'⛵ Zum Bootshafen':a==='tram'?'🚋 Einsteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='flasche'?'🍾 Flaschenpost':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
+    b.textContent=closed?SHOP_CLOSED_TXT:vm?vm.ico+' '+vm.on:tk?'💬 Reden mit '+tk.name:a==='dismount'?VEHICLES[player.ride].off:a==='vshop'?'🛒 Zum Fahrzeug-Laden':a==='museum'?'🏛️ Ins Museum':a==='bootshafen'?'⛵ Zum Bootshafen':a==='tram'?'🚋 Einsteigen':a==='luxus_an'?'⛵ An Bord gehen':a==='luxus_ab'?'⚓ Aussteigen':a==='tramoff'?'🚋 Aussteigen':a==='info'?'📋 Infotafel lesen':a==='flasche'?'🍾 Flaschenpost':a==='trap'?'🧺 Reuse ansehen':a==='placetrap'?'🧺 Reuse auslegen':a==='fly'?planeNear().label:a==='shop'?'🐟 Zu Rosa':a==='tiago'?'🎣 Zu Opa Tiago':a==='hannes'?'🐟 Zu Fischer Hannes':a==='build'?'🔨 Bauen':a==='board'?'🛶 Einsteigen':a==='exit'?'Aussteigen':'';}
 }
 $('#btnCtx').onclick=()=>{audio();
   if(SHOP_CTX.includes(ctxAction)&&!shopOpen()){toast(ctxAction==='museum'?MUSEUM_CLOSED_TOAST:ctxAction==='bootshafen'?BOOT_CLOSED_TOAST:SHOP_CLOSED_TOAST);return;} // Laden zu: nichts öffnet sich
@@ -2299,6 +2379,8 @@ $('#btnCtx').onclick=()=>{audio();
   else if(ctxAction==='museum'){stopFishing();showMuseum();}
   else if(ctxAction==='bootshafen'){stopFishing();showBootshafen();}
   else if(ctxAction==='tram')boardTram();
+  else if(ctxAction==='luxus_an')boardLuxus();
+  else if(ctxAction==='luxus_ab'){const k=luxusBerthNear();if(player.ride==='luxus'&&k)luxusDock(k);}
   else if(ctxAction==='tramoff'){const st=tramAtStop();if(player.ride==='tram'&&st&&st!==tramBoard)tramOff(st);}
   else if(ctxAction==='board'){stopFishing();player.inBoat=true;state.usedBoat=true;save();player.pos.copy(boat.pos);player.facing=boat.yaw;toast('Leinen los! Im tiefen Fluss leben die Riesenfische.');}
   else if(ctxAction==='exit'&&exitSpot){stopFishing();player.inBoat=false;player.pos.x=exitSpot.x;player.pos.z=exitSpot.z;player.y=groundY(exitSpot.x,exitSpot.z);
@@ -2421,6 +2503,7 @@ function faceFreeSide(){const p=player.pos;
       if(hitsCollider(x,z,0.7)||hitsWall(x,z,0.5)||heightAt(x,z)>player.y+1.2){free=false;break;}}
     if(free){player.facing=a;return;}}}
 function openCreator(){
+  if(player.ride==='luxus')luxusDock(luxusNearest()); // von der Yacht: am nächsten Steg anlegen, man steht auf dem Steg (wie beim Speichern)
   if(player.ride==='tram')tramOff(STOP_IDS[tram.stopIdx]); // aus der Straßenbahn steigt man an der letzten Haltestelle aus (wie beim Speichern)
   // Wer gerade fährt, steigt erst ab. Ist daneben kein Platz, bleibt das Fahrzeug hier stehen und man steht 2 m rechts daneben
   // (in Fahrtrichtung gesehen). Ist auch dort kein Platz, bleibt man zu Fuß an der Stelle vom Fahrzeug.
@@ -2550,7 +2633,9 @@ function adultGate(box,onOk){
   ok.onclick=()=>{g.remove();if(Number(inp.value)===a*b)onOk();else{toast('Das stimmt leider nicht. Hier ist eine neue Aufgabe.');adultGate(box,onOk);}};
   const bt=el('div','btns');bt.appendChild(ok);g.appendChild(bt);box.appendChild(g);inp.focus();return g;}
 function lockTime(){
-  if(timeLocked)return;timeLocked=true;stopFishing();save();
+  if(timeLocked)return;timeLocked=true;stopFishing();
+  if(player.ride==='luxus')luxusDock(luxusNearest()); // Pause auf der Yacht: am nächsten Steg anlegen
+  save();
   timeBack=mode==='modal'?modalBack:mode;$('#modal').hidden=true;mode='pause';
   const c=$('#timeCard');c.innerHTML='';
   c.appendChild(el('h2',null,'⏰ Deine Spielzeit ist um!'));
@@ -3390,7 +3475,7 @@ function placeTram(){tramCars(tram.s,tram.cars);tramCircles(tram.cars,tram.cols)
 const tramObst=[],tramMe=[{x:0,z:0,r:0.35},{x:0,z:0,r:1.2},{x:0,z:0,r:1.2}],tramTry={cars:[{x:0,z:0,yaw:0},{x:0,z:0,yaw:0}],cols:[]};
 for(let i=0;i<10;i++)tramTry.cols.push({x:0,z:0,r:TRAM_COL_R});
 function tramBlocked(s,noMe){tramObst.length=0;for(const p of people)tramObst.push(p.col); // noMe: ohne den Spieler prüfen
-  if(player.ride!=='tram'&&!noMe){const p=player.pos;tramMe[0].x=p.x;tramMe[0].z=p.z;tramMe[0].r=player.ride==='truck'?1.4:0.35;tramObst.push(tramMe[0]);
+  if(player.ride!=='tram'&&player.ride!=='luxus'&&!noMe){const p=player.pos;tramMe[0].x=p.x;tramMe[0].z=p.z;tramMe[0].r=player.ride==='truck'?1.4:0.35;tramObst.push(tramMe[0]);
     if(player.ride==='truck'){const sx=Math.sin(player.facing)*2,sz=Math.cos(player.facing)*2; // Nase und Heck vom Truck (wie truckFits)
       tramMe[1].x=p.x+sx;tramMe[1].z=p.z+sz;tramMe[2].x=p.x-sx;tramMe[2].z=p.z-sz;tramObst.push(tramMe[1],tramMe[2]);}}
   tramCars(s,tramTry.cars);tramCircles(tramTry.cars,tramTry.cols);
@@ -3585,6 +3670,7 @@ function buildLuxus(){const g=new THREE.Group(),BLACK='#16191f',GOLD='#d9a93a',T
   for(const sx of[-1,1])bx(g,0.12,1.2,0.3,BLACK,sx*1.3,S,2.6);bx(g,2.72,0.14,0.34,GOLD,0,S+1.2,2.6);
   bakeKids(g);
   g.add(new THREE.Mesh(merge(win),winMat)); // nach bakeKids: die Fenster leuchten nachts
+  g.rotation.order='YXZ'; // erst die Richtung (rotation.y), dann das Schaukeln um die eigene Längs- und Querachse
   g.visible=false;return g;}
 function buildLuxusName(){if(luxusMesh)luxusName=hullName(luxusMesh,luxusName,'#e8be4f',3.4,0.64,LUXUS_B+0.03,0.42,-2.4);}
 // Die Luxusyacht an ihren Liegeplatz legen; zu sehen ist sie nur, wenn man sie gekauft hat
@@ -3646,10 +3732,12 @@ function buildSea(g){const R=rng(2610),sg=new THREE.Group();g.add(sg);const KM='
     const h=new THREE.Group();h.position.set(0.68,0.42,0);pv.add(h);
     ball(h,0.26,'#9aa0a6',0.2,0.06,0);ball(h,0.15,'#b4b9bd',0.42,0,0,1.1,0.85,1.1); // Kopf und Schnauze
     ball(h,0.05,'#2a2a2a',0.56,0.04,0);for(const s of[-1,1])ball(h,0.05,'#1e1e1e',0.36,0.16,s*0.13); // Nase und Augen
-    bakeKids(h);seals.push({head:h,ph:p.ph,per:p.per,dir:p.dir});});}
+    bakeKids(h);seals.push({head:h,ph:p.ph,per:p.per,dir:p.dir,x:p.x,z:p.z,lookUntil:-1,lift:0});});}
 // Seehunde heben ab und zu langsam den Kopf und schauen sich um
+// Kommt die Yacht zu nah, hebt der nächste Seehund den Kopf ein paar Sekunden lang (lookUntil, sanft über lift)
 function updateSea(t){if(!seaWater.visible)return;
-  for(const s of seals){const c=((t+s.ph)%s.per)/s.per,k=c<0.3?Math.sin(Math.PI*c/0.3):0;s.head.rotation.z=0.5*k;s.head.rotation.y=0.35*k*s.dir;}}
+  for(const s of seals){const c=((t+s.ph)%s.per)/s.per;s.lift+=((t<s.lookUntil?1:0)-s.lift)*0.04;
+    const k=Math.max(c<0.3?Math.sin(Math.PI*c/0.3):0,s.lift);s.head.rotation.z=0.5*k;s.head.rotation.y=0.35*k*s.dir;}}
 // 24 Menschen laufen auf den Gehwegen rund um die Blöcke (1 m neben dem Straßenrand)
 function buildPeople(g,R){const pick=a=>a[Math.floor(R()*a.length)],order=[];
   for(let i=0;i<4;i++)for(let j=0;j<4;j++)order.push([i,j]);
@@ -3971,7 +4059,8 @@ function showSpotPreview(s,mode){const b=BL[s.bl],open=spotOpen(s.id),here=atDE(
   const z=el('button','b alt','Zurück zur Karte');z.onclick=()=>showGermany(mode);bt.appendChild(z);card.appendChild(bt);}
 // Fliegen: zum Amazonas, zum Heimat-See oder zu einem Flussplatz
 function flyTo(dest){const s=SPOTS_BY[dest];if(s&&!spotOpen(dest))return;
-  if(player.ride){parkHere();save();} // das Fahrzeug bleibt in der Stadt stehen
+  if(player.ride==='luxus')luxusDock(luxusNearest()); // die Yacht legt am nächsten Steg an
+  else if(player.ride){parkHere();save();} // das Fahrzeug bleibt in der Stadt stehen
   stopFishing();$('#modal').hidden=true;const ov=$('#flight');
   ov.querySelector('b').textContent=s?'Flug: '+s.name:dest==='city'?'Flug nach Hafenhausen':dest==='see'?'Flug zum Heimat-See':'Flug zum Amazonas';
   ov.hidden=false;mode='modal';input.jx=input.jy=0;joyId=null;lookId=null;joyBase.hidden=true;tone(392,0.3,'sine',0.08);tone(523,0.4,'sine',0.08,0.25);
@@ -4167,8 +4256,8 @@ function showCityMap(sea){if(typeof sea!=='boolean')sea=atSea();
   card.appendChild(el('p',null,(sea?'Vor dem Hafen liegt das <b>Meer</b> mit einer Insel und einer Sandbank.':'Du bist in der Stadt <b>Hafenhausen</b>.')+' Der rote Pfeil bist du. Norden ist oben.'));
   const row=el('div','maprow'),w=el('div','mapwrap'),cv=el('canvas');cv.id='cityMap';w.appendChild(cv);row.appendChild(w);
   const leg=el('div','maplegend');
-  (sea?[['🔴','Rote Boje: links, wenn du in den Hafen fährst'],['🟢','Grüne Boje: rechts, wenn du in den Hafen fährst'],['🦭','Seehunde auf der Sandbank'],['🏝️','Insel mit Steg und Leuchtturm'],['🛥️','Deine Luxusyacht']]
-    :[['🚋','Haltestelle der Straßenbahn'],['🛒','Fahrzeug-Laden'],['🐟','Fischer Hannes (Angeln am Hafen)'],['🚲','Dein Fahrrad'],['✈️','Flugzeug'],['🏛️','Museum'],['⛵','Bootshafen'],['🛥️','Deine Luxusyacht'],['🍾','Flaschenpost'],['🟫','Haus']]).forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
+  (sea?[['🔴','Rote Boje: links, wenn du in den Hafen fährst'],['🟢','Grüne Boje: rechts, wenn du in den Hafen fährst'],['🦭','Seehunde auf der Sandbank'],['🏝️','Insel mit Steg und Leuchtturm'],...(state.city.luxus?[['🛥️','Deine Luxusyacht']]:[])]
+    :[['🚋','Haltestelle der Straßenbahn'],['🛒','Fahrzeug-Laden'],['🐟','Fischer Hannes (Angeln am Hafen)'],['🚲','Dein Fahrrad'],['✈️','Flugzeug'],['🏛️','Museum'],['⛵','Bootshafen'],...(state.city.luxus?[['🛥️','Deine Luxusyacht']]:[]),['🍾','Flaschenpost'],['🟫','Haus']]).forEach(([i,t])=>leg.appendChild(el('span',null,i+' '+t)));
   row.appendChild(leg);card.appendChild(row);
   card.appendChild(aufgabenList());
   card.appendChild(towList());
@@ -4262,11 +4351,13 @@ $('#btnNews').onclick=()=>{audio();showNews();};
 const r2=v=>Math.round(v*100)/100;
 function saveWhere(){if(mode==='creator')return;
   // In der Straßenbahn: gespeichert wird die letzte Haltestelle (zu Fuß daneben), damit man nach dem Neuladen dort steht
-  const tr=player.ride==='tram',p=tr?stopExit(STOP_IDS[tram.stopIdx]):player.pos;
-  state.where={x:r2(p.x),z:r2(p.z),f:r2(tr?p.f:player.facing),boat:player.inBoat};
+  // Auf der Luxusyacht: gespeichert wird der nächste Steg (die Yacht liegt dort, man steht auf dem Steg)
+  const tr=player.ride==='tram',lx=player.ride==='luxus',lk=lx?luxusNearest():'',p=tr?stopExit(STOP_IDS[tram.stopIdx]):lx?LUXUS_BERTHS[lk]:player.pos;
+  state.where={x:r2(p.x),z:r2(p.z),f:r2(tr||lx?p.f:player.facing),boat:player.inBoat};
+  if(lx)state.city.yachtAt=lk;
   if(VEHICLES[player.ride])state.city.parked[player.ride]={x:r2(player.pos.x),z:r2(player.pos.z),yaw:r2(player.facing)}; // beim Fahren: wo das Fahrzeug ist
   if(state.hasBoat)state.boatAt={x:r2(boat.pos.x),z:r2(boat.pos.z),yaw:r2(boat.yaw)};
-  if(tr)state.city.riding='';save();if(tr)state.city.riding='tram';} // gespeichert: zu Fuß. Im Spiel fährt man weiter mit.
+  if(tr||lx)state.city.riding='';save();if(tr)state.city.riding='tram';if(lx)state.city.riding='luxus';} // gespeichert: zu Fuß. Im Spiel fährt man weiter.
 addEventListener('pagehide',saveWhere);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)saveWhere();});
 let boardOnStart=false;
@@ -4363,8 +4454,9 @@ function updateCamera(dt){
     return;
   }
   const inTram=player.ride==='tram'; // in der Bahn schaut die Kamera von weiter weg und über das Dach (der Zug ist 24 m lang)
-  camTarget.set(player.pos.x,player.y+(inTram?3.6:1.6),player.pos.z);
-  const cp=Math.cos(camPitch),d=player.inBoat?camDist+2:player.ride==='truck'?camDist+3:inTram?camDist+4:camDist;
+  const lux=player.ride==='luxus'; // auf der Yacht: auf die Mitte der Yacht, ohne das Schaukeln (kein Wackeln), von weiter weg (sie ist 12 m lang)
+  camTarget.set(player.pos.x,lux?LUXUS_TOP+2:player.y+(inTram?3.6:1.6),player.pos.z);
+  const cp=Math.cos(camPitch),d=player.inBoat?camDist+2:player.ride==='truck'?camDist+3:inTram?camDist+4:lux?camDist+9:camDist;
   const cx=camTarget.x+Math.sin(camYaw)*cp*d,cz=camTarget.z+Math.cos(camYaw)*cp*d;
   let cy=camTarget.y+Math.sin(camPitch)*d;cy=Math.max(cy,Math.max(heightAt(cx,cz),0)+0.9);
   camWant.set(cx,cy,cz);camera.position.lerp(camWant,1-Math.exp(-dt*10));camera.lookAt(camTarget);
@@ -4379,7 +4471,9 @@ function loop(){
   water.position.z=Math.round(focusZ/8)*8;
   {const sea=cityBuilt&&focusZ<CITY.zone;water.visible=!sea;seaWater.visible=sea; // in Hafenhausen: Wasser von Hafen und Meer
     if(sea)seaWater.position.set(Math.round(player.pos.x/8)*8,0.04*Math.sin(t*0.7),Math.round(focusZ/8)*8);} // ganz sanfte Wellen
-  {const fd=focusZ<DE.zone;scene.fog.near=fd?70:45;scene.fog.far=fd?260:150;} // am Fluss sieht man weiter
+  {const fd=focusZ<DE.zone,meer=cityBuilt&&focusZ<SEA.z0+30; // am Fluss sieht man weiter, auf dem Meer noch weiter (vom Hafen bis zur Insel)
+    scene.fog.near=meer?120:fd?70:45;scene.fog.far=meer?420:fd?260:150;
+    const cf=meer?450:400;if(camera.far!==cf){camera.far=cf;camera.updateProjectionMatrix();}}
 updateFoam(dt,t);updateTraps(t);updateDeShip(dt);updatePeople(dt,t);rapidSound(player.pos.x,player.pos.z);
   if(mode==='play'){updateTram(dt);updatePlayer(dt,t);updateFishing(dt,t);updateTow(dt,t);
     slowT+=dt;if(slowT>0.2){slowT=0;updateCtx();updateTip();drawMini();}
@@ -4397,7 +4491,10 @@ updateFoam(dt,t);updateTraps(t);updateDeShip(dt);updatePeople(dt,t);rapidSound(p
     if(wakeT>0.05){wakeT=0;const back=state.hasYacht?3.6:3.1,bx=boat.pos.x-Math.sin(boat.yaw)*back,bz=boat.pos.z-Math.cos(boat.yaw)*back;
       wakePuff(bx+(Math.random()-0.5)*0.6,bz+(Math.random()-0.5)*0.6);}}
   for(const w of wake){if(!w.m.visible)continue;w.t+=dt;const sc=1+w.t*2.2;w.m.scale.set(sc,sc,sc);w.m.material.opacity=Math.max(0,0.7-w.t*0.7);if(w.t>1)w.m.visible=false;}
-  engineSound(tuckern?0.15+fahrt*0.85:0);
+  const luxFahrt=mode==='play'&&player.ride==='luxus';rockLuxus(t);
+  if(luxFahrt&&player.speed>0.2){wakeT+=dt;if(wakeT>0.05){wakeT=0;const bx=player.pos.x-Math.sin(player.facing)*6.4,bz=player.pos.z-Math.cos(player.facing)*6.4;
+    wakePuff(bx+(Math.random()-0.5)*1.4,bz+(Math.random()-0.5)*1.4);}} // Kielwasser hinter der Luxusyacht
+  engineSound(tuckern?0.15+fahrt*0.85:luxFahrt?0.15+(player.speed||0)*0.85:0);
   // Haus: im Baumodus Dach halb durchsichtig, steht man drin auch die Wände
   const inside=mode!=='build'&&!player.inBoat&&onPlot(player.pos.x,player.pos.z);
   roofMat.opacity=mode==='build'?0.4:inside?0.25:1;roofMat.depthWrite=roofMat.opacity===1;
@@ -4440,6 +4537,13 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
     fichten:(()=>{const f=[];scene.traverse(o=>{if(o.isInstancedMesh&&o.geometry===FICHTE)f.push(o.material===wieseMat);});return f.length>0&&f.every(Boolean);})(),blueten:bloomOn&&blooms.size>0&&[...blooms].every(p=>p.visible)}),
   hoehe:(x,z)=>heightAt(x,z),
   bojen:()=>buoyList.map(b=>({x:b.x,z:b.z,farbe:b.farbe})), // Bojen auf dem Meer vor dem Hafen
+  wo:()=>({atSea:atSea(),ride:player.ride,x:player.pos.x,z:player.pos.z,facing:player.facing,nebel:scene.fog.far}), // wo bin ich, worauf fahre ich (nebel: wie weit man sieht)
+  wasser:()=>({fluss:water.visible,meer:seaWater.visible}), // welche Wasserfläche ist zu sehen (Fluss/See oder Hafen/Meer)
+  kollision:(x,z,r)=>hitsCollider(x,z,r), // stößt ein Kreis mit Radius r bei (x,z) an ein Hindernis?
+  wurf:()=>{const w=findWater();return w&&{x:w.x,z:w.z};}, // wohin würde der Köder jetzt fliegen (null: kein Wasser)
+  // die gerade gefahrene Luxusyacht an p.yx/p.yz/p.yaw (oder p.x/p.z) setzen, nur wenn sie dort ins Wasser passt
+  luxusWarp(p){if(player.ride!=='luxus'||!p)return false;const x=Number.isFinite(p.yx)?p.yx:p.x,z=Number.isFinite(p.yz)?p.yz:p.z,f=Number.isFinite(p.yaw)?p.yaw:player.facing;
+    if(!Number.isFinite(x)||!Number.isFinite(z)||!luxusFits(x,z,f))return false;player.pos.set(x,0,z);player.facing=f;camYaw=f+Math.PI;camHold=0;return true;},
   luxus:()=>luxusMesh?{sichtbar:luxusMesh.visible,x:luxusMesh.position.x,z:luxusMesh.position.z,yaw:luxusMesh.rotation.y,name:luxusName&&luxusName.text}:null, // Luxusyacht in Hafenhausen
   // Hafenhausen: ist (x,z) auf dem Gehweg / der Straße, wie weit von den Schienen, und wie weit von jeder Haustür (Haus-Mitte + halbe Tiefe in Türrichtung)?
   stadtPunkt:(x,z)=>({walk:onWalk(x,z),road:onRoad(x,z),rail:railDist(x,z),tueren:cityHouses.map(h=>{const [tx,tz]=rotXZ(h.x,h.z,h.ry,0,-h.d/2);return Math.hypot(tx-x,tz-z);})}),
