@@ -3140,6 +3140,7 @@ async function yachtSeite(extra = {}, iso = YACHT_ISO, fest = false) {
     city: { visited: true, luxus: true, yachtAt: 'hafen', ...(city || {}) } }, iso, fest);
 }
 const wo = page => page.evaluate(() => window.__test.wo());
+const winkel = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b))); // Unterschied zweier Richtungen (0 bis π)
 async function anBord(page) {
   await page.locator('#btnCtx:has-text("⛵ An Bord gehen")').waitFor({ timeout: 20000 });
   await page.click('#btnCtx');
@@ -3291,7 +3292,7 @@ test('Yacht: an beiden Stegen wenden', async () => {
     const vorher = (await wo(page)).facing;
     await halten(page, 'KeyA', 3000);
     const nach = (await wo(page)).facing;
-    assert.ok(Math.abs(nach - vorher) > 1, ort + ': die Yacht hat gewendet (' + vorher + ' → ' + nach + ')');
+    assert.ok(winkel(nach, vorher) > 1, ort + ': die Yacht hat gewendet (' + vorher + ' → ' + nach + ')');
   }
   assert.deepEqual(errors, []);
   await ctx.close();
@@ -3320,10 +3321,55 @@ test('Yacht: Angeln vom Hafen-Steg trifft nicht die Yacht', async () => {
   const { ctx, page, errors } = await yachtSeite();
   await page.waitForFunction(() => window.__test.luxus() && window.__test.luxus().sichtbar, null, { timeout: 20000 });
   const p = await page.evaluate(() => window.__test.wurf()); // man steht auf dem Steg und schaut zur Yacht
-  if (p) {
+  assert.ok(p, 'hinter der Yacht ist Wasser zum Angeln');
+  {
     const dx = p.x - H.yx, dz = p.z - H.yz, laengs = dx * Math.sin(H.yaw) + dz * Math.cos(H.yaw), quer = dx * Math.cos(H.yaw) - dz * Math.sin(H.yaw);
     assert.ok(Math.abs(quer) >= 2.2 || Math.abs(laengs) >= 6.3, 'der Köder landet nicht im Rumpf: ' + JSON.stringify(p));
   }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: aus einer Ecke kommt man rückwärts wieder heraus', async () => {
+  const { ctx, page, errors } = await yachtSeite();
+  await anBord(page);
+  // in die Nordwest-Ecke des Hafenbeckens (−98,85 | −3113,7) fahren, bis es nicht mehr weitergeht
+  const ecke = { x: -90, z: -3122, yaw: Math.atan2(-98.85 + 90, -3113.7 + 3122) };
+  assert.equal(await page.evaluate(p => window.__test.luxusWarp(p), ecke), true);
+  await page.keyboard.down('KeyW');
+  await toastIst(page, 'Zieh nach hinten, dann fährt die Yacht rückwärts.');
+  await page.keyboard.up('KeyW');
+  const fest = await wo(page);
+  // zurücksetzen und dabei lenken: das Heck geht nach hinten links, die Yacht dreht sich
+  await page.keyboard.down('KeyS');
+  await page.keyboard.down('KeyA');
+  await page.waitForTimeout(3000);
+  await page.keyboard.up('KeyA');
+  await page.keyboard.up('KeyS');
+  const raus = await wo(page);
+  assert.ok(Math.hypot(raus.x - fest.x, raus.z - fest.z) > 3, 'die Yacht ist rückwärts aus der Ecke gefahren: ' + JSON.stringify([fest, raus]));
+  assert.ok(winkel(raus.facing, fest.facing) > 0.1, 'und hat sich dabei gedreht');
+  // nur nach hinten ziehen: gerade zurück, kein Kreisen
+  await halten(page, 'KeyS', 2000);
+  const gerade = await wo(page);
+  assert.ok(winkel(gerade.facing, raus.facing) < 0.2, 'gerade zurück: ' + raus.facing + ' → ' + gerade.facing);
+  assert.ok(Math.hypot(gerade.x - raus.x, gerade.z - raus.z) > 1, 'und fährt dabei rückwärts');
+  const s = await weg(page);
+  assert.equal(s.ludins, 50, 'kein Strafzettel');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Hafenhausen: ein Fahrrad auf dem Steg kann herunterfahren', async () => {
+  const { ctx, page, errors } = await yachtSeite({ where: { x: 82.5, z: -3121.6, f: 0, boat: false },
+    city: { parked: { bike: { x: 82.5, z: -3120, yaw: 0 } } } }); // so stand es früher nach dem Abschleppen manchmal
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#btnCtx:has-text("Absteigen")').waitFor({ timeout: 5000 });
+  await page.keyboard.down('KeyW');
+  const runter = await page.waitForFunction(() => window.__test.wo().z > -3112, null, { timeout: 20000, polling: 100 }).then(() => true, () => false);
+  await page.keyboard.up('KeyW');
+  assert.ok(runter, 'das Rad ist vom Steg auf die Kaimauer gefahren: ' + JSON.stringify(await wo(page)));
   assert.deepEqual(errors, []);
   await ctx.close();
 });
