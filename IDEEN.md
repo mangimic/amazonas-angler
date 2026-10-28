@@ -39,5 +39,6 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [ ] Ampeln und Verkehrsregeln
 - [ ] Goldschürfen
 - [ ] Mehr Menschen in der Angelwelt
+- [ ] Luxusyacht-Feinschliff: Bojen dichter am Rumpf, Nebel weich wechseln, Schnur vom Bug, seltene Fische im Museum anzeigen
 - [ ] 
 - [ ] 

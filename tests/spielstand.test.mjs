@@ -1305,10 +1305,10 @@ function meerWert(name) {
   for (const [, k, v] of m[1].matchAll(/(\w+):(-?\d+(?:\.\d+)?)/g)) o[k] = Number(v);
   return o;
 }
-async function meerSeite() {
+async function meerSeite(city = {}) {
   const L = stadtWert('CITY_LAND');
   const { ctx, page, errors } = await newPage();
-  await seed(page, { [KEY]: stadtSeed({ city: { visited: true }, where: { x: L.x, z: L.z, f: L.f, boat: false } }) });
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, ...city }, where: { x: L.x, z: L.z, f: L.f, boat: false } }) });
   await startGame(page);
   await page.click('#btnGo');
   return { ctx, page, errors };
@@ -1331,7 +1331,8 @@ test('Meer: tiefes Wasser, Insel und Sandbank', async () => {
 
 test('Meer: auf der Insel kann man herumlaufen', async () => {
   const SEA = meerWert('SEA'), I = stadtWert('ISLAND');
-  const { ctx, page, errors } = await meerSeite(); // Blick vom Landeplatz nach +x: W läuft nach +x
+  // die eigene Luxusyacht liegt am Insel-Steg: nur dann bleibt man nach dem Neuladen auf der Insel
+  const { ctx, page, errors } = await meerSeite({ luxus: true, yachtAt: 'insel' }); // Blick vom Landeplatz nach +x: W läuft nach +x
   await page.evaluate(([x, z]) => window.__test.warp(x, z), [I.x - 8, I.z]);
   const vorher = await weg(page);
   assert.ok(Math.hypot(vorher.where.x - (I.x - 8), vorher.where.z - I.z) < 0.5, 'man steht auf der Insel');
@@ -1371,6 +1372,13 @@ test('Meer: Bojen rot links, grün rechts', async () => {
   // Bojen sind Hindernisse: dort stößt man an (hitsCollider), daneben im freien Wasser nicht
   const stoss = await page.evaluate(l => l.map(b => [window.__test.kollision(b.x, b.z, 0.1), window.__test.kollision(b.x, b.z + 5, 0.1)]), liste);
   assert.ok(stoss.every(([an, frei]) => an && !frei), 'an jeder Boje stößt man an, 5 m daneben nicht: ' + JSON.stringify(stoss));
+  // Die 3 Fischerboote im Hafenbecken sind auch Hindernisse: die Luxusyacht fährt nicht hindurch (Mitte, Bug und Heck)
+  const BOOTE = [[-60, -3126, 0.2], [-28, -3136, -0.3], [42, -3128, 0.15]];
+  const boote = await page.evaluate(l => l.map(([x, z, ry]) => [0, 2.5, -2.5].map(d => {
+    const px = x + d * Math.cos(ry), pz = z - d * Math.sin(ry); // entlang vom Rumpf (wie rotXZ im Spiel)
+    return { an: window.__test.kollision(px, pz, 0.1), wasser: window.__test.luxusWasser(px, pz) }; })), BOOTE);
+  assert.ok(boote.flat().every(b => b.an && !b.wasser), 'an jedem Fischerboot stößt man an, die Yacht passt dort nicht hin: ' + JSON.stringify(boote));
+  assert.equal(await page.evaluate(() => window.__test.luxusWasser(0, -3135)), true, 'zwischen den Booten ist freies Wasser');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -3430,6 +3438,114 @@ test('Wasser: nach dem Flug von Hafenhausen zum Amazonas wieder Flusswasser', as
 
 // Hochseefische (home:'hochsee'): beißen nur draußen auf dem Meer (an Bord der Luxusyacht oder am Ufer der Insel).
 // fischHeime liest aus FISH in index.html, wo jeder Fisch lebt (ohne home = Amazonas).
+test('Alter Spielstand: Fahrrad im neuen Bootshafen-Haus kommt an seinen Startplatz', async () => {
+  // Früher war dort, wo jetzt der Bootshafen steht, freies Land. Ein Fahrrad, das dort geparkt wurde, stünde jetzt im Haus.
+  const L = stadtWert('CITY_LAND');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ city: { visited: true, parked: { bike: { x: 88, z: -3092, yaw: 0 }, rakete: { x: 88, z: -3092, yaw: 0 } } },
+    where: { x: L.x, z: L.z, f: L.f, boat: false } }) });
+  await startGame(page);
+  let s = JSON.parse(await read(page));
+  let p = s.city.parked.bike;
+  assert.ok(Math.hypot(p.x - (L.x + 2), p.z - L.z) < 0.05 && Math.abs(p.yaw - L.f) < 0.01, 'gleich gespeichert: das Fahrrad steht am Startplatz: ' + JSON.stringify(p));
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Aufsteigen")').waitFor({ timeout: 20000 }); // man steht am Landeplatz, das Fahrrad gleich daneben
+  s = await weg(page);
+  p = s.city.parked.bike;
+  assert.ok(Math.hypot(p.x - (L.x + 2), p.z - L.z) < 0.05, 'das Fahrrad steht am Startplatz: ' + JSON.stringify(p));
+  assert.deepEqual(s.city.parked.rakete, { x: 88, z: -3092, yaw: 0 }, 'unbekannte Einträge bleiben gespeichert');
+  assert.equal(s.city.vehicles.bike, true);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Alter Spielstand: auf der Insel oder auf See ohne Yacht dort steht man nach dem Laden am Hafen-Steg', async () => {
+  const H = stadtWert('BERTH_HAFEN'), I = stadtWert('ISLAND');
+  const faelle = [
+    { where: { x: I.x - 8, z: I.z }, city: { visited: true, luxus: false } },                  // auf der Insel, ohne Luxusyacht
+    { where: { x: I.x - 8, z: I.z }, city: { visited: true, luxus: true, yachtAt: 'hafen' } },   // auf der Insel, die Yacht liegt im Hafen
+    { where: { x: 0, z: -3400 }, city: { visited: true, luxus: false } },                       // mitten auf dem Meer
+  ];
+  for (const f of faelle) {
+    const { ctx, page, errors } = await newPage();
+    await seed(page, { [KEY]: stadtSeed({ city: f.city, where: { ...f.where, f: 0, boat: false } }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.waitForTimeout(300);
+    const w = await wo(page);
+    assert.ok(Math.hypot(w.x - H.x, w.z - H.z) < 0.5, 'am Hafen-Steg: ' + JSON.stringify(f) + ' → ' + JSON.stringify(w));
+    assert.equal(w.atSea, false);
+    const s = await weg(page);
+    assert.ok(Math.hypot(s.where.x - H.x, s.where.z - H.z) < 0.5, 'so gespeichert: ' + JSON.stringify(s.where));
+    assert.equal(s.city.luxus, f.city.luxus, 'die Yacht bleibt, wie sie war');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Yacht: auf die Insel und aufs Meer kommt kein Abschleppdienst', async () => {
+  const I = stadtWert('BERTH_INSEL');
+  const MSG = 'Auf die Insel kann der Abschleppdienst nicht fahren.', BOX = '#card .towbox:has(h3:has-text("Abschleppdienst"))';
+  const { ctx, page, errors } = await yachtSeite({ ludins: 50, where: { x: I.x, z: I.z, f: I.f, boat: false }, city: { yachtAt: 'insel' } });
+  assert.equal((await wo(page)).atSea, true, 'zu Fuß auf dem Insel-Steg');
+  await page.click('#btnMap');
+  await page.locator(BOX).waitFor();
+  assert.ok((await page.locator(BOX).textContent()).includes(MSG), 'auf der Insel: ' + await page.locator(BOX).textContent());
+  assert.equal(await page.locator('#card button[data-tow]').count(), 0, 'keine Knöpfe für den Abschleppdienst');
+  await page.click('#card .btns button:has-text("Fertig")');
+  await anBord(page);
+  assert.equal(await page.evaluate(() => window.__test.luxusWarp({ x: 0, z: -3400, yaw: 0 })), true, 'mitten auf dem Meer');
+  await page.click('#btnMap');
+  await page.locator(BOX).waitFor();
+  assert.ok((await page.locator(BOX).textContent()).includes(MSG), 'auf dem Meer: ' + await page.locator(BOX).textContent());
+  assert.equal(await page.locator('#card button[data-tow]').count(), 0);
+  assert.equal(JSON.parse(await read(page)).ludins, 50);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: kein Fahrrad-Tipp am Yacht-Steg und an Bord', async () => {
+  const L = stadtWert('CITY_LAND');
+  const tipp = page => page.evaluate(() => document.querySelector('#tip').textContent);
+  // Gegenprobe: am Landeplatz, das Fahrrad wurde nie bewegt, dann kommt der Tipp
+  const a = await stadtSeite({ where: { x: L.x, z: L.z, f: L.f, boat: false } }, YACHT_ISO);
+  await a.page.waitForFunction(() => /Fahrrad am Flugplatz/.test(document.querySelector('#tip').textContent), null, { timeout: 5000 });
+  await a.ctx.close();
+  const { ctx, page, errors } = await yachtSeite(); // zu Fuß auf dem Hafen-Steg
+  await page.waitForTimeout(800);
+  assert.doesNotMatch(await tipp(page), /Fahrrad am Flugplatz/, 'auf dem Hafen-Steg');
+  await anBord(page);
+  await page.waitForTimeout(800);
+  assert.doesNotMatch(await tipp(page), /Fahrrad am Flugplatz/, 'an Bord im Hafen');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Yacht: Name am Rumpf nur bei neuem Namen neu, das alte Schild wird freigegeben', async () => {
+  const { ctx, page, errors } = await yachtSeite();
+  await page.waitForFunction(() => window.__test.luxus() && window.__test.luxus().sichtbar, null, { timeout: 20000 });
+  const vorher = await page.evaluate(() => window.__test.luxus());
+  assert.equal(await page.evaluate(() => window.__test.luxusNameWatch()), true);
+  // Werkstatt öffnen und mit demselben Namen wieder los: nichts wird neu gemacht
+  await page.click('#btnAvatar');
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 5000 });
+  await page.click('#btnGo');
+  let y = await page.evaluate(() => window.__test.luxus());
+  assert.equal(y.nameId, vorher.nameId, 'gleicher Name: dasselbe Schild');
+  assert.equal(await page.evaluate(() => window.__test.frei), 0);
+  // neuer Name: neues Schild, das alte (Bild, Material, 2 Flächen) wird freigegeben
+  await page.click('#btnAvatar');
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 5000 });
+  await page.fill('#nameIn', 'Kapitänin');
+  await page.click('#btnGo');
+  y = await page.evaluate(() => window.__test.luxus());
+  assert.equal(y.name, 'Kapitänin');
+  assert.notEqual(y.nameId, vorher.nameId, 'neues Schild');
+  assert.equal(await page.evaluate(() => window.__test.frei), 4, 'das alte Schild ist freigegeben');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 function fischHeime() {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const i = html.indexOf('const FISH=['), j = html.indexOf('];', i), h = {};
@@ -3473,7 +3589,7 @@ test('Hochsee: draußen beißen nur Meeres- und Hochseefische', async () => {
 test('Hochsee: von der Insel aus beißen sie auch', async () => {
   const heim = fischHeime(), I = stadtWert('ISLAND');
   const ufer = { x: I.x, z: I.z - 17, f: Math.PI, boat: false }; // Südufer der Insel, Blick aufs Meer
-  const { ctx, page, errors } = await stadtSeite({ book: {}, where: ufer }, YACHT_ISO);
+  const { ctx, page, errors } = await stadtSeite({ book: {}, where: ufer, city: { visited: true, luxus: true, yachtAt: 'insel' } }, YACHT_ISO); // hergekommen mit der Yacht
   const w = await wo(page);
   assert.equal(w.atSea, true, 'auf der Insel');
   assert.equal(await page.evaluate(w => window.__test.begehbar(w.x, w.z), w), true, 'man steht am Ufer');

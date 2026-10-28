@@ -454,7 +454,7 @@ const BAITS={
 // like = beißen viel öfter (×3), no = beißen kaum (×0,15)
 const METHODS={
  pose:{name:'Posenangeln',ico:'🎣',like:[],no:[],miss:'wenn die Pose taucht',hint:'Posenangeln: Die Pose schwimmt oben. Taucht sie unter, beißt ein Fisch!'},
- spin:{name:'Spinnfischen',ico:'🌀',like:['hecht','zander','barsch','forelle','doebel','pfauen','dorado','arowana','piranha','rapfen','huchen'],
+ spin:{name:'Spinnfischen',ico:'🌀',like:['hecht','zander','barsch','forelle','doebel','pfauen','dorado','arowana','piranha','rapfen','huchen','makrele','hornhecht','dorsch','seelachs','thunfisch'],
    no:['neon','beil','skalar','diskus','karausche','schleie','karpfen','rotfeder','tambaqui','pacu','brachse','nase','quappe','aal','stoer','scholle'],
    miss:'wenn es am Köder platscht',hint:'Spinnfischen: Der Kunstköder kommt von selbst zu dir zurück. Raubfische jagen ihm nach!'},
  grund:{name:'Grundangeln',ico:'⚓',like:['karpfen','schleie','karausche','antennen','piraiba','rochen','tambaqui','pacu','barbe','brachse','wels','aal','quappe','stoer','scholle','dorsch','steinbutt'],
@@ -1359,8 +1359,11 @@ function buildYacht(){const g=new THREE.Group(),white=mat('#f4f6f7'),blue=mat('#
   return g;}
 // Der Avatar-Name auf beiden Seiten vom Rumpf (Yacht am Amazonas, Luxusyacht in Hafenhausen). old = alte Schrift (wird ersetzt).
 // col = Farbe der Schrift, w × h = Größe, (±x, y, z) = Stelle am Rumpf. Gibt {a, b, text} zurück.
-function hullName(g,old,col,w,h,x,y,z){if(old){g.remove(old.a);g.remove(old.b);}
-  const name=(state.avatar.name||'Ludina').slice(0,14),cv=document.createElement('canvas');cv.width=512;cv.height=96;const c=cv.getContext('2d');
+// Gleicher Name: die alte Schrift bleibt. Neuer Name: die alte wird ganz freigegeben (Bild, Material, Flächen), sonst bleibt sie im Grafikspeicher.
+function hullName(g,old,col,w,h,x,y,z){const name=(state.avatar.name||'Ludina').slice(0,14);
+  if(old&&old.text===name&&old.a.parent===g)return old;
+  if(old){g.remove(old.a);g.remove(old.b);old.a.material.map.dispose();old.a.material.dispose();old.a.geometry.dispose();old.b.geometry.dispose();}
+  const cv=document.createElement('canvas');cv.width=512;cv.height=96;const c=cv.getContext('2d');
   c.fillStyle=col;c.font='italic 800 64px "Trebuchet MS",sans-serif';c.textAlign='center';c.textBaseline='middle';c.fillText(name,256,50);
   const m=new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),transparent:true});
   const a=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m),b=new THREE.Mesh(new THREE.PlaneGeometry(w,h),m);
@@ -1540,7 +1543,8 @@ const LUXUS_R=1.4,LUXUS_HELM=3.6,LUXUS_NEAR=18; // Abstand zu Hindernissen, Steu
 const SEAL_TXT='Abstand halten! Die Seehunde ruhen sich aus.',SEAL_DIST=25;
 const BERTH_IDS=Object.keys(LUXUS_BERTHS),SEAL_K=[-1,0,1]; // einmal anlegen (nicht in jedem Bild neu)
 const LUXUS_BACK=0.3,LUXUS_BACK_AT=2.1; // rückwärts: 0,3 × Tempo, wenn der Stick mehr als 120° von der Fahrtrichtung weg zeigt
-const nearYachtDock=(x,z)=>[HDOCK,IDOCK].some(d=>x>d.x0-1&&x<d.x1+1&&z>d.z0-1&&z<d.z1+1);
+const YACHT_DOCKS=[HDOCK,IDOCK]; // einmal anlegen: nearYachtDock läuft in jedem Bild viele Male
+const nearYachtDock=(x,z)=>{for(let i=0;i<YACHT_DOCKS.length;i++){const d=YACHT_DOCKS[i];if(x>d.x0-1&&x<d.x1+1&&z>d.z0-1&&z<d.z1+1)return true;}return false;};
 const luxusWater=(x,z)=>inBounds(x,z)&&heightAt(x,z)<-1&&!onDock(x,z)&&!nearYachtDock(x,z)&&!hitsList(cityCols,x,z,LUXUS_R);
 const luxusFits=(x,z,yaw)=>{const d=LUXUS.len*0.4,sx=Math.sin(yaw)*d,sz=Math.cos(yaw)*d;
   return luxusWater(x,z)&&luxusWater(x+sx,z+sz)&&luxusWater(x-sx,z-sz);};
@@ -2335,6 +2339,13 @@ function parkFree(id,x,z,yaw){
   if(id!=='truck')return railDist(x,z)>=2.2;
   const sx=Math.sin(yaw)*2,sz=Math.cos(yaw)*2;return railDist(x,z)>=2.8&&railDist(x+sx,z+sz)>=2.6&&railDist(x-sx,z-sz)>=2.6;}
 const RAIL_MSG='Hier fährt die Straßenbahn. Stell dein Fahrzeug an den Rand.';
+// Steht ein gespeicherter Parkplatz in einem Hindernis (z. B. alter Spielstand: dort steht jetzt der Bootshafen)? Erst wenn die Stadt gebaut ist.
+const parkBlocked=(id,p)=>{if(!cityCols.length)return false;if(hitsList(cityCols,p.x,p.z,0))return true;if(id!=='truck')return false;
+  const sx=Math.sin(p.yaw)*2,sz=Math.cos(p.yaw)*2;return hitsList(cityCols,p.x+sx,p.z+sz,0)||hitsList(cityCols,p.x-sx,p.z-sz,0);};
+// Fahrzeuge, die auf den Schienen oder in einem Hindernis gespeichert sind, kommen an ihren Startplatz (nur der Platz ändert sich, nichts wird gelöscht)
+function parkedHome(){let ch=false;VEHICLE_IDS.forEach(id=>{const p=state.city.parked[id];
+    if(parkedOk(p)&&(!parkFree(id,p.x,p.z,p.yaw)||parkBlocked(id,p))){const h=vehicleHome(id);state.city.parked[id]={x:r2(h.x),z:r2(h.z),yaw:r2(h.yaw)};ch=true;}});
+  return ch;}
 function mountVehicle(id){if(!VEHICLES[id]||!state.city.vehicles[id]||player.ride)return;stopFishing();
   const v=vehicleAt(id);player.pos.set(v.x,0,v.z);player.facing=v.yaw;player.y=groundY(v.x,v.z);
   player.ride=id;state.city.riding=id;state.city.parked[id]={x:r2(v.x),z:r2(v.z),yaw:r2(v.yaw)};save();}
@@ -2409,8 +2420,8 @@ $('#btnCtx').onclick=()=>{audio();
   else if(ctxAction==='museum'){stopFishing();showMuseum();}
   else if(ctxAction==='bootshafen'){stopFishing();showBootshafen();}
   else if(ctxAction==='tram')boardTram();
-  else if(ctxAction==='luxus_an')boardLuxus();
-  else if(ctxAction==='luxus_ab'){const k=luxusBerthNear();if(player.ride==='luxus'&&k)luxusDock(k);}
+  else if(ctxAction==='luxus_an')boardLuxus(); // boardLuxus beendet das Angeln selbst (stopFishing)
+  else if(ctxAction==='luxus_ab'){const k=luxusBerthNear();if(player.ride==='luxus'&&k){stopFishing();luxusDock(k);}}
   else if(ctxAction==='tramoff'){const st=tramAtStop();if(player.ride==='tram'&&st&&st!==tramBoard)tramOff(st);}
   else if(ctxAction==='board'){stopFishing();player.inBoat=true;state.usedBoat=true;save();player.pos.copy(boat.pos);player.facing=boat.yaw;toast('Leinen los! Im tiefen Fluss leben die Riesenfische.');}
   else if(ctxAction==='exit'&&exitSpot){stopFishing();player.inBoat=false;player.pos.x=exitSpot.x;player.pos.z=exitSpot.z;player.y=groundY(exitSpot.x,exitSpot.z);
@@ -2482,7 +2493,8 @@ let lastTip='';
 function tipText(){
   const found=Object.keys(state.book).length;
   if(fishing.state!=='idle')return '';
-  if(atCity())return atSea()||parkedOk(state.city.parked.bike)?'':'Willkommen in Hafenhausen! Steig auf dein Fahrrad am Flugplatz.';
+  if(atCity())return atSea()||player.ride==='luxus'||nearYachtDock(player.pos.x,player.pos.z)||parkedOk(state.city.parked.bike)?'': // an der Luxusyacht kein Fahrrad-Tipp
+    'Willkommen in Hafenhausen! Steig auf dein Fahrrad am Flugplatz.';
   if(found===0)return 'Lauf über den Holzsteg bis ans Wasser. Dann tippe auf „Angeln“.';
   if(state.bucket.length>=bucketMax())return sellTo()==='Rosa'?'Dein Eimer ist voll! Bring die Fische zu Rosa an die Hütte.':'Dein Eimer ist voll! Verkaufe die Fische bei Fischer Hannes am Stand.';
   if(atLake()&&!Object.keys(state.book).some(id=>FISH_BY[id]&&fishHome(FISH_BY[id])==='see'))return 'Lauf über den Steg bis ans Wasser und wirf die Angel aus!';
@@ -3328,7 +3340,10 @@ function cityColor(x,z,y){
   if(onWalk(x,z))return '#b9b4a8';                     // Gehweg
   if(inRect(PARK,x,z)&&((x>80&&x<82.5)||(z>-2907.5&&z<-2905)))return '#c9b88f'; // Kieswege im Park
   const n=hash(Math.round(x/2.5),Math.round(z/2.5));return n<0.33?'#5a8f3a':n<0.66?'#609540':'#54893a';}
-// Fischerboot (einfache Kästen), schwimmt im Hafenbecken
+// Fischerboot (einfache Kästen), schwimmt im Hafenbecken. FISH_BOATS: x, z, Drehung, Farbe.
+// Hindernisse sind sie erst nach dem Bauen der Stadt (fishBoatCols, ohne Zufall): 2 Kreise entlang vom 6 m langen Rumpf.
+const FISH_BOATS=[[-60,-3126,0.2,'#2f7fd8'],[-28,-3136,-0.3,'#e2412b'],[42,-3128,0.15,'#2f9e5b']];
+function fishBoatCols(){for(const [x,z,ry] of FISH_BOATS)for(const lx of[-1.5,1.5]){const [cx,cz]=rotXZ(x,z,ry,lx,0);cityCols.push({x:cx,z:cz,r:1.5});}}
 function fishBoat(g,x,z,ry,col){const b=new THREE.Group();b.position.set(x,0,z);b.rotation.y=ry;g.add(b);
   bx(b,6,1.3,2.4,col,0,-0.8,0);bx(b,6.2,0.15,2.6,'#f4f4f0',0,0.45,0);bx(b,1.1,1.1,2.3,col,2.6,-0.5,0);
   bx(b,1.8,1.4,1.7,'#f4f4f0',-1,0.6,0);bx(b,1.9,0.15,1.9,col,-1,2,0);bx(b,0.06,0.45,1.2,'#8fc3dd',-0.07,1.2,0);
@@ -3579,7 +3594,7 @@ function buildCity(){if(cityBuilt)return;
   // Hafen: Kaimauer, Molen, Poller, Fischerboote, Leuchtturm, Kisten und das Schild
   {const KM='#8a8378';bx(g,198,4.25,1,KM,0,-3,-3113);for(const s of[-1,1])bx(g,1,4.25,37.5,KM,s*99.5,-3,-3131.25);
     for(let x=-90;x<=90;x+=15){deco.push(part(new THREE.CylinderGeometry(0.18,0.22,0.6,8),'#2b2f33',M(x,1.5,-3112.1)));cityCols.push({x,z:-3112.1,r:0.25});}
-    fishBoat(g,-60,-3126,0.2,'#2f7fd8');fishBoat(g,-28,-3136,-0.3,'#e2412b');fishBoat(g,42,-3128,0.15,'#2f9e5b');
+    FISH_BOATS.forEach(([x,z,ry,col])=>fishBoat(g,x,z,ry,col));
     lighthouse(g,110,-3140);cityCols.push({x:110,z:-3140,r:2.3});
     [[-112,-3122,'#c2401f'],[-110.6,-3122.4,'#2f7fd8'],[-111.3,-3124,'#f6a623'],[-111.2,-3123.2,'#2f9e5b']].forEach(([x,z,col],i)=>dbox(1.3,1.1,1.3,col,x,1.2+(i===3?1.1:0),z,i*0.4));
     cityCols.push({x:-111.3,z:-3123,r:1.8});
@@ -3649,6 +3664,8 @@ function buildCity(){if(cityBuilt)return;
   buildTram(g); // zuletzt: ohne Zufall, und erst jetzt kommt die Bahn zu den Hindernissen (die Häuser stehen schon)
   buildSea(g); // ganz am Ende, mit eigenem Zufall: die Stadt bleibt, wie sie ist
   buildBootshafen(g); // danach: Bootshafen, Hafen-Steg und Luxusyacht (ohne Zufall)
+  fishBoatCols(); // zuletzt: die Fischerboote werden Hindernisse (die Luxusyacht fährt nicht hindurch)
+  if(parkedHome()){placeVehicles();save();} // alter Spielstand: ein Fahrzeug im Bootshafen-Haus kommt an seinen Startplatz
   cityBuilt=true;}
 // Bootshafen an der Hafenstraße: Haus mit Markise und Schild (die Tür schaut zum Gehweg, BOOTSHAFEN_AT liegt 3 m davor)
 // und der Hafen-Steg (HDOCK, begehbar über onDock) im Hafenbecken. Ohne Zufall, darum braucht es kein eigenes rng.
@@ -4268,13 +4285,14 @@ function showMap(){
 function towList(){const box=el('div','towbox');box.appendChild(el('h3',null,'🛻 Abschleppdienst'));
   const far=VEHICLE_IDS.filter(id=>state.city.vehicles[id]&&player.ride!==id&&!towBusy(id)&&
     Math.hypot(vehicleAt(id).x-player.pos.x,vehicleAt(id).z-player.pos.z)>10);
-  let msg='Der Abschleppdienst bringt dein Fahrzeug zu dir. Das kostet '+TOW.price+' Ludins.';
-  if(player.ride==='tram')msg='In der Straßenbahn geht das nicht. Steig erst aus.';
+  let msg='Der Abschleppdienst bringt dein Fahrzeug zu dir. Das kostet '+TOW.price+' Ludins.';const sea=atSea();
+  if(sea)msg='Auf die Insel kann der Abschleppdienst nicht fahren.'; // auf See und auf der Insel: keine Straße dorthin
+  else if(player.ride==='tram')msg='In der Straßenbahn geht das nicht. Steig erst aus.';
   else if(player.ride)msg='Steig erst ab, dann kann der Abschleppdienst kommen.';
   else if(tow.phase)msg='Der Abschleppdienst ist gerade unterwegs.';
   else if(!far.length)msg='Alle deine Fahrzeuge stehen in deiner Nähe.';
   box.appendChild(el('p',null,msg));
-  if(!player.ride&&!tow.phase&&far.length){const bt=el('div','btns');
+  if(!sea&&!player.ride&&!tow.phase&&far.length){const bt=el('div','btns');
     far.forEach(id=>{const V=VEHICLES[id],b=el('button','b',V.ico+' '+V.name+' holen · '+TOW.price+' L');
       if(state.ludins<TOW.price){b.disabled=true;b.textContent=V.ico+' '+V.name+': noch '+(TOW.price-state.ludins)+' L';}
       b.dataset.tow=id;b.onclick=()=>{audio();callTow(id);};bt.appendChild(b);});
@@ -4393,13 +4411,16 @@ function saveWhere(){if(mode==='creator')return;
 addEventListener('pagehide',saveWhere);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)saveWhere();});
 let boardOnStart=false;
-(function(){const w=state.where,b=state.boatAt,rid=state.city.riding;
+(function(){let w=state.where;const b=state.boatAt,rid=state.city.riding;
   state.city.riding=''; // nach dem Laden ist man immer zu Fuß
-  // Fahrzeuge, die auf den Schienen gespeichert wurden (z. B. beim Fahren gegangen), stehen jetzt an ihrem Startplatz
-  VEHICLE_IDS.forEach(id=>{const p=state.city.parked[id];
-    if(parkedOk(p)&&!parkFree(id,p.x,p.z,p.yaw)){const h=vehicleHome(id);state.city.parked[id]={x:r2(h.x),z:r2(h.z),yaw:r2(h.yaw)};}});
+  // Fahrzeuge, die auf den Schienen gespeichert wurden (z. B. beim Fahren gegangen), stehen jetzt an ihrem Startplatz.
+  // (In einem Hindernis: das prüft buildCity, sobald die Stadt steht.)
+  parkedHome();
   if(state.hasBoat&&b&&boatable(b.x,b.z)){boat.pos.set(b.x,0,b.z);boat.yaw=b.yaw||0;}
   if(!w)return;
+  // Auf der Insel oder auf See (südlich vom Hafen) bleibt man nur, wenn die eigene Luxusyacht am Insel-Steg liegt. Sonst: auf den Hafen-Steg.
+  if(isObj(w)&&w.z<SEA.z0&&!(state.city.luxus===true&&state.city.yachtAt==='insel')){
+    w=state.where={x:BERTH_HAFEN.x,z:BERTH_HAFEN.z,f:BERTH_HAFEN.f,boat:false};}
   if(w.z<CITY.zone)buildCity(); // stellt auch die Fahrzeuge hin (placeVehicles)
   else if(w.z<DE.zone&&SPOTS_BY[state.flussAt]&&spotOpen(state.flussAt))buildSpot(state.flussAt);
   if(w.boat&&state.hasBoat&&b&&boatable(b.x,b.z))boardOnStart=true; // erst nach „Los geht's!“ einsteigen
@@ -4572,11 +4593,15 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
   wo:()=>({atSea:atSea(),ride:player.ride,x:player.pos.x,z:player.pos.z,facing:player.facing,nebel:scene.fog.far}), // wo bin ich, worauf fahre ich (nebel: wie weit man sieht)
   wasser:()=>({fluss:water.visible,meer:seaWater.visible}), // welche Wasserfläche ist zu sehen (Fluss/See oder Hafen/Meer)
   kollision:(x,z,r)=>hitsCollider(x,z,r), // stößt ein Kreis mit Radius r bei (x,z) an ein Hindernis?
+  luxusWasser:(x,z)=>luxusWater(x,z), // hätte die Luxusyacht bei (x,z) Platz (tiefes Wasser, kein Steg, kein Hindernis)?
   wurf:()=>{const w=findWater();return w&&{x:w.x,z:w.z};}, // wohin würde der Köder jetzt fliegen (null: kein Wasser)
   // die gerade gefahrene Luxusyacht an p.yx/p.yz/p.yaw (oder p.x/p.z) setzen, nur wenn sie dort ins Wasser passt
   luxusWarp(p){if(player.ride!=='luxus'||!p)return false;const x=Number.isFinite(p.yx)?p.yx:p.x,z=Number.isFinite(p.yz)?p.yz:p.z,f=Number.isFinite(p.yaw)?p.yaw:player.facing;
     if(!Number.isFinite(x)||!Number.isFinite(z)||!luxusFits(x,z,f))return false;player.pos.set(x,0,z);player.facing=f;camYaw=f+Math.PI;camHold=0;return true;},
-  luxus:()=>luxusMesh?{sichtbar:luxusMesh.visible,x:luxusMesh.position.x,z:luxusMesh.position.z,yaw:luxusMesh.rotation.y,name:luxusName&&luxusName.text}:null, // Luxusyacht in Hafenhausen
+  luxus:()=>luxusMesh?{sichtbar:luxusMesh.visible,x:luxusMesh.position.x,z:luxusMesh.position.z,yaw:luxusMesh.rotation.y,name:luxusName&&luxusName.text,nameId:luxusName&&luxusName.a.uuid}:null, // Luxusyacht in Hafenhausen (nameId: neu gemacht?)
+  // Name am Rumpf der Luxusyacht: beim nächsten Freigeben (dispose) von Schrift-Bild, Material und Flächen zählt frei hoch
+  frei:0,luxusNameWatch(){const n=luxusName;if(!n)return false;window.__test.frei=0;
+    [n.a.material.map,n.a.material,n.a.geometry,n.b.geometry].forEach(o=>o.addEventListener('dispose',()=>{window.__test.frei++;}));return true;},
   // Hafenhausen: ist (x,z) auf dem Gehweg / der Straße, wie weit von den Schienen, und wie weit von jeder Haustür (Haus-Mitte + halbe Tiefe in Türrichtung)?
   stadtPunkt:(x,z)=>({walk:onWalk(x,z),road:onRoad(x,z),rail:railDist(x,z),tueren:cityHouses.map(h=>{const [tx,tz]=rotXZ(h.x,h.z,h.ry,0,-h.d/2);return Math.hypot(tx-x,tz-z);})}),
   fischInfo:id=>({fact:FISH_BY[id].fact,anzahl:FISH.length}),
