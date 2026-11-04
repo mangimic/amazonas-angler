@@ -361,6 +361,32 @@ test('Sicherheit: eine präparierte Sicherheitskopie kann kein HTML einschleusen
   await ctx.close();
 });
 
+test('Sicherheit: Köder, Haus und Angel aus einer präparierten Datei schleusen nichts ein und stoppen das Spiel nicht (SEC-001, SEC-006)', async () => {
+  const { ctx, page, errors } = await newPage();
+  const fremd = '<img class="eingeschleust" src="x" onerror="window.__pwn=1">'; // liefe es als HTML, würde window.__pwn gesetzt
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, metTiago: true, where: NEBEN_TIAGO,
+    baits: { frucht: fremd, blinker: fremd }, rod: -5, clothes: { anglerhut: 'ja', weste: fremd }, methods: { spin: 'ja', grund: 1 },
+    quiz: { ok: [fremd, 5, {}] }, infoRead: [{}, 7],
+    house: { w: { a: 5, 'h,0,0': ['constructor', 'x'], 'v,1,1': 5, 'h,2,2': ['wand', 'constructor'] }, r: { x: 1, '0,0': 1 } } }) });
+  await startGame(page); // das Spiel startet trotz kaputtem Haus (früher: „number 5 is not iterable“)
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Opa Tiago")').waitFor({ timeout: 10000 });
+  await page.click('#btnCtx');
+  await page.click('#card .tabs button:text-is("Köder")');
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('.eingeschleust').count(), 0, 'kein eingeschleustes HTML bei Opa Tiago');
+  assert.equal(await page.evaluate(() => window.__pwn), undefined, 'kein fremdes Skript gelaufen');
+  const s = await weg(page);
+  assert.deepEqual(s.baits, { frucht: 0, blinker: 0 }, 'Köder sind Zahlen');
+  assert.equal(s.rod, 0, 'Angel-Stufe begrenzt');
+  assert.deepEqual([s.clothes.anglerhut, s.clothes.weste, s.methods.spin, s.methods.grund], [false, false, false, false], 'nur echtes true zählt');
+  assert.deepEqual(s.quiz.ok, [fremd], 'Quiz-Liste nur aus Text (Text bleibt, er wird nie angezeigt)');
+  assert.deepEqual(s.infoRead, [], 'Infotafel-Liste nur aus Text');
+  assert.equal(s.house.w.a, 5, 'kaputte Haus-Teile bleiben gespeichert (nie löschen), das Spiel überspringt sie');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 test('Mehrere Spieler: kaputte Spielerliste, aber kein Spieler geht verloren', async () => {
   const { ctx, page, errors } = await newPage();
   await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playerId: 'p1' }),

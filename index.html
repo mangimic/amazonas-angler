@@ -432,7 +432,7 @@ const FOTOS={
  steinbutt:{src:'fotos/steinbutt.jpg',von:'Luc Viatour',lizenz:'CC BY-SA 3.0',link:'https://commons.wikimedia.org/wiki/File:Psetta_maxima_Luc_Viatour.jpg'},
  thunfisch:{src:'fotos/thunfisch.jpg',von:'Danilo Cedrone (FAO)',lizenz:'Public domain',link:'https://commons.wikimedia.org/wiki/File:Group_of_tuna.jpg'}
 };
-const FISH_BY={};FISH.forEach(f=>FISH_BY[f.id]=f);
+const FISH_BY=Object.create(null);FISH.forEach(f=>FISH_BY[f.id]=f); // ohne Prototyp: ids wie 'constructor' aus einer Datei finden nichts
 // Fische nach Uhrzeit (Uhr am Gerät, WT.hour): zeit:'nacht' = 16–6 Uhr, 'tag' = 6–18 Uhr, 'daemmerung' = 5–9 und 16–21 Uhr.
 // Nach der Schule (16–18 Uhr) kann so jeder Fisch beißen. Fische ohne zeit beißen immer. zeit nur, wo es in der Natur stimmt (Belege in docs/fakten-quellen.md).
 const ZEIT_FENSTER={nacht:[[16,24],[0,6]],tag:[[6,18]],daemmerung:[[5,9],[16,21]]};
@@ -553,16 +553,21 @@ if(!Array.isArray(state.bucket))state.bucket=[];
 if(!isObj(state.book))state.book={};
 for(const id in state.book){const b=state.book[id];state.book[id]=isObj(b)?Object.assign(b,{n:num(b.n),best:num(b.best,10000)}):{n:1,best:0};}
 state.baits=Object.assign({frucht:0,blinker:0},isObj(state.baits)?state.baits:{});
+state.baits.frucht=num(state.baits.frucht,1e6);state.baits.blinker=num(state.baits.blinker,1e6); // nur Zahlen (sie stehen bei Tiago und Hannes auf dem Bildschirm)
 state.clothes=Object.assign({anglerhut:false,weste:false,muetze:false},isObj(state.clothes)?state.clothes:{});
+['anglerhut','weste','muetze'].forEach(k=>{state.clothes[k]=state.clothes[k]===true;});
+state.rod=num(state.rod,RODS.length-1);
 if(!BAITS[state.bait])state.bait='wurm';
-state.house=Object.assign({w:{},r:{}},isObj(state.house)?state.house:{});
+state.house=Object.assign({w:{},r:{}},isObj(state.house)?state.house:{});if(!isObj(state.house.w))state.house.w={};if(!isObj(state.house.r))state.house.r={};
 state.reusen=Math.max(0,Math.round(Number(state.reusen)||0));
 if(!Array.isArray(state.traps))state.traps=[];
 if(!isObj(state.quiz)||!Array.isArray(state.quiz.ok))state.quiz={ok:[]};
+state.quiz.ok=state.quiz.ok.filter(x=>typeof x==='string');
 state.angelschein=state.angelschein===true;
-state.methods=Object.assign({spin:false,grund:false},isObj(state.methods)?state.methods:{});
+state.methods=Object.assign({spin:false,grund:false},isObj(state.methods)?state.methods:{});state.methods.spin=state.methods.spin===true;state.methods.grund=state.methods.grund===true;
 if(!['pose','spin','grund'].includes(state.method))state.method='pose';
 if(!Array.isArray(state.infoRead))state.infoRead=[];
+state.infoRead=state.infoRead.filter(x=>typeof x==='string');
 // Flüsse in Deutschland: pro Flussplatz f = gefangene Fischarten dort, q = Rätsel gelöst, s = Stempel, r = Tafel gelesen
 if(!isObj(state.fluss))state.fluss={};
 for(const id in state.fluss){if(!isObj(state.fluss[id]))state.fluss[id]={};const p=state.fluss[id];
@@ -1300,6 +1305,7 @@ const WALL_SHAPES={
   wand:{p:[[0,1.2,2,2.4]],hit:[[-1,1]]},
   fenster:{p:[[0,0.45,2,0.9],[0,2.15,2,0.5],[-0.75,1.4,0.5,1],[0.75,1.4,0.5,1],[0,1.4,1,1,1]],hit:[[-1,1]]},
   tuer:{p:[[-0.8,1.2,0.4,2.4],[0.8,1.2,0.4,2.4],[0,2.15,1.2,0.5]],hit:[[-1,-0.6],[0.6,1]]}};
+Object.setPrototypeOf(WALL_SHAPES,null); // ohne Prototyp: eine Form 'constructor' aus einer Datei gibt es nicht
 const houseG=new THREE.Group();scene.add(houseG);
 const houseParts={};const pops=[];
 // Kante: 'h,i,j' = waagrecht bei z=j (Feld i), 'v,i,j' = senkrecht bei x=i (Feld j)
@@ -1309,15 +1315,16 @@ function rebuildHouse(){
   while(houseG.children.length)houseG.remove(houseG.children[0]);
   for(const k in houseParts)delete houseParts[k];houseSegs.length=0;
   const Y=PLOT.y,verts={};
-  for(const key in state.house.w){const [type,col]=state.house.w[key],sh=WALL_SHAPES[type];if(!sh)continue;const e=edgeInfo(key);
+  for(const key in state.house.w){const v=state.house.w[key];if(!Array.isArray(v)||!/^[hv],-?\d+,-?\d+$/.test(key))continue; // kaputter Eintrag: überspringen, nicht löschen
+    const [type,col]=v,sh=WALL_SHAPES[type];if(!sh)continue;const e=edgeInfo(key);
     const wg=new THREE.Group();wg.position.set(e.x,Y,e.z);wg.rotation.y=e.rot;
-    sh.p.forEach(([x,y,w,h,gl])=>{const m=new THREE.Mesh(box(w,h,gl?0.05:T),gl?glassMat:wallMats[col]||wallMats[0]);m.position.set(x,y,0);wg.add(m);});
+    sh.p.forEach(([x,y,w,h,gl])=>{const m=new THREE.Mesh(box(w,h,gl?0.05:T),gl?glassMat:wallMats[Number.isInteger(col)?col:0]||wallMats[0]);m.position.set(x,y,0);wg.add(m);});
     houseG.add(wg);houseParts[key]=wg;
     const ca=Math.cos(e.rot),sa=Math.sin(e.rot);
     sh.hit.forEach(([a,b])=>houseSegs.push({ax:e.x+a*ca,az:e.z-a*sa,bx:e.x+b*ca,bz:e.z-b*sa}));
     e.ends.forEach(([i,j])=>verts[i+','+j]=1);}
   for(const v in verts){const [i,j]=v.split(',').map(Number);const m=new THREE.Mesh(box(0.24,2.5,0.24),postMat);m.position.set(PLOT.x0+i*PLOT.c,Y+1.25,PLOT.z0+j*PLOT.c);houseG.add(m);}
-  for(const key in state.house.r){const [i,j]=key.split(',').map(Number);const m=new THREE.Mesh(box(2.2,0.2,2.2),roofMat);
+  for(const key in state.house.r){if(!/^-?\d+,-?\d+$/.test(key))continue;const [i,j]=key.split(',').map(Number);const m=new THREE.Mesh(box(2.2,0.2,2.2),roofMat);
     m.position.set(PLOT.x0+(i+0.5)*PLOT.c,Y+2.55,PLOT.z0+(j+0.5)*PLOT.c);houseG.add(m);houseParts['r'+key]=m;}
 }
 rebuildHouse();
@@ -2190,7 +2197,7 @@ function buyList(items,again){
   const l=el('div','list');
   items.forEach(it=>{const owned=it.owned&&it.owned(),lock=it.lock&&it.lock();
     const row=el('div','item shopitem');row.appendChild(el('div','shopicon',it.ico));
-    row.appendChild(el('div','t','<b>'+it.name+'</b><span>'+it.desc+(it.count?' <span class="havecount">Du hast '+it.count()+'.</span>':'')+'</span>'));
+    row.appendChild(el('div','t','<b>'+it.name+'</b><span>'+it.desc+(it.count?' <span class="havecount">Du hast '+esc(it.count())+'.</span>':'')+'</span>'));
     const b=el('button','b',owned?(it.have||(it.price?'Gekauft':'Hast du')):it.price+' L');
     if(owned)b.disabled=true;
     else if(lock){b.disabled=true;b.textContent=lock;}
@@ -3081,7 +3088,7 @@ const SPOTS=[
    'Die Spree fließt mitten durch die Stadt und mündet in Berlin-Spandau in die Havel.'],
   q:[{q:'Was ist die Hauptstadt von Deutschland?',a:'Berlin',w:['Bonn','Hamburg']},
    {q:'Wie hoch ist der Berliner Fernsehturm?',a:'368 Meter',w:['36 Meter','3.680 Meter']}]}];
-const SPOTS_BY={};SPOTS.forEach(s=>SPOTS_BY[s.id]=s);
+const SPOTS_BY=Object.create(null);SPOTS.forEach(s=>SPOTS_BY[s.id]=s);
 // Wege zwischen den Plätzen: [Platz, Platz, Fluss, warum]. Hat man an einem Ende den Stempel, öffnet sich das andere.
 const LINKS=[
  ['bw-neckar','bw-rhein','Neckar','Der Neckar fließt bei Mannheim in den Rhein.'],
@@ -4469,10 +4476,11 @@ function buildTap(cx,cy){
   const eKey=dh<=dv?'h,'+Math.min(N-1,Math.floor(u))+','+Math.round(v):'v,'+Math.round(u)+','+Math.min(N-1,Math.floor(v));
   const cKey=Math.min(N-1,Math.floor(u))+','+Math.min(N-1,Math.floor(v));
   const H=state.house;let changed=null;
+  const partRefund=v=>Array.isArray(v)&&Object.prototype.hasOwnProperty.call(PARTS,v[0])?PARTS[v[0]].price:0; // kaputter Eintrag aus einer Datei: kein Geld zurück
   if(buildTool==='weg'){
-    if(H.w[eKey]&&(Math.min(dh,dv)<0.3||!H.r[cKey])){state.ludins+=PARTS[H.w[eKey][0]].price;delete H.w[eKey];changed='-';}
+    if(H.w[eKey]&&(Math.min(dh,dv)<0.3||!H.r[cKey])){state.ludins+=partRefund(H.w[eKey]);delete H.w[eKey];changed='-';}
     else if(H.r[cKey]){state.ludins+=PARTS.dach.price;delete H.r[cKey];changed='-';}
-    else if(H.w[eKey]){state.ludins+=PARTS[H.w[eKey][0]].price;delete H.w[eKey];changed='-';}
+    else if(H.w[eKey]){state.ludins+=partRefund(H.w[eKey]);delete H.w[eKey];changed='-';}
   }else if(buildTool==='dach'){
     if(H.r[cKey])return;
     if(state.ludins<PARTS.dach.price){toast('Dafür fehlen dir noch '+(PARTS.dach.price-state.ludins)+' Ludins.');return;}
