@@ -3677,6 +3677,7 @@ test('Ideen-Kiste: Idee mit Thema und Text abschicken, bleibt nach dem Neuladen'
   assert.ok((await page.locator('#ideeOk').boundingBox()).height >= 60, 'Abschicken mindestens 60 px');
   await page.click('#ideeOk');
   assert.match(await page.textContent('#card'), /Danke für deine Idee! Ich gebe sie weiter\./);
+  assert.match(await page.textContent('#card p.next'), /^👴 Opa Tiago:\s*Danke für deine Idee! Ich gebe sie weiter\.$/, 'Opa Tiago bedankt sich');
   assert.match(await page.textContent('#card'), /💡 Erfinder/, 'erster Sticker');
   const tag = await seitenTag(page);
   const soll = { thema: 'fisch', text: 'Ein Hai im Amazonas', day: tag, gelesen: false };
@@ -3709,6 +3710,11 @@ test('Ideen-Kiste: Abschicken erst ab 3 Zeichen, Zähler zählt herunter', async
   assert.match(await page.textContent('#card'), /Schreib deine Idee auf\. Du kannst auch das Mikrofon der Tastatur benutzen\./);
   assert.equal(await page.getAttribute('#ideeText', 'maxlength'), '200');
   assert.equal((await page.textContent('#ideeRest')).trim(), 'noch 200 Zeichen');
+  // iPad-Tastatur: die Knöpfe stehen über dem Textfeld (direkt unter dem Thema), der Zähler darunter
+  const box = async sel => (await page.locator(sel).boundingBox()).y;
+  const [thema, knopf, feld, rest] = [await box('#card p.next'), await box('#ideeOk'), await box('#ideeText'), await box('#ideeRest')];
+  assert.ok(thema < knopf && knopf < feld && feld < rest, 'Thema, Knöpfe, Textfeld, Zähler: ' + [thema, knopf, feld, rest]);
+  assert.equal(await page.locator('#card p.next + .btns #ideeOk').count(), 1, 'Knöpfe direkt unter dem Thema');
   assert.equal(await page.isDisabled('#ideeOk'), true, 'leer');
   await page.fill('#ideeText', 'ab');
   assert.equal(await page.isDisabled('#ideeOk'), true, 'bei „ab“');
@@ -3787,7 +3793,7 @@ test('Ideen-Kiste: Sticker bei 1, 5 und 10 Ideen', async () => {
   }
 });
 
-test('Ideen-Kiste: HTML im Ideen-Text wird nicht ausgeführt (Fischbuch)', async () => {
+test('Ideen-Kiste: Fischbuch zeigt nur den Sticker, nie den Ideen-Text', async () => {
   const { ctx, page, errors } = await newPage();
   await seed(page, { [KEY]: stadtSeed({ ideen: [{ thema: 'fisch', text: '<img class="eingeschleust" src="x" onerror="window.__pwn=1">', day: '2026-11-01', gelesen: false }] }) });
   await startGame(page);
@@ -3797,6 +3803,8 @@ test('Ideen-Kiste: HTML im Ideen-Text wird nicht ausgeführt (Fischbuch)', async
   await page.waitForTimeout(300);
   assert.equal(await page.locator('.eingeschleust').count(), 0);
   assert.equal(await page.evaluate(() => window.__pwn), undefined);
+  assert.equal((await page.textContent('#card .ideenSticker')).trim(), '💡 Erfinder', 'nur der Sticker');
+  assert.ok(!(await page.textContent('#card')).includes('eingeschleust'), 'kein Ideen-Text');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -3816,19 +3824,20 @@ test('Ideen-Kiste: Tippen neben die Karte löscht die Idee nicht, Entwurf bleibt
   await neben(page); // Ecke des Hintergrunds, außerhalb der Karte (z. B. um die Tastatur zu schließen)
   assert.equal(await page.isVisible('#modal'), true, 'Karte bleibt offen');
   assert.equal(await page.inputValue('#ideeText'), 'Ein Faultier als Freund', 'Text bleibt');
-  // Die Karte geht zu (wie bei der Spielzeit-Pause): der Entwurf kommt beim selben Thema wieder, nicht im Spielstand
+  // Die Karte geht zu (wie bei der Spielzeit-Pause): der Entwurf kommt wieder, bei jedem Thema, nicht im Spielstand
   await page.evaluate(() => { document.querySelector('#modal').hidden = true; });
   await ideeKarte(page);
   await page.click('#card [data-thema="fisch"]');
-  assert.equal(await page.inputValue('#ideeText'), '', 'anderes Thema: leer');
+  assert.equal(await page.inputValue('#ideeText'), 'Ein Faultier als Freund', 'anderes Thema: der Entwurf kommt mit');
   await page.click('#card button:text-is("Abbrechen")');
   await page.click('#btnIdee');
-  await page.click('#card [data-thema="figur"]');
+  await page.click('#card [data-thema="ort"]');
   assert.equal(await page.inputValue('#ideeText'), 'Ein Faultier als Freund', 'Entwurf wieder da');
   assert.equal((await page.textContent('#ideeRest')).trim(), 'noch 177 Zeichen');
   assert.equal(await page.isDisabled('#ideeOk'), false);
   assert.deepEqual((await weg(page)).ideen, [], 'Entwurf steht nicht im Spielstand');
   await page.click('#ideeOk');
+  assert.equal((await weg(page)).ideen[0].thema, 'ort', 'die Idee bekommt das Thema, das zuletzt angetippt wurde');
   await page.waitForTimeout(700); // Knöpfe der Danke-Karte sind kurz gesperrt
   await neben(page);
   assert.equal(await page.isVisible('#modal'), true, 'Danke-Karte bleibt offen');
@@ -3859,6 +3868,11 @@ async function ideenAnsicht(page) { // Werkstatt: „💡 Ideen der Kinder“, d
   await page.locator('#ideenTeilen').waitFor({ timeout: 5000 });
 }
 const ideeZeilen = page => page.locator('#card .idee').evaluateAll(l => l.map(e => e.textContent.trim()));
+async function markieren(page) { // „Als gelesen markieren“, dann in derselben Karte bestätigen
+  await page.click('#ideenGelesen');
+  await page.click('#ideenGelesenJa');
+  await page.locator('#card .ideeAlt').first().waitFor({ state: 'attached', timeout: 5000 });
+}
 
 test('Ideen der Kinder: nur nach der Rechenaufgabe, mit zwei Spielern', async () => {
   const { ctx, page, errors } = await newPage();
@@ -3892,14 +3906,15 @@ test('Ideen der Kinder: nur nach der Rechenaufgabe, mit zwei Spielern', async ()
 
 test('Ideen der Kinder: kaputter Spieler-Platz stört nicht', async () => {
   const { ctx, page, errors } = await newPage();
-  await seed(page, zweiSpieler({ mehr: { p3: 'kein json', p4: JSON.stringify({ ideen: 'x' }) } }));
+  // p5: Name mit Richtungs- und Formatzeichen (wie bei cleanIdeen weg), die Emoji-Verbinder U+200C/U+200D bleiben
+  await seed(page, zweiSpieler({ mehr: { p3: 'kein json', p4: JSON.stringify({ ideen: 'x' }),
+    p5: JSON.stringify({ avatar: { name: 'Li\u202Ena\u2066\u200B\u200E\u200F\u2069\n👨\u200D👩 a\u200Cb\u0007' }, ideen: [] }) } }));
   await startGame(page);
   await ideenAnsicht(page);
   assert.equal(await page.locator('#card .idee').count(), 3);
   assert.deepEqual(await page.evaluate(() => window.__test.alleIdeen().map(e => [e.player, e.name, e.ideen.length])),
-    [['p1', 'Mia', 2], ['p2', 'Tom', 1], ['p4', 'Angler', 0]], 'kaputter Platz wird übersprungen');
-  await page.click('#ideenGelesen');
-  await page.locator('#card .ideeAlt').first().waitFor({ state: 'attached', timeout: 5000 });
+    [['p1', 'Mia', 2], ['p2', 'Tom', 1], ['p4', 'Angler', 0], ['p5', 'Lina👨\u200D👩 a\u200Cb', 0]], 'kaputter Platz wird übersprungen');
+  await markieren(page);
   assert.equal(await read(page, KEY + '-spieler-p3'), 'kein json', 'kaputter Platz wird nicht geschrieben');
   assert.equal(await read(page, KEY + '-spieler-p4'), JSON.stringify({ ideen: 'x' }), 'Platz ohne Ideen bleibt, wie er ist');
   assert.deepEqual(errors, []);
@@ -3965,14 +3980,46 @@ test('Ideen der Kinder: Teilen abbrechen', async () => {
   await ctx.close();
 });
 
+test('Ideen der Kinder: zweimal schnell auf Teilen tippen gibt keinen Download', async () => {
+  const { ctx, page, errors } = await newPage();
+  await ctx.addInitScript(() => {
+    window.__teilen = 0;
+    navigator.canShare = () => true;
+    navigator.share = () => { window.__teilen++;
+      if (window.__fehler) return Promise.reject(new DOMException('x', window.__fehler));
+      return new Promise(r => { window.__fertig = r; }); }; // das Teilen-Fenster bleibt offen
+  });
+  await seed(page, zweiSpieler());
+  await startGame(page);
+  await ideenAnsicht(page);
+  let downloads = 0;
+  page.on('download', () => downloads++);
+  await page.locator('#ideenTeilen').evaluate(b => { b.click(); b.click(); });
+  await page.waitForTimeout(1000);
+  assert.equal(await page.evaluate(() => window.__teilen), 1, 'nur ein Teilen-Fenster');
+  assert.equal(await page.isDisabled('#ideenTeilen'), true, 'gesperrt, solange das Teilen-Fenster offen ist');
+  assert.equal(downloads, 0, 'kein Download');
+  assert.equal(await page.evaluate(() => document.querySelector('#toast').classList.contains('show')), false, 'kein Toast');
+  await page.evaluate(() => window.__fertig());
+  await page.waitForFunction(() => !document.querySelector('#ideenTeilen').disabled, null, { timeout: 5000 });
+  // InvalidStateError (ein Teilen-Fenster ist schon offen): leise, kein Download
+  await page.evaluate(() => { window.__fehler = 'InvalidStateError'; });
+  await page.click('#ideenTeilen');
+  await page.waitForTimeout(1000);
+  assert.equal(await page.evaluate(() => window.__teilen), 2);
+  assert.equal(downloads, 0, 'auch dann kein Download');
+  assert.equal(await page.isDisabled('#ideenTeilen'), false, 'wieder frei');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
 test('Ideen der Kinder: als gelesen markieren löscht nichts', async () => {
   const { ctx, page, errors } = await newPage();
   await seed(page, zweiSpieler());
   await startGame(page);
   await ideenAnsicht(page);
   const tomVorher = JSON.parse(await read(page, KEY + '-spieler-p2'));
-  await page.click('#ideenGelesen');
-  await page.locator('#card .ideeAlt').first().waitFor({ state: 'attached', timeout: 5000 });
+  await markieren(page);
   const s = JSON.parse(await read(page));
   assert.equal(s.ideen.length, 2);
   assert.deepEqual(s.ideen, MIA_IDEEN.map(i => ({ ...i, gelesen: true })), 'Mia: alles gelesen, sonst gleich');
@@ -3984,6 +4031,32 @@ test('Ideen der Kinder: als gelesen markieren löscht nichts', async () => {
   assert.match(await page.locator('#card details summary').textContent(), /Schon gelesen/);
   assert.equal(await page.locator('#card details').evaluate(d => d.open), false, 'zugeklappt');
   assert.equal(await page.isDisabled('#ideenTeilen'), true, 'nichts Neues zum Teilen');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Ideen der Kinder: vor dem Markieren wird gefragt, „Nein, zurück“ ändert nichts', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, zweiSpieler());
+  await startGame(page);
+  await ideenAnsicht(page);
+  const stand = async () => [JSON.parse(await read(page)).ideen, await read(page, KEY + '-spieler-p2')]; // das Spiel speichert nebenbei (z. B. Spielzeit), darum nur ideen
+  const vorher = await stand();
+  await page.click('#ideenGelesen');
+  assert.match(await page.textContent('#card'), /Hast du die Ideen schon geteilt\? Danach stehen sie nicht mehr in der Datei\./);
+  assert.equal((await page.textContent('#ideenGelesenJa')).trim(), 'Ja, als gelesen markieren');
+  assert.equal((await page.textContent('#ideenGelesenNein')).trim(), 'Nein, zurück');
+  for (const id of ['#ideenGelesenJa', '#ideenGelesenNein']) assert.ok((await page.locator(id).boundingBox()).height >= 60, id + ' mindestens 60 px');
+  assert.equal(await page.locator('#card .idee').count(), 3, 'die Ideen stehen noch da');
+  assert.deepEqual(await stand(), vorher, 'noch nichts markiert');
+  await page.click('#ideenGelesenNein');
+  await page.locator('#ideenGelesen').waitFor({ timeout: 5000 });
+  assert.equal(await page.locator('#ideenGelesenJa').count(), 0);
+  assert.equal(await page.locator('#card .idee').count(), 3);
+  assert.equal(await page.locator('#card .ideeAlt').count(), 0);
+  assert.equal(await page.isDisabled('#ideenTeilen'), false);
+  assert.deepEqual(await stand(), vorher, '„Nein, zurück“ ändert nichts');
+  assert.deepEqual(vorher[0], MIA_IDEEN);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -4002,8 +4075,7 @@ test('Ideen der Kinder: ohne Ideen steht „Noch keine Ideen.“, nach dem Marki
   await startGame(b.page);
   await ideenAnsicht(b.page);
   assert.equal(await b.page.locator('#card .idee').count(), 50);
-  await b.page.click('#ideenGelesen');
-  await b.page.locator('#card .ideeAlt').first().waitFor({ state: 'attached', timeout: 5000 });
+  await markieren(b.page);
   await b.page.click('#card button:text-is("Fertig")');
   await b.page.click('#btnGo');
   await ideeKarte(b.page);
@@ -4011,6 +4083,76 @@ test('Ideen der Kinder: ohne Ideen steht „Noch keine Ideen.“, nach dem Marki
   assert.equal(JSON.parse(await read(b.page)).ideen.length, 50, 'nichts gelöscht');
   assert.deepEqual([...errors, ...b.errors], []);
   await b.ctx.close();
+});
+
+test('Mehrere Spieler: Spieler ohne Namen, aber mit einer Idee, geht beim Wechseln nicht verloren', async () => {
+  const { ctx, page, errors } = await newPage();
+  const idee = { thema: 'fisch', text: 'Ein Hai im Amazonas', day: '2026-11-03', gelesen: false };
+  await seed(page, { [KEY]: JSON.stringify({ v: 2, newsSeen: 999, playerId: 'p1', avatar: { name: '' }, ideen: [idee] }),
+    [KEY + '-spieler-p2']: JSON.stringify(TOM_SLOT),
+    [KEY + '-spieler']: JSON.stringify({ list: [{ id: 'p1', name: '' }, { id: 'p2', name: 'Tom' }], picked: true }) });
+  await startGame(page);
+  await page.click('#btnPlayers');
+  await Promise.all([page.waitForEvent('load'), page.click('#card .player:has-text("Tom")')]);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  assert.equal(await page.inputValue('#nameIn'), 'Tom');
+  assert.deepEqual(JSON.parse(await read(page, KEY + '-spieler-p1')).ideen, [idee], 'das Fach von Spieler 1 ist geschrieben');
+  assert.ok(JSON.parse(await read(page, KEY + '-spieler')).list.some(p => p.id === 'p1'), 'Spieler 1 bleibt in der Liste');
+  // und wieder zurück
+  await page.click('#btnPlayers');
+  await Promise.all([page.waitForEvent('load'), page.click('#card .player:has-text("Neuer Spieler")')]);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  const s = JSON.parse(await read(page));
+  assert.equal(s.playerId, 'p1');
+  assert.deepEqual(s.ideen, [idee], 'die Idee ist noch da');
+  assert.deepEqual(JSON.parse(await read(page, KEY + '-spieler')).list.map(p => p.id).sort(), ['p1', 'p2']);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Ideen-Kiste: Ideen bleiben in der Sicherheitskopie (speichern und wieder laden)', async () => {
+  const { ctx, page, errors } = await newPage();
+  const ideen = [...MIA_IDEEN, { thema: 'figur', text: 'Schon gelesene Idee', day: '2026-11-01', gelesen: true }];
+  await seed(page, { [KEY]: stadtSeed({ ideen }) });
+  await startGame(page);
+  await page.click('#btnSaveCode');
+  await page.locator('text=Gerade eben gespeichert').waitFor();
+  const [download] = await Promise.all([page.waitForEvent('download'), page.click('#btnBackupSave')]);
+  const datei = path.join(here, 'test-sicherheitskopie-ideen.json');
+  await download.saveAs(datei);
+  assert.deepEqual(JSON.parse(fs.readFileSync(datei, 'utf8')).state.ideen, ideen, 'Ideen stehen in der Datei');
+  // Neues Gerät: ein Spieler ohne Namen, der nur eine Idee hat. Er ist nicht leer und bleibt als eigener Spieler.
+  const eigene = { thema: 'ort', text: 'Ein Baumhaus', day: '2026-11-04', gelesen: false };
+  await seed(page, { [KEY]: JSON.stringify({ v: 2, newsSeen: 999, playerId: 'p1', avatar: { name: '' }, ideen: [eigene] }) });
+  await startGame(page);
+  await page.click('#btnSaveCode');
+  await page.setInputFiles('#backupFile', datei);
+  await page.locator('text=Er kommt als neuer Spieler dazu').waitFor();
+  await Promise.all([page.waitForEvent('load'), page.click('text=Ja, laden')]);
+  fs.unlinkSync(datei);
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  assert.equal(await page.inputValue('#nameIn'), 'Testkind');
+  assert.deepEqual(JSON.parse(await read(page)).ideen, ideen, 'Ideen sind nach dem Laden wieder da');
+  assert.deepEqual(JSON.parse(await read(page, KEY + '-spieler-p1')).ideen, [eigene], 'die Idee vom Spieler ohne Namen bleibt');
+  assert.equal(JSON.parse(await read(page, KEY + '-spieler')).list.length, 2);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Sicherheit: Fisch- und Platz-id „constructor“ findet nichts (SEC-006)', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ludins: 345, bucket: [{ id: 'constructor', cm: 5, value: 5 }], book: { constructor: { n: 1, best: 1 } }, flussAt: 'constructor' }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBook');
+  await page.locator('#card h2:text-is("Fischbuch")').waitFor({ timeout: 5000 });
+  const s = await weg(page);
+  assert.deepEqual(s.bucket, [], 'wie ein unbekannter Fisch: nicht mehr im Eimer');
+  assert.equal(s.ludins, 345 + 5, 'Rosa kauft ihn ab');
+  assert.deepEqual(s.book.constructor, { n: 1, best: 1 }, 'das Fischbuch behält den Eintrag (nichts löschen)');
+  assert.equal(s.flussAt, 'constructor', 'flussAt bleibt gespeichert');
+  assert.deepEqual(errors, []);
+  await ctx.close();
 });
 
 test('Was ist neu v43: Ideen-Kiste', () => {

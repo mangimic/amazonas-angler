@@ -670,7 +670,7 @@ if(typeof state.playerId!=='string'||!state.playerId)state.playerId=players.list
 if(!players.list.some(p=>p.id===state.playerId))players.list.push({id:state.playerId});
 const askWhoPlays=players.list.length>1&&!players.picked; // nach einem Spielerwechsel nicht gleich noch einmal fragen
 delete players.picked;
-const emptyPlayer=s=>!(s.avatar&&s.avatar.name)&&!(Number(s.ludins)>0)&&!Object.keys(s.book||{}).length&&!s.hasBoat;
+const emptyPlayer=s=>!(s.avatar&&s.avatar.name)&&!(Number(s.ludins)>0)&&!Object.keys(s.book||{}).length&&!s.hasBoat&&!(Array.isArray(s.ideen)&&s.ideen.length); // wer eine Idee hat, ist nie leer
 function syncPlayer(){const p=players.list.find(p=>p.id===state.playerId);if(!p)return;
   Object.assign(p,{name:state.avatar.name||'',ludins:state.ludins,fish:Object.keys(state.book).length,skin:state.avatar.skin,shirt:state.avatar.shirt,t:Date.now()});
   lsSet(PLAYERS_KEY,JSON.stringify(players));}
@@ -2544,18 +2544,18 @@ function showIdee(){
   card.appendChild(g);
   const bt=el('div','btns');bt.appendChild(back('Abbrechen'));card.appendChild(bt);
 }
-// Entwurf: was gerade geschrieben wird (nicht im Spielstand). Geht die Karte zu (z. B. Spielzeit-Pause), kommt der Text beim selben Thema wieder.
+// Entwurf: was gerade geschrieben wird (nicht im Spielstand). Geht die Karte zu (z. B. Spielzeit-Pause), kommt der Text wieder,
+// bei jedem Thema, das man dann antippt (der Entwurf bekommt dieses Thema).
 let ideeEntwurf=null; // {thema,text}
 // Schritt 2: die Idee aufschreiben (oder mit dem Mikrofon der Tastatur sprechen)
 function ideeText(thema){
   card.innerHTML='';
   card.appendChild(el('h2',null,'💡 Deine Idee'));
   card.appendChild(el('p','next',esc(IDEE_THEMEN[thema])));
-  card.appendChild(el('p',null,'Schreib deine Idee auf. Du kannst auch das Mikrofon der Tastatur benutzen.'));
   const ta=el('textarea');ta.id='ideeText';ta.maxLength=200;ta.rows=4;ta.setAttribute('aria-label','Deine Idee');
   const rest=el('p','small');rest.id='ideeRest';
   const ok=el('button','b go','Abschicken');ok.id='ideeOk';
-  if(ideeEntwurf&&ideeEntwurf.thema===thema)ta.value=ideeEntwurf.text;
+  if(ideeEntwurf){ta.value=ideeEntwurf.text;ideeEntwurf={thema,text:ta.value};}
   const upd=()=>{rest.textContent='noch '+Math.max(0,200-ta.value.length)+' Zeichen';ok.disabled=ta.value.trim().length<3;};
   ta.addEventListener('input',()=>{ideeEntwurf={thema,text:ta.value};upd();});upd();
   let sent=false;
@@ -2565,13 +2565,14 @@ function ideeText(thema){
     ideeDanke(vorher);};
   const ab=el('button','b alt','Abbrechen');ab.onclick=showHeute;
   const bt=el('div','btns');bt.append(ab,ok);
-  card.append(ta,rest,bt);
+  // Knöpfe über dem Textfeld: auf dem iPad (hochkant) verdeckt die Tastatur sonst „Abschicken“
+  card.append(bt,el('p',null,'Schreib deine Idee auf. Du kannst auch das Mikrofon der Tastatur benutzen.'),ta,rest);
   try{ta.focus();}catch(e){}
 }
 function ideeDanke(vorher){
   card.innerHTML='';
   card.appendChild(el('h2',null,'💡 Deine Idee'));
-  card.appendChild(el('p','next','Danke für deine Idee! Ich gebe sie weiter.'));
+  card.appendChild(el('p','next','<b>👴 Opa Tiago:</b><br>Danke für deine Idee! Ich gebe sie weiter.'));
   const st=ideenSticker(state.ideen.length);
   if(st&&st!==vorher)card.appendChild(el('p',null,'Neuer Sticker: <span class="ideenSticker">'+esc(st)+'</span> Du findest ihn im Fischbuch.'));
   const noch=el('button','b alt','Noch eine Idee'),w=el('button','b go','Weiter spielen');
@@ -2806,7 +2807,8 @@ $('#btnTime').onclick=()=>{audio();showTimeSettings();};
 const ideeTag=d=>d?d.slice(8,10)+'.'+d.slice(5,7)+'.'+d.slice(0,4):''; // JJJJ-MM-TT → TT.MM.JJJJ
 const ideeThema=t=>{const s=IDEE_THEMEN[t]||IDEE_THEMEN.sonst,i=s.indexOf(' ');return {sym:s.slice(0,i),wort:s.slice(i+1)};};
 const ideenNeuZuerst=l=>l.map((x,n)=>({x,n})).sort((a,b)=>a.x.day<b.x.day?1:a.x.day>b.x.day?-1:b.n-a.n).map(o=>o.x);
-const ideenName=s=>{const n=isObj(s.avatar)&&typeof s.avatar.name==='string'?s.avatar.name.replace(/[\u0000-\u001f\u007f-\u009f]/g,'').slice(0,40):'';return n||'Angler';};
+// Name aus einem Fach: dieselben Zeichen weg wie in cleanIdeen (dazu auch \n), die Emoji-Verbinder U+200C/U+200D bleiben
+const ideenName=s=>{const n=isObj(s.avatar)&&typeof s.avatar.name==='string'?s.avatar.name.replace(/[\u0000-\u001f\u007f-\u009f\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,'').slice(0,40):'';return n||'Angler';};
 // Ideen aller Spieler: zuerst der, der gerade spielt (aus state), dann die anderen aus ihren Fächern
 function alleIdeen(){
   const list=[{player:state.playerId,name:ideenName(state),ideen:cleanIdeen(state.ideen)}],seen=new Set([state.playerId]);
@@ -2830,8 +2832,10 @@ function ideenTeilen(){
   let file=null,geht=false;
   try{file=new File([text],name,{type});geht=!!(navigator.canShare&&navigator.canShare({files:[file]}));}catch(e){}
   if(!geht){laden();return;}
-  let p;try{p=navigator.share({files:[file],title:'Ideen aus Amazonas Angler'});}catch(e){laden();return;}
-  Promise.resolve(p).catch(e=>{if(!(e&&e.name==='AbortError'))laden();});} // Abbrechen im Teilen-Fenster: nichts tun
+  const b=$('#ideenTeilen');if(b){if(b.disabled)return;b.disabled=true;} // zweimal tippen: nur ein Teilen-Fenster
+  const frei=()=>{if(b&&b.isConnected)b.disabled=false;};
+  let p;try{p=navigator.share({files:[file],title:'Ideen aus Amazonas Angler'});}catch(e){frei();laden();return;}
+  Promise.resolve(p).then(frei,e=>{frei();if(!(e&&(e.name==='AbortError'||e.name==='InvalidStateError')))laden();});} // Abbrechen oder Fenster schon offen: nichts tun
 function ideenGelesen(){
   state.ideen.forEach(i=>{i.gelesen=true;});save();
   const seen=new Set([state.playerId]);
@@ -2858,7 +2862,11 @@ function showIdeenKinder(frei){
   if(alt){const d=el('details');d.appendChild(el('summary',null,'Schon gelesen ('+alt+')'));gruppen(d,i=>i.gelesen,'ideeAlt');card.appendChild(d);}
   const bt=el('div','btns col');
   const sh=el('button','b go','📤 Als Text-Datei teilen');sh.id='ideenTeilen';sh.disabled=!offen;sh.onclick=ideenTeilen;
-  const gl=el('button','b','Als gelesen markieren');gl.id='ideenGelesen';gl.disabled=!offen;gl.onclick=()=>{ideenGelesen();showIdeenKinder(true);};
+  const gl=el('button','b','Als gelesen markieren');gl.id='ideenGelesen';gl.disabled=!offen;
+  gl.onclick=()=>{bt.innerHTML=''; // erst fragen: gelesene Ideen stehen nicht mehr in der Datei
+    const ja=el('button','b go','Ja, als gelesen markieren');ja.id='ideenGelesenJa';ja.onclick=()=>{ideenGelesen();showIdeenKinder(true);};
+    const nein=el('button','b alt','Nein, zurück');nein.id='ideenGelesenNein';nein.onclick=()=>showIdeenKinder(true);
+    bt.append(el('p','next','Hast du die Ideen schon geteilt? Danach stehen sie nicht mehr in der Datei.'),ja,nein);};
   const cl=el('button','b alt','Fertig');cl.onclick=closeModal;
   bt.append(sh,gl,cl);card.appendChild(bt);}
 $('#btnIdeen').onclick=()=>{audio();showIdeenKinder(false);};
