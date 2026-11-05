@@ -3757,7 +3757,9 @@ test('Alter Spielstand: ideen bekommt Startwert, kaputte Werte werden repariert'
     [[{ thema: 'rakete', text: 'x'.repeat(300), day: 'gestern', gelesen: 'ja', extra: 1 }, 'quatsch', { text: 5 }],
       [{ thema: 'sonst', text: 'x'.repeat(200), day: '', gelesen: false, extra: 1 }]],
     [[null, [1], { thema: '__proto__', text: 'A\u0000B\nC\u0007D\u001b\u007f', day: '2026-11-05', gelesen: true }],
-      [{ thema: 'sonst', text: 'AB\nCD', day: '2026-11-05', gelesen: true }]]]) {
+      [{ thema: 'sonst', text: 'AB\nCD', day: '2026-11-05', gelesen: true }]],
+    [[{ thema: 'ort', text: 'a\u200Bb\u200Fc\u202Ad\u202Ee\u2066f\u2069g', day: '2026-11-05' }], // Richtungs- und Formatzeichen weg
+      [{ thema: 'ort', text: 'abcdefg', day: '2026-11-05', gelesen: false }]]]) {
     await seed(page, { [KEY]: stadtSeed({ ideen }) });
     await startGame(page);
     await playAndLeave(page);
@@ -3793,6 +3795,45 @@ test('Ideen-Kiste: HTML im Ideen-Text wird nicht ausgeführt (Fischbuch)', async
   await page.waitForTimeout(300);
   assert.equal(await page.locator('.eingeschleust').count(), 0);
   assert.equal(await page.evaluate(() => window.__pwn), undefined);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+// Tippt auf den dunklen Hintergrund unten links, außerhalb der Karte
+const neben = async page => { const v = page.viewportSize(); assert.equal(await page.evaluate(([x, y]) => document.elementFromPoint(x, y).id, [5, v.height - 5]), 'modal'); await page.mouse.click(5, v.height - 5); };
+test('Ideen-Kiste: Tippen neben die Karte löscht die Idee nicht, Entwurf bleibt nach einer Pause', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({}) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await ideeKarte(page);
+  await neben(page); // Hintergrund neben den Themen
+  assert.equal(await page.isVisible('#modal'), true, 'Themen-Karte bleibt offen');
+  await page.click('#card [data-thema="figur"]');
+  await page.fill('#ideeText', 'Ein Faultier als Freund');
+  await neben(page); // Ecke des Hintergrunds, außerhalb der Karte (z. B. um die Tastatur zu schließen)
+  assert.equal(await page.isVisible('#modal'), true, 'Karte bleibt offen');
+  assert.equal(await page.inputValue('#ideeText'), 'Ein Faultier als Freund', 'Text bleibt');
+  // Die Karte geht zu (wie bei der Spielzeit-Pause): der Entwurf kommt beim selben Thema wieder, nicht im Spielstand
+  await page.evaluate(() => { document.querySelector('#modal').hidden = true; });
+  await ideeKarte(page);
+  await page.click('#card [data-thema="fisch"]');
+  assert.equal(await page.inputValue('#ideeText'), '', 'anderes Thema: leer');
+  await page.click('#card button:text-is("Abbrechen")');
+  await page.click('#btnIdee');
+  await page.click('#card [data-thema="figur"]');
+  assert.equal(await page.inputValue('#ideeText'), 'Ein Faultier als Freund', 'Entwurf wieder da');
+  assert.equal((await page.textContent('#ideeRest')).trim(), 'noch 177 Zeichen');
+  assert.equal(await page.isDisabled('#ideeOk'), false);
+  assert.deepEqual((await weg(page)).ideen, [], 'Entwurf steht nicht im Spielstand');
+  await page.click('#ideeOk');
+  await page.waitForTimeout(700); // Knöpfe der Danke-Karte sind kurz gesperrt
+  await neben(page);
+  assert.equal(await page.isVisible('#modal'), true, 'Danke-Karte bleibt offen');
+  await page.click('#card button:text-is("Noch eine Idee")');
+  await page.click('#card [data-thema="figur"]');
+  assert.equal(await page.inputValue('#ideeText'), '', 'nach dem Abschicken ist der Entwurf weg');
+  assert.equal((await weg(page)).ideen.length, 1);
   assert.deepEqual(errors, []);
   await ctx.close();
 });

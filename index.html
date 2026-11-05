@@ -635,7 +635,7 @@ function cleanIdeen(v){
   if(!Array.isArray(v))return [];
   return v.filter(i=>isObj(i)&&typeof i.text==='string').map(i=>({...i, // {...i} statt Object.assign: ein Feld „__proto__“ aus einer Datei bleibt ein normales Feld
     thema:Object.prototype.hasOwnProperty.call(IDEE_THEMEN,i.thema)?i.thema:'sonst',
-    text:i.text.replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g,'').slice(0,200), // Steuerzeichen weg, nur \n bleibt
+    text:i.text.replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g,'').slice(0,200), // Steuer-, Richtungs- und Formatzeichen weg, nur \n bleibt
     day:dayOk(i.day),gelesen:i.gelesen===true}));}
 state.ideen=cleanIdeen(state.ideen);
 const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
@@ -1508,7 +1508,7 @@ cvs.addEventListener('pointermove',e=>{if(mode!=='build'||e.pointerId!==bPtr)ret
 cvs.addEventListener('pointerup',e=>{if(e.pointerId!==bPtr)return;bPtr=null;if(mode==='build'&&!bMoved)buildTap(e.clientX,e.clientY);});
 cvs.addEventListener('pointercancel',e=>{if(e.pointerId===bPtr)bPtr=null;});
 cvs.addEventListener('wheel',e=>{camDist=Math.min(14,Math.max(5,camDist+e.deltaY*0.01));},{passive:true});
-addEventListener('keydown',e=>{if(e.target.tagName==='INPUT')return;input.keys[e.code]=true;if(mode==='play'&&(e.code==='Space'||e.code==='KeyE')){e.preventDefault();fishPress();}
+addEventListener('keydown',e=>{if(/^(INPUT|TEXTAREA)$/.test(e.target.tagName))return;input.keys[e.code]=true;if(mode==='play'&&(e.code==='Space'||e.code==='KeyE')){e.preventDefault();fishPress();}
   else if(mode==='play'&&e.code==='KeyM')showMap();});
 addEventListener('keyup',e=>{input.keys[e.code]=false;});
 
@@ -2458,7 +2458,7 @@ $('#btnFish').onclick=fishPress;
 $('#btnBucket').onclick=()=>{stopFishing();showBucket();};
 $('#btnBook').onclick=()=>{stopFishing();showBook();};
 $('#btnAvatar').onclick=()=>{stopFishing();openCreator();};
-$('#modal').addEventListener('pointerdown',e=>{if(e.target.id==='modal'&&!card.classList.contains('catch'))closeModal();});
+$('#modal').addEventListener('pointerdown',e=>{if(e.target.id==='modal'&&!card.classList.contains('catch')&&!card.classList.contains('idee'))closeModal();}); // Ideen-Karte: nur mit ihren Knöpfen schließen (Tippen daneben schließt auf dem iPad die Tastatur)
 
 /* ---- Heute für dich (Uhr oben antippen) ----
    Wie im Skill i-have-adhd: der eine nächste Schritt zuerst, darunter höchstens 5 Zeilen, Erfolge sichtbar.
@@ -2534,6 +2534,8 @@ function showIdee(){
   card.appendChild(g);
   const bt=el('div','btns');bt.appendChild(back('Abbrechen'));card.appendChild(bt);
 }
+// Entwurf: was gerade geschrieben wird (nicht im Spielstand). Geht die Karte zu (z. B. Spielzeit-Pause), kommt der Text beim selben Thema wieder.
+let ideeEntwurf=null; // {thema,text}
 // Schritt 2: die Idee aufschreiben (oder mit dem Mikrofon der Tastatur sprechen)
 function ideeText(thema){
   card.innerHTML='';
@@ -2543,12 +2545,13 @@ function ideeText(thema){
   const ta=el('textarea');ta.id='ideeText';ta.maxLength=200;ta.rows=4;ta.setAttribute('aria-label','Deine Idee');
   const rest=el('p','small');rest.id='ideeRest';
   const ok=el('button','b go','Abschicken');ok.id='ideeOk';
+  if(ideeEntwurf&&ideeEntwurf.thema===thema)ta.value=ideeEntwurf.text;
   const upd=()=>{rest.textContent='noch '+Math.max(0,200-ta.value.length)+' Zeichen';ok.disabled=ta.value.trim().length<3;};
-  ta.addEventListener('input',upd);upd();
+  ta.addEventListener('input',()=>{ideeEntwurf={thema,text:ta.value};upd();});upd();
   let sent=false;
   ok.onclick=()=>{const text=ta.value.trim();if(sent||text.length<3)return;sent=true;ok.disabled=true; // zweimal tippen = nur eine Idee
     const vorher=ideenSticker(state.ideen.length);
-    state.ideen.push({thema,text,day:todayKey(),gelesen:false});save();
+    state.ideen.push({thema,text,day:todayKey(),gelesen:false});save();ideeEntwurf=null;
     ideeDanke(vorher);};
   const ab=el('button','b alt','Abbrechen');ab.onclick=showHeute;
   const bt=el('div','btns');bt.append(ab,ok);
