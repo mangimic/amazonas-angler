@@ -3649,7 +3649,7 @@ test('Hochsee: von der Insel aus beißen sie auch', async () => {
 });
 
 test('Was ist neu v42: Luxusyacht', () => {
-  const n = newsListe()[0];
+  const n = newsListe().find(n => n.v === 42);
   assert.deepEqual({ v: n.v, day: n.day, ico: n.ico, t: n.t, d: n.d }, { v: 42, day: '28.10.2026', ico: '🛥️', t: 'Luxusyacht',
     d: 'Am Hafen gibt es jetzt einen Bootshafen. Kauf dir die schwarz-goldene Luxusyacht und fahr hinaus aufs Meer – zur Insel und zu den Seehunden!' });
 });
@@ -3759,7 +3759,9 @@ test('Alter Spielstand: ideen bekommt Startwert, kaputte Werte werden repariert'
     [[null, [1], { thema: '__proto__', text: 'A\u0000B\nC\u0007D\u001b\u007f', day: '2026-11-05', gelesen: true }],
       [{ thema: 'sonst', text: 'AB\nCD', day: '2026-11-05', gelesen: true }]],
     [[{ thema: 'ort', text: 'a\u200Bb\u200Fc\u202Ad\u202Ee\u2066f\u2069g', day: '2026-11-05' }], // Richtungs- und Formatzeichen weg
-      [{ thema: 'ort', text: 'abcdefg', day: '2026-11-05', gelesen: false }]]]) {
+      [{ thema: 'ort', text: 'abcdefg', day: '2026-11-05', gelesen: false }]],
+    [[{ thema: 'figur', text: '👨\u200D👩\u200D👧 a\u200Cb\u200Ec', day: '2026-11-05' }], // Emoji-Verbinder (U+200C, U+200D) bleiben, damit Familien-Emojis heil sind
+      [{ thema: 'figur', text: '👨\u200D👩\u200D👧 a\u200Cbc', day: '2026-11-05', gelesen: false }]]]) {
     await seed(page, { [KEY]: stadtSeed({ ideen }) });
     await startGame(page);
     await playAndLeave(page);
@@ -3836,4 +3838,183 @@ test('Ideen-Kiste: Tippen neben die Karte löscht die Idee nicht, Entwurf bleibt
   assert.equal((await weg(page)).ideen.length, 1);
   assert.deepEqual(errors, []);
   await ctx.close();
+});
+
+// Ideen der Kinder (für Erwachsene): in der Avatar-Werkstatt hinter der Rechenaufgabe. Zeigt die Ideen aller Spieler auf diesem iPad.
+const MIA_IDEEN = [
+  { thema: 'fisch', text: 'Ein Hai im Amazonas', day: '2026-11-03', gelesen: false },
+  { thema: 'ort', text: 'Eine Wasserrutsche am See', day: '2026-11-04', gelesen: false }];
+const TOM_SLOT = { v: 2, ludins: 50, newsSeen: 999, playerId: 'p2', avatar: { name: 'Tom' }, museum: { hering: { cm: 22, t: 1761500000000 } }, zukunft: { a: [1, { b: 2 }] },
+  ideen: [{ thema: 'fahrzeug', text: 'Ein fliegendes Fahrrad', day: '2026-11-02', gelesen: 'nein', extra: { x: 1 } }, { text: 5 }] }; // { text: 5 } ist keine Idee und bleibt, wie es ist
+function zweiSpieler({ mia = MIA_IDEEN, tom = TOM_SLOT, mehr = {} } = {}) {
+  return { [KEY]: stadtSeed({ playerId: 'p1', avatar: { ...ALT_V1.avatar, name: 'Mia' }, ideen: mia }),
+    [KEY + '-spieler-p2']: JSON.stringify(tom),
+    [KEY + '-spieler']: JSON.stringify({ list: [{ id: 'p1', name: 'Mia' }, { id: 'p2', name: 'Tom' }, ...Object.keys(mehr).map(id => ({ id, name: id }))], picked: true }),
+    ...Object.fromEntries(Object.entries(mehr).map(([id, v]) => [KEY + '-spieler-' + id, v])) };
+}
+async function ideenAnsicht(page) { // Werkstatt: „💡 Ideen der Kinder“, dann die Rechenaufgabe
+  await page.click('#btnIdeen');
+  await page.locator('#gateIn').waitFor({ timeout: 5000 });
+  await rechenaufgabe(page);
+  await page.locator('#ideenTeilen').waitFor({ timeout: 5000 });
+}
+const ideeZeilen = page => page.locator('#card .idee').evaluateAll(l => l.map(e => e.textContent.trim()));
+
+test('Ideen der Kinder: nur nach der Rechenaufgabe, mit zwei Spielern', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, zweiSpieler());
+  await startGame(page);
+  assert.equal((await page.textContent('#btnIdeen')).trim(), '💡 Ideen der Kinder');
+  assert.ok((await page.locator('#btnIdeen').boundingBox()).height >= 60, 'Knopf mindestens 60 px');
+  await page.click('#btnIdeen');
+  await page.locator('#gateIn').waitFor({ timeout: 5000 });
+  assert.equal(await page.locator('#card h2').textContent(), '💡 Ideen der Kinder');
+  assert.equal(await page.locator('.idee').count(), 0, 'vor der Rechenaufgabe keine Ideen');
+  await page.fill('#gateIn', '1');
+  await page.click('#gateOk');
+  await page.locator('#gateIn').waitFor({ timeout: 5000 });
+  assert.equal(await page.locator('.idee').count(), 0, 'falsche Antwort: keine Ideen');
+  await rechenaufgabe(page);
+  await page.locator('#card .idee').first().waitFor({ timeout: 5000 });
+  assert.equal(await page.locator('.idee').count(), 3);
+  assert.equal(await page.locator('#card h3:text-is("Mia")').count(), 1);
+  assert.equal(await page.locator('#card h3:text-is("Tom")').count(), 1);
+  assert.deepEqual(await ideeZeilen(page), ['🗺️ 04.11.2026: Eine Wasserrutsche am See', '🐟 03.11.2026: Ein Hai im Amazonas', '🚗 02.11.2026: Ein fliegendes Fahrrad'], 'neueste zuerst');
+  for (const id of ['#ideenTeilen', '#ideenGelesen']) {
+    assert.ok((await page.locator(id).boundingBox()).height >= 60, id + ' mindestens 60 px');
+    assert.equal(await page.isDisabled(id), false);
+  }
+  assert.equal((await page.textContent('#ideenTeilen')).trim(), '📤 Als Text-Datei teilen');
+  assert.equal((await page.textContent('#ideenGelesen')).trim(), 'Als gelesen markieren');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Ideen der Kinder: kaputter Spieler-Platz stört nicht', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, zweiSpieler({ mehr: { p3: 'kein json', p4: JSON.stringify({ ideen: 'x' }) } }));
+  await startGame(page);
+  await ideenAnsicht(page);
+  assert.equal(await page.locator('#card .idee').count(), 3);
+  assert.deepEqual(await page.evaluate(() => window.__test.alleIdeen().map(e => [e.player, e.name, e.ideen.length])),
+    [['p1', 'Mia', 2], ['p2', 'Tom', 1], ['p4', 'Angler', 0]], 'kaputter Platz wird übersprungen');
+  await page.click('#ideenGelesen');
+  await page.locator('#card .ideeAlt').first().waitFor({ state: 'attached', timeout: 5000 });
+  assert.equal(await read(page, KEY + '-spieler-p3'), 'kein json', 'kaputter Platz wird nicht geschrieben');
+  assert.equal(await read(page, KEY + '-spieler-p4'), JSON.stringify({ ideen: 'x' }), 'Platz ohne Ideen bleibt, wie er ist');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Ideen der Kinder: HTML im Text wird nicht ausgeführt', async () => {
+  const { ctx, page, errors } = await newPage();
+  const boese = '<img class="eingeschleust" src="x" onerror="window.__pwn=1">';
+  await seed(page, zweiSpieler({ tom: { ...TOM_SLOT, ideen: [{ thema: 'fisch', text: boese, day: '2026-11-02', gelesen: false }] },
+    mehr: { p3: JSON.stringify({ avatar: { name: '<img class="eingeschleust" src="x" onerror="window.__pwn=2">' }, ideen: [{ thema: 'figur', text: 'Hallo', day: '2026-11-01' }] }) } }));
+  await startGame(page);
+  await ideenAnsicht(page);
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('.eingeschleust').count(), 0);
+  assert.equal(await page.evaluate(() => window.__pwn), undefined);
+  assert.ok((await ideeZeilen(page)).includes('🐟 02.11.2026: ' + boese), 'als Text sichtbar');
+  assert.equal(await page.locator('#card h3', { hasText: '<img class="eingeschleust"' }).count(), 1, 'Name als Text');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Ideen der Kinder: Text-Datei', async () => {
+  const { ctx, page, errors } = await newPage();
+  await ctx.addInitScript(() => { Object.defineProperty(navigator, 'canShare', { value: undefined, configurable: true }); });
+  await seed(page, zweiSpieler({ mia: [...MIA_IDEEN, { thema: 'figur', text: 'Schon gelesene Idee', day: '2026-11-04', gelesen: true }] }));
+  await startGame(page);
+  await ideenAnsicht(page);
+  const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.click('#ideenTeilen')]);
+  assert.match(dl.suggestedFilename(), /^Ideen-Mia-\d{4}-\d\d-\d\d\.txt$/);
+  assert.equal(dl.suggestedFilename(), 'Ideen-Mia-' + await seitenTag(page) + '.txt', 'heutiger Tag');
+  const text = fs.readFileSync(await dl.path(), 'utf8');
+  assert.ok(text.startsWith('Ideen aus Amazonas Angler – '));
+  for (const t of ['Mia:', 'Tom:', 'Ein Hai im Amazonas', 'Eine Wasserrutsche am See', 'Ein fliegendes Fahrrad']) assert.ok(text.includes(t), t);
+  const [j, m, d] = (await seitenTag(page)).split('-');
+  assert.equal(text, 'Ideen aus Amazonas Angler – ' + d + '.' + m + '.' + j + '\n' +
+    '\nMia:\n- [Ort] 04.11.2026: Eine Wasserrutsche am See\n- [Fisch] 03.11.2026: Ein Hai im Amazonas\n' +
+    '\nTom:\n- [Fahrzeug] 02.11.2026: Ein fliegendes Fahrrad\n', 'nur ungelesene Ideen, reiner Text');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Ideen der Kinder: Teilen abbrechen', async () => {
+  const { ctx, page, errors } = await newPage();
+  await ctx.addInitScript(() => {
+    navigator.canShare = () => true;
+    navigator.share = d => { window.__geteilt = { title: d.title, name: d.files[0].name, type: d.files[0].type }; return Promise.reject(new DOMException('x', 'AbortError')); };
+  });
+  await seed(page, zweiSpieler());
+  await startGame(page);
+  await ideenAnsicht(page);
+  let downloads = 0;
+  page.on('download', () => downloads++);
+  await page.click('#ideenTeilen');
+  await page.waitForTimeout(1000);
+  const g = await page.evaluate(() => window.__geteilt);
+  assert.equal(g.title, 'Ideen aus Amazonas Angler');
+  assert.match(g.name, /^Ideen-Mia-\d{4}-\d\d-\d\d\.txt$/);
+  assert.match(g.type, /^text\/plain/);
+  assert.equal(downloads, 0, 'kein Download');
+  assert.equal(await page.evaluate(() => document.querySelector('#toast').classList.contains('show')), false, 'kein Fehler-Toast');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Ideen der Kinder: als gelesen markieren löscht nichts', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, zweiSpieler());
+  await startGame(page);
+  await ideenAnsicht(page);
+  const tomVorher = JSON.parse(await read(page, KEY + '-spieler-p2'));
+  await page.click('#ideenGelesen');
+  await page.locator('#card .ideeAlt').first().waitFor({ state: 'attached', timeout: 5000 });
+  const s = JSON.parse(await read(page));
+  assert.equal(s.ideen.length, 2);
+  assert.deepEqual(s.ideen, MIA_IDEEN.map(i => ({ ...i, gelesen: true })), 'Mia: alles gelesen, sonst gleich');
+  const soll = structuredClone(tomVorher);
+  soll.ideen[0].gelesen = true;
+  assert.deepEqual(JSON.parse(await read(page, KEY + '-spieler-p2')), soll, 'Tom: nur gelesen geändert');
+  assert.equal(await page.locator('#card .idee').count(), 0, 'keine offenen Ideen');
+  assert.equal(await page.locator('#card details .ideeAlt').count(), 3);
+  assert.match(await page.locator('#card details summary').textContent(), /Schon gelesen/);
+  assert.equal(await page.locator('#card details').evaluate(d => d.open), false, 'zugeklappt');
+  assert.equal(await page.isDisabled('#ideenTeilen'), true, 'nichts Neues zum Teilen');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Ideen der Kinder: ohne Ideen steht „Noch keine Ideen.“, nach dem Markieren ist die volle Kiste wieder frei', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ avatar: { ...ALT_V1.avatar, name: 'Mia' } }) });
+  await startGame(page);
+  await ideenAnsicht(page);
+  assert.match(await page.textContent('#card'), /Noch keine Ideen\./);
+  assert.equal(await page.isDisabled('#ideenTeilen'), true);
+  await ctx.close();
+  // 50 ungelesene Ideen: die Kiste ist voll. Nach dem Markieren kann Mia wieder eine Idee aufschreiben.
+  const b = await newPage();
+  await seed(b.page, { [KEY]: stadtSeed({ avatar: { ...ALT_V1.avatar, name: 'Mia' }, ideen: ideenListe(50) }) });
+  await startGame(b.page);
+  await ideenAnsicht(b.page);
+  assert.equal(await b.page.locator('#card .idee').count(), 50);
+  await b.page.click('#ideenGelesen');
+  await b.page.locator('#card .ideeAlt').first().waitFor({ state: 'attached', timeout: 5000 });
+  await b.page.click('#card button:text-is("Fertig")');
+  await b.page.click('#btnGo');
+  await ideeKarte(b.page);
+  assert.equal(await b.page.locator('#card [data-thema]').count(), 5, 'Formular wieder frei');
+  assert.equal(JSON.parse(await read(b.page)).ideen.length, 50, 'nichts gelöscht');
+  assert.deepEqual([...errors, ...b.errors], []);
+  await b.ctx.close();
+});
+
+test('Was ist neu v43: Ideen-Kiste', () => {
+  const n = newsListe()[0];
+  assert.deepEqual({ v: n.v, day: n.day, ico: n.ico, t: n.t, d: n.d }, { v: 43, day: '05.11.2026', ico: '💡', t: 'Ideen-Kiste',
+    d: 'Du hast eine Idee fürs Spiel? Tipp auf die Uhr und dann auf 💡. Ein Erwachsener schickt sie weiter.' });
 });

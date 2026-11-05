@@ -245,6 +245,15 @@ button.bk:active{border-color:var(--ink)}
 .idee .themen .b{font-size:21px;white-space:nowrap}
 .idee textarea{width:100%;box-sizing:border-box;min-height:140px;font:600 20px/1.35 var(--body);padding:10px 12px;border:3px solid var(--ink);border-radius:14px;background:#fff;color:var(--ink);resize:vertical}
 .idee .b:disabled{opacity:.45;box-shadow:none}
+.ideen h3{margin:4px 0 0;font:800 22px var(--display)}
+.ideen .idee,.ideen .ideeAlt{background:#fff3c4;border-radius:12px;padding:8px 12px;white-space:pre-wrap;overflow-wrap:anywhere}
+.ideen .ideeAlt{background:#eee6d2}
+.ideen details>*+*{margin-top:8px}
+.ideen summary{min-height:60px;display:flex;align-items:center;gap:8px;font:800 20px var(--display);cursor:pointer;list-style:none;
+  background:#f3e8cc;border-radius:14px;padding:0 14px}
+.ideen summary::-webkit-details-marker{display:none}
+.ideen summary::before{content:'▸'}.ideen details[open] summary::before{content:'▾'}
+.ideen .b:disabled{opacity:.45;box-shadow:none}
 .quiz .qq{font:800 22px/1.25 var(--display)}
 .quiz .qa{text-align:left;font-size:18px}
 .quiz .qa.right{background:#5fb36a;color:#fff}
@@ -309,6 +318,7 @@ table.rules tr.now td{background:#ffe9c2}
   <button class="b alt" id="btnPlayers">👥 Spieler wechseln</button>
   <button class="b alt" id="btnRanking">🏆 Bestenliste</button>
   <button class="b alt" id="btnTime">⏰ Spielzeit</button>
+  <button class="b alt" id="btnIdeen">💡 Ideen der Kinder</button>
   <button class="b alt" id="btnSaveCode">💾 Spielstand sichern</button>
   <div class="small-note">Laufen: links auf dem Bildschirm wischen · Umschauen: rechts wischen · Am Computer: Pfeiltasten oder WASD, Leertaste zum Angeln</div>
 </div>
@@ -635,7 +645,7 @@ function cleanIdeen(v){
   if(!Array.isArray(v))return [];
   return v.filter(i=>isObj(i)&&typeof i.text==='string').map(i=>({...i, // {...i} statt Object.assign: ein Feld „__proto__“ aus einer Datei bleibt ein normales Feld
     thema:Object.prototype.hasOwnProperty.call(IDEE_THEMEN,i.thema)?i.thema:'sonst',
-    text:i.text.replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b-\u200f\u202a-\u202e\u2066-\u2069]/g,'').slice(0,200), // Steuer-, Richtungs- und Formatzeichen weg, nur \n bleibt
+    text:i.text.replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,'').slice(0,200), // Steuer-, Richtungs- und Formatzeichen weg, nur \n und die Emoji-Verbinder U+200C/U+200D bleiben
     day:dayOk(i.day),gelesen:i.gelesen===true}));}
 state.ideen=cleanIdeen(state.ideen);
 const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
@@ -2789,6 +2799,70 @@ function showTimeSettings(){
   const cl=el('button','b alt','Fertig');cl.onclick=closeModal;bt.append(ch,cl);card.appendChild(bt);}
 $('#btnTime').onclick=()=>{audio();showTimeSettings();};
 
+/* ---- Ideen der Kinder: für Erwachsene (Avatar-Werkstatt, hinter der Rechenaufgabe) ----
+   Zeigt die Ideen aller Spieler auf diesem iPad. Teilen geht als Text-Datei: kein Server, Erwachsene teilen selbst.
+   Die Fächer der anderen Spieler sind fremde Daten: nur in try lesen, mit cleanIdeen prüfen, Text immer mit esc() zeigen.
+   Beim Markieren wird dort nur ideen[i].gelesen geändert, ein kaputtes Fach wird nie geschrieben. */
+const ideeTag=d=>d?d.slice(8,10)+'.'+d.slice(5,7)+'.'+d.slice(0,4):''; // JJJJ-MM-TT → TT.MM.JJJJ
+const ideeThema=t=>{const s=IDEE_THEMEN[t]||IDEE_THEMEN.sonst,i=s.indexOf(' ');return {sym:s.slice(0,i),wort:s.slice(i+1)};};
+const ideenNeuZuerst=l=>l.map((x,n)=>({x,n})).sort((a,b)=>a.x.day<b.x.day?1:a.x.day>b.x.day?-1:b.n-a.n).map(o=>o.x);
+const ideenName=s=>{const n=isObj(s.avatar)&&typeof s.avatar.name==='string'?s.avatar.name.replace(/[\u0000-\u001f\u007f-\u009f]/g,'').slice(0,40):'';return n||'Angler';};
+// Ideen aller Spieler: zuerst der, der gerade spielt (aus state), dann die anderen aus ihren Fächern
+function alleIdeen(){
+  const list=[{player:state.playerId,name:ideenName(state),ideen:cleanIdeen(state.ideen)}],seen=new Set([state.playerId]);
+  players.list.forEach(p=>{if(seen.has(p.id))return;seen.add(p.id);
+    let s=null;try{s=JSON.parse(lsGet(slotKey(p.id)));}catch(e){return;} // kaputtes Fach: überspringen
+    if(isObj(s))list.push({player:p.id,name:ideenName(s),ideen:cleanIdeen(s.ideen)});});
+  return list;}
+// Reiner Text für die Datei: nur ungelesene Ideen, neueste zuerst
+function ideenText(list){
+  let t='Ideen aus Amazonas Angler – '+ideeTag(todayKey())+'\n';
+  list.forEach(e=>{const neu=ideenNeuZuerst(e.ideen.filter(i=>!i.gelesen));if(!neu.length)return;
+    t+='\n'+e.name+':\n'+neu.map(i=>'- ['+ideeThema(i.thema).wort+'] '+(i.day?ideeTag(i.day)+': ':'')+i.text.replace(/\s*\n\s*/g,' ')+'\n').join('');});
+  return t;}
+function ideenTeilen(){
+  const text=ideenText(alleIdeen()),type='text/plain;charset=utf-8';
+  const name='Ideen-'+(state.avatar.name||'Angler').replace(/[^0-9A-Za-zÄÖÜäöüß-]+/g,'_')+'-'+todayKey()+'.txt';
+  const laden=()=>{const url=URL.createObjectURL(new Blob([text],{type})); // wie die Sicherheitskopie
+    const a=el('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    toast('Gespeichert! Die Datei liegt in der App „Dateien“ unter „Downloads“.');};
+  let file=null,geht=false;
+  try{file=new File([text],name,{type});geht=!!(navigator.canShare&&navigator.canShare({files:[file]}));}catch(e){}
+  if(!geht){laden();return;}
+  let p;try{p=navigator.share({files:[file],title:'Ideen aus Amazonas Angler'});}catch(e){laden();return;}
+  Promise.resolve(p).catch(e=>{if(!(e&&e.name==='AbortError'))laden();});} // Abbrechen im Teilen-Fenster: nichts tun
+function ideenGelesen(){
+  state.ideen.forEach(i=>{i.gelesen=true;});save();
+  const seen=new Set([state.playerId]);
+  players.list.forEach(p=>{if(seen.has(p.id))return;seen.add(p.id);
+    const k=slotKey(p.id);let s=null;try{s=JSON.parse(lsGet(k));}catch(e){return;} // kaputtes Fach: nicht schreiben
+    if(!isObj(s)||!Array.isArray(s.ideen))return;
+    let neu=false;s.ideen.forEach(i=>{const c=cleanIdeen([i])[0];if(c&&!c.gelesen){i.gelesen=true;neu=true;}}); // nur echte Ideen, nur gelesen ändern
+    if(neu)lsSet(k,JSON.stringify(s));});}
+function showIdeenKinder(frei){
+  openModal();card.className='card ideen';card.innerHTML='';
+  card.appendChild(el('h2',null,'💡 Ideen der Kinder'));
+  if(!frei){
+    card.appendChild(el('p',null,'Hier stehen die Ideen, die die Kinder fürs Spiel aufgeschrieben haben.'));
+    const box=el('div');card.appendChild(box);
+    const bt=el('div','btns'),ab=el('button','b alt','Abbrechen');ab.onclick=closeModal;bt.appendChild(ab);card.appendChild(bt);
+    adultGate(box,()=>showIdeenKinder(true));return;}
+  const list=alleIdeen(),zahl=f=>list.reduce((n,e)=>n+e.ideen.filter(f).length,0),offen=zahl(i=>!i.gelesen),alt=zahl(i=>i.gelesen);
+  const zeile=(cls,i)=>{const th=ideeThema(i.thema);return el('p',cls,esc(th.sym+' '+(i.day?ideeTag(i.day)+': ':'')+i.text));};
+  const gruppen=(box,f,cls)=>list.forEach(e=>{const l=ideenNeuZuerst(e.ideen.filter(f));if(!l.length)return;
+    box.appendChild(el('h3',null,esc(e.name)));l.forEach(i=>box.appendChild(zeile(cls,i)));});
+  if(!offen)card.appendChild(el('p','next',alt?'Keine neuen Ideen.':'Noch keine Ideen.'));
+  else card.appendChild(el('p',null,'Teile die Ideen, dann markiere sie als gelesen. Dann ist die Ideen-Kiste wieder frei.'));
+  gruppen(card,i=>!i.gelesen,'idee');
+  if(alt){const d=el('details');d.appendChild(el('summary',null,'Schon gelesen ('+alt+')'));gruppen(d,i=>i.gelesen,'ideeAlt');card.appendChild(d);}
+  const bt=el('div','btns col');
+  const sh=el('button','b go','📤 Als Text-Datei teilen');sh.id='ideenTeilen';sh.disabled=!offen;sh.onclick=ideenTeilen;
+  const gl=el('button','b','Als gelesen markieren');gl.id='ideenGelesen';gl.disabled=!offen;gl.onclick=()=>{ideenGelesen();showIdeenKinder(true);};
+  const cl=el('button','b alt','Fertig');cl.onclick=closeModal;
+  bt.append(sh,gl,cl);card.appendChild(bt);}
+$('#btnIdeen').onclick=()=>{audio();showIdeenKinder(false);};
+
 /* ---- Bestenliste: alle Spieler auf diesem iPad und die Rekord-Karten von Freunden ----
    Es gibt keinen Server. Eine Rekord-Karte ist eine kleine Datei (Spitzname, Ludins, Fänge).
    Erwachsene schicken sie sich selbst zu. Freunde-Karten liegen in FRIENDS_KEY und dürfen auch wieder weg. */
@@ -4412,6 +4486,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:43,day:'05.11.2026',ico:'💡',t:'Ideen-Kiste',d:'Du hast eine Idee fürs Spiel? Tipp auf die Uhr und dann auf 💡. Ein Erwachsener schickt sie weiter.'},
  {v:42,day:'28.10.2026',ico:'🛥️',t:'Luxusyacht',d:'Am Hafen gibt es jetzt einen Bootshafen. Kauf dir die schwarz-goldene Luxusyacht und fahr hinaus aufs Meer – zur Insel und zu den Seehunden!'},
  {v:41,day:'27.10.2026',ico:'📅',t:'Heute für dich',d:'Tipp auf die Uhr oben: Dort steht, was heute für dich ansteht – und was du schon geschafft hast.'},
  {v:40,day:'27.10.2026',ico:'💡',t:'Klarere Tipps',d:'Das Spiel sagt dir jetzt genauer, was du als Nächstes tun kannst – und wie viel dir noch fehlt.'},
@@ -4688,6 +4763,7 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
   // Hafenhausen: ist (x,z) auf dem Gehweg / der Straße, wie weit von den Schienen, und wie weit von jeder Haustür (Haus-Mitte + halbe Tiefe in Türrichtung)?
   stadtPunkt:(x,z)=>({walk:onWalk(x,z),road:onRoad(x,z),rail:railDist(x,z),tueren:cityHouses.map(h=>{const [tx,tz]=rotXZ(h.x,h.z,h.ry,0,-h.d/2);return Math.hypot(tx-x,tz-z);})}),
   fischInfo:id=>({fact:FISH_BY[id].fact,anzahl:FISH.length}),
+  alleIdeen:()=>alleIdeen(), // Ideen aller Spieler (wie in „Ideen der Kinder“)
   // Mensch k in Hafenhausen: wo er steht, sichtbar = wach (Schlafende sieht man nicht), ob er ein Kind ist, und wohin er gerade läuft (nächste Ecke)
   nachbar(k){const p=people[k];if(!p)return null;const w=p.path[p.i];return {x:p.g.position.x,z:p.g.position.z,sichtbar:!!p.awake,kid:p.kid,ziel:{x:w.x,z:w.z}};},
   // welcher Fisch würde jetzt hier beißen (n-mal ausgewürfelt, Angel muss ausgeworfen sein) / in die Reuse schwimmen
