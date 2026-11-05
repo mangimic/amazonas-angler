@@ -97,6 +97,12 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   Ist die Tipp-Zeile leer, steht dort der nächste Schritt. `state.heute` (`day`, `fische`, `ludins`, `arten`) zählt, was heute geschafft ist; neuer Tag = 0.
   Verdiente Ludins immer mit `earn(n)` gutschreiben (zählt für „Heute geschafft“), Käufe und Strafen direkt abziehen.
   Spielstand: `state.museum`, `state.nachbarn`, `state.aufgaben`, `state.tag` (`day`, `flasche`), `state.heute`. Test-Helfer `window.__test` gibt es nur bei `navigator.webdriver` (automatische Tests).
+- **Ideen-Kiste**: Das Kind schreibt Ideen fürs Spiel auf (Uhr oben → „Heute für dich“ → „💡 Idee fürs Spiel“, `showIdee`).
+  Thema aus `IDEE_THEMEN`, Text höchstens 200 Zeichen, gespeichert in `state.ideen` (`thema`, `text`, `day`, `gelesen`). Höchstens `IDEEN_MAX` = 50 ungelesene.
+  Beim Laden prüft `cleanIdeen` jede Liste (auch die anderer Spieler). Text immer mit `esc()` zeigen. Sticker im Fischbuch (`ideenSticker`), keine Ludins.
+  Für Erwachsene: Werkstatt-Knopf „💡 Ideen der Kinder“ (`#btnIdeen`, hinter `adultGate`) zeigt die Ideen aller Spieler (`alleIdeen`),
+  teilt die ungelesenen als `.txt`-Datei (`ideenText`, Teilen-Fenster oder Download) und markiert sie als gelesen (in fremden Fächern nur `gelesen`).
+  Ideen werden nie gelöscht. Kein Server, Erwachsene teilen selbst.
 - Das Geld heißt **Ludins**
 - Mit genug Ludins kann man ein **Boot** kaufen (300 Ludins); Riesenfische nur vom Boot
 - **Yacht** bei Opa Tiago (Tab Boot, 1500 Ludins, braucht das Boot): ersetzt das Kanu, ist am schnellsten,
