@@ -3653,3 +3653,146 @@ test('Was ist neu v42: Luxusyacht', () => {
   assert.deepEqual({ v: n.v, day: n.day, ico: n.ico, t: n.t, d: n.d }, { v: 42, day: '28.10.2026', ico: '🛥️', t: 'Luxusyacht',
     d: 'Am Hafen gibt es jetzt einen Bootshafen. Kauf dir die schwarz-goldene Luxusyacht und fahr hinaus aufs Meer – zur Insel und zu den Seehunden!' });
 });
+
+// Ideen-Kiste: das Kind schreibt Ideen fürs Spiel auf (state.ideen). Sie bleiben gespeichert, bis ein Erwachsener sie liest.
+const seitenTag = page => page.evaluate(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); });
+const ideenListe = (n, extra) => Array.from({ length: n }, (_, i) => ({ thema: 'fisch', text: 'Idee Nummer ' + (i + 1), day: '2026-11-01', gelesen: false, ...extra }));
+async function ideeKarte(page) { // Uhr antippen, dann „💡 Idee fürs Spiel“
+  await page.click('#clockChip');
+  await page.locator('#card h2:text-is("📅 Heute für dich")').waitFor({ timeout: 5000 });
+  await page.click('#btnIdee');
+  await page.locator('#card h2:text-is("💡 Deine Idee")').waitFor({ timeout: 5000 });
+}
+
+test('Ideen-Kiste: Idee mit Thema und Text abschicken, bleibt nach dem Neuladen', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({}) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await ideeKarte(page);
+  assert.ok((await page.locator('#card [data-thema]').count()) === 5, '5 Themen');
+  for (const b of await page.locator('#card [data-thema]').all()) assert.ok((await b.boundingBox()).height >= 60, 'Themen-Knopf mindestens 60 px');
+  await page.click('#card [data-thema="fisch"]');
+  await page.fill('#ideeText', 'Ein Hai im Amazonas');
+  assert.ok((await page.locator('#ideeOk').boundingBox()).height >= 60, 'Abschicken mindestens 60 px');
+  await page.click('#ideeOk');
+  assert.match(await page.textContent('#card'), /Danke für deine Idee! Ich gebe sie weiter\./);
+  assert.match(await page.textContent('#card'), /💡 Erfinder/, 'erster Sticker');
+  const tag = await seitenTag(page);
+  const soll = { thema: 'fisch', text: 'Ein Hai im Amazonas', day: tag, gelesen: false };
+  let s = JSON.parse(await read(page)); // sofort gespeichert, ohne Schließen
+  assert.deepEqual(s.ideen, [soll]);
+  // Neu laden: die Idee ist noch da
+  await startGame(page);
+  await page.click('#btnGo');
+  s = await weg(page);
+  assert.deepEqual(s.ideen, [soll], 'nach dem Neuladen');
+  // Zwei schnelle Klicks auf Abschicken ergeben nur eine Idee
+  await ideeKarte(page);
+  await page.click('#card [data-thema="ort"]');
+  await page.fill('#ideeText', '  Eine Wasserrutsche  ');
+  await page.locator('#ideeOk').evaluate(b => { b.click(); b.click(); });
+  s = await weg(page);
+  assert.equal(s.ideen.length, 2, 'nur 1 neue Idee');
+  assert.deepEqual(s.ideen[1], { thema: 'ort', text: 'Eine Wasserrutsche', day: tag, gelesen: false }, 'ohne Leerzeichen am Rand');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Ideen-Kiste: Abschicken erst ab 3 Zeichen, Zähler zählt herunter', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({}) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await ideeKarte(page);
+  await page.click('#card [data-thema="sonst"]');
+  assert.match(await page.textContent('#card'), /Schreib deine Idee auf\. Du kannst auch das Mikrofon der Tastatur benutzen\./);
+  assert.equal(await page.getAttribute('#ideeText', 'maxlength'), '200');
+  assert.equal((await page.textContent('#ideeRest')).trim(), 'noch 200 Zeichen');
+  assert.equal(await page.isDisabled('#ideeOk'), true, 'leer');
+  await page.fill('#ideeText', 'ab');
+  assert.equal(await page.isDisabled('#ideeOk'), true, 'bei „ab“');
+  await page.fill('#ideeText', '   ab   ');
+  assert.equal(await page.isDisabled('#ideeOk'), true, 'Leerzeichen zählen nicht');
+  await page.fill('#ideeText', 'abc');
+  assert.equal(await page.isDisabled('#ideeOk'), false, 'bei „abc“');
+  assert.equal((await page.textContent('#ideeRest')).trim(), 'noch 197 Zeichen');
+  // Abbrechen: zurück zu „Heute für dich“, nichts gespeichert
+  await page.click('#card button:text-is("Abbrechen")');
+  await page.locator('#card h2:text-is("📅 Heute für dich")').waitFor({ timeout: 5000 });
+  assert.deepEqual((await weg(page)).ideen, []);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Ideen-Kiste: volle Kiste zeigt den Hinweis', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ideen: ideenListe(50) }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await ideeKarte(page);
+  assert.match(await page.textContent('#card'), /Die Ideen-Kiste ist voll\. Frag einen Erwachsenen, sie zu leeren\./);
+  assert.equal(await page.locator('#ideeText').count(), 0, 'kein Textfeld');
+  assert.equal(await page.locator('#card [data-thema]').count(), 0, 'keine Themen');
+  assert.equal((await weg(page)).ideen.length, 50);
+  // gelesene Ideen zählen nicht: 49 ungelesene + 1 gelesene, dann geht es wieder
+  await seed(page, { [KEY]: stadtSeed({ ideen: [...ideenListe(49), ...ideenListe(1, { gelesen: true })] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await ideeKarte(page);
+  assert.equal(await page.locator('#card [data-thema]').count(), 5);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Alter Spielstand: ideen bekommt Startwert, kaputte Werte werden repariert', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify(ALT_V1) });
+  await startGame(page);
+  await playAndLeave(page);
+  assert.deepEqual(JSON.parse(await read(page)).ideen, [], 'Startwert');
+  for (const [ideen, soll] of [
+    ['x', []],
+    [{ text: 'hallo' }, []],
+    [[{ thema: 'rakete', text: 'x'.repeat(300), day: 'gestern', gelesen: 'ja', extra: 1 }, 'quatsch', { text: 5 }],
+      [{ thema: 'sonst', text: 'x'.repeat(200), day: '', gelesen: false, extra: 1 }]],
+    [[null, [1], { thema: '__proto__', text: 'A\u0000B\nC\u0007D\u001b\u007f', day: '2026-11-05', gelesen: true }],
+      [{ thema: 'sonst', text: 'AB\nCD', day: '2026-11-05', gelesen: true }]]]) {
+    await seed(page, { [KEY]: stadtSeed({ ideen }) });
+    await startGame(page);
+    await playAndLeave(page);
+    assert.deepEqual(JSON.parse(await read(page)).ideen, soll, JSON.stringify(ideen));
+  }
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Ideen-Kiste: Sticker bei 1, 5 und 10 Ideen', async () => {
+  for (const [n, soll] of [[0, null], [1, '💡 Erfinder'], [4, '💡 Erfinder'], [5, '💡💡 Ideen-Profi'], [10, '🏆 Ideen-König']]) {
+    const { ctx, page, errors } = await newPage();
+    await seed(page, { [KEY]: stadtSeed({ ideen: ideenListe(n, { gelesen: n >= 5 }) }) }); // gelesene Ideen zählen auch
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.click('#btnBook');
+    await page.locator('#card h2:text-is("Fischbuch")').waitFor({ timeout: 5000 });
+    const st = page.locator('#card .ideenSticker');
+    if (soll === null) assert.equal(await st.count(), 0, 'ohne Ideen kein Sticker');
+    else assert.equal((await st.textContent()).trim(), soll, n + ' Ideen');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Ideen-Kiste: HTML im Ideen-Text wird nicht ausgeführt (Fischbuch)', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: stadtSeed({ ideen: [{ thema: 'fisch', text: '<img class="eingeschleust" src="x" onerror="window.__pwn=1">', day: '2026-11-01', gelesen: false }] }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.click('#btnBook');
+  await page.locator('#card h2:text-is("Fischbuch")').waitFor({ timeout: 5000 });
+  await page.waitForTimeout(300);
+  assert.equal(await page.locator('.eingeschleust').count(), 0);
+  assert.equal(await page.evaluate(() => window.__pwn), undefined);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});

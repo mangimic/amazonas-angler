@@ -239,6 +239,12 @@ button.bk:active{border-color:var(--ink)}
 .tipline{background:#e3f1ea;border-radius:12px;padding:8px 12px;font-size:16px}
 .card .small{font-size:14px;color:var(--muted)}
 .card .tagesfisch{background:#fff3c4;border-radius:12px;padding:8px 12px;margin-bottom:0}
+.bookkopf{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.bookkopf .tagesfisch{flex:1 1 220px}
+.ideenSticker{background:#fff;border:3px solid var(--gold);border-radius:999px;padding:4px 12px;font:800 17px var(--display);transform:rotate(-2deg);white-space:nowrap}
+.idee .themen{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+.idee .themen .b{font-size:21px;white-space:nowrap}
+.idee textarea{width:100%;box-sizing:border-box;min-height:140px;font:600 20px/1.35 var(--body);padding:10px 12px;border:3px solid var(--ink);border-radius:14px;background:#fff;color:var(--ink);resize:vertical}
+.idee .b:disabled{opacity:.45;box-shadow:none}
 .quiz .qq{font:800 22px/1.25 var(--display)}
 .quiz .qa{text-align:left;font-size:18px}
 .quiz .qa.right{background:#5fb36a;color:#fff}
@@ -512,7 +518,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false,muetze:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],fluss:{},flussAt:'',nachbarn:{},aufgaben:[],museum:{},tag:{day:'',flasche:false},heute:{day:'',fische:0,ludins:0,arten:0},
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false,muetze:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],fluss:{},flussAt:'',nachbarn:{},aufgaben:[],museum:{},tag:{day:'',flasche:false},heute:{day:'',fische:0,ludins:0,arten:0},ideen:[],
   city:{visited:false,vehicles:{bike:true,roller:false,skate:false,truck:false},parked:{},riding:'',luxus:false,yachtAt:'hafen'},
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
@@ -621,6 +627,17 @@ for(const f of FISH){if(!Object.prototype.hasOwnProperty.call(state.museum,f.id)
 state.tag=isObj(state.tag)?Object.assign(state.tag,{day:dayOk(state.tag.day),flasche:state.tag.flasche===true}):{day:'',flasche:false};
 // Heute für dich: day = welcher Tag (wie todayKey), fische/ludins/arten = heute geschafft (nur Zahlen). Andere Teile bleiben gespeichert.
 {const h=state.heute;state.heute=isObj(h)?Object.assign(h,{day:dayOk(h.day),fische:num(h.fische),ludins:num(h.ludins),arten:num(h.arten)}):{day:'',fische:0,ludins:0,arten:0};}
+// Ideen-Kiste: Ideen fürs Spiel, die das Kind aufschreibt. thema = Schlüssel aus IDEE_THEMEN, text = höchstens 200 Zeichen,
+// day = Tag (wie todayKey), gelesen = ein Erwachsener hat sie gelesen. Andere Teile bleiben gespeichert.
+const IDEE_THEMEN={fisch:'🐟 Fisch',ort:'🗺️ Ort',fahrzeug:'🚗 Fahrzeug',figur:'👤 Figur',sonst:'✨ Sonstiges'},IDEEN_MAX=50; // höchstens 50 ungelesene Ideen
+// Prüft eine Liste von Ideen (auch aus fremden Dateien). Gibt eine neue Liste zurück, ändert nichts am Wert v.
+function cleanIdeen(v){
+  if(!Array.isArray(v))return [];
+  return v.filter(i=>isObj(i)&&typeof i.text==='string').map(i=>({...i, // {...i} statt Object.assign: ein Feld „__proto__“ aus einer Datei bleibt ein normales Feld
+    thema:Object.prototype.hasOwnProperty.call(IDEE_THEMEN,i.thema)?i.thema:'sonst',
+    text:i.text.replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f]/g,'').slice(0,200), // Steuerzeichen weg, nur \n bleibt
+    day:dayOk(i.day),gelesen:i.gelesen===true}));}
+state.ideen=cleanIdeen(state.ideen);
 const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
 // Sicherheitskopie: der Stand vom letzten Spielstart. Geht der Hauptstand kaputt, lädt das Spiel diese Kopie.
 if(loadedFrom==='main')lsSet(BACKUP_KEY,savedRaw);
@@ -2149,7 +2166,9 @@ function showBook(){
   card.appendChild(el('h2',null,'Fischbuch'));
   card.appendChild(el('p',null,'Du hast '+n+' von '+FISH.length+' Fischarten gefunden.'));
   const tf=tagesfisch(todayKey());
-  card.appendChild(el('p','tagesfisch','⭐ Tagesfisch heute: <b>'+esc(tf.name)+'</b>'));
+  const kopf=el('div','bookkopf');kopf.appendChild(el('p','tagesfisch','⭐ Tagesfisch heute: <b>'+esc(tf.name)+'</b>'));
+  const st=ideenSticker(state.ideen.length);if(st)kopf.appendChild(el('span','ideenSticker',esc(st))); // Sticker für deine Ideen
+  card.appendChild(kopf);
   card.appendChild(el('p','small','Dafür zahlen Rosa und Fischer Hannes heute doppelt so viele Ludins. Jeden Tag gibt es einen neuen Tagesfisch.'));
   const parts=[['amazonas','Amazonas'],['see','Heimat-See'],['fluss','Flüsse in Deutschland'],['meer','Meer (Hafen von Hafenhausen)'],['hochsee','Offenes Meer']]; // wo du gerade bist, steht oben
   const top=atLake()?['see']:atDE()?['fluss']:atSea()?['hochsee','meer']:atCity()?['meer','hochsee']:[];
@@ -2491,9 +2510,62 @@ function showHeute(){
   row('🎯','Nächstes Ziel',heuteZiel().z);
   card.appendChild(box);
   const g=geschafft();if(g)card.appendChild(el('p','small',esc(g)));
+  const ib=el('button','b','💡 Idee fürs Spiel');ib.id='btnIdee';ib.onclick=showIdee;const ibt=el('div','btns');ibt.appendChild(ib);card.appendChild(ibt);
   const bt=el('div','btns'),m=el('button','b alt','🗺️ Karte'),w=el('button','b go','Weiter spielen');
   m.onclick=()=>{closeModal();showMap();};w.onclick=closeModal;bt.append(m,w);card.appendChild(bt);}
 $('#clockChip').onclick=()=>{audio();showHeute();};
+
+/* ---- Ideen-Kiste: Ideen fürs Spiel aufschreiben (aus „Heute für dich“) ----
+   Die Ideen bleiben im Spielstand (state.ideen), bis ein Erwachsener sie liest. Text immer mit esc() zeigen.
+   Sticker zählen alle Ideen (auch gelesene). Für Ideen gibt es keine Ludins. */
+const ideenOffen=()=>state.ideen.filter(i=>!i.gelesen).length;
+const ideenSticker=n=>n>=10?'🏆 Ideen-König':n>=5?'💡💡 Ideen-Profi':n>=1?'💡 Erfinder':'';
+function showIdee(){
+  openModal();card.className='card idee';card.innerHTML='';
+  card.appendChild(el('h2',null,'💡 Deine Idee'));
+  const back=(txt,cls)=>{const b=el('button',cls||'b alt',txt);b.onclick=showHeute;return b;};
+  if(ideenOffen()>=IDEEN_MAX){
+    card.appendChild(el('p','next','Die Ideen-Kiste ist voll. Frag einen Erwachsenen, sie zu leeren.'));
+    const bt=el('div','btns');bt.appendChild(back('Zurück','b'));card.appendChild(bt);return;}
+  // Schritt 1: Worum geht es?
+  card.appendChild(el('p',null,'Worum geht es bei deiner Idee?'));
+  const g=el('div','themen');
+  Object.keys(IDEE_THEMEN).forEach(k=>{const b=el('button','b alt',esc(IDEE_THEMEN[k]));b.dataset.thema=k;b.onclick=()=>ideeText(k);g.appendChild(b);});
+  card.appendChild(g);
+  const bt=el('div','btns');bt.appendChild(back('Abbrechen'));card.appendChild(bt);
+}
+// Schritt 2: die Idee aufschreiben (oder mit dem Mikrofon der Tastatur sprechen)
+function ideeText(thema){
+  card.innerHTML='';
+  card.appendChild(el('h2',null,'💡 Deine Idee'));
+  card.appendChild(el('p','next',esc(IDEE_THEMEN[thema])));
+  card.appendChild(el('p',null,'Schreib deine Idee auf. Du kannst auch das Mikrofon der Tastatur benutzen.'));
+  const ta=el('textarea');ta.id='ideeText';ta.maxLength=200;ta.rows=4;ta.setAttribute('aria-label','Deine Idee');
+  const rest=el('p','small');rest.id='ideeRest';
+  const ok=el('button','b go','Abschicken');ok.id='ideeOk';
+  const upd=()=>{rest.textContent='noch '+Math.max(0,200-ta.value.length)+' Zeichen';ok.disabled=ta.value.trim().length<3;};
+  ta.addEventListener('input',upd);upd();
+  let sent=false;
+  ok.onclick=()=>{const text=ta.value.trim();if(sent||text.length<3)return;sent=true;ok.disabled=true; // zweimal tippen = nur eine Idee
+    const vorher=ideenSticker(state.ideen.length);
+    state.ideen.push({thema,text,day:todayKey(),gelesen:false});save();
+    ideeDanke(vorher);};
+  const ab=el('button','b alt','Abbrechen');ab.onclick=showHeute;
+  const bt=el('div','btns');bt.append(ab,ok);
+  card.append(ta,rest,bt);
+  try{ta.focus();}catch(e){}
+}
+function ideeDanke(vorher){
+  card.innerHTML='';
+  card.appendChild(el('h2',null,'💡 Deine Idee'));
+  card.appendChild(el('p','next','Danke für deine Idee! Ich gebe sie weiter.'));
+  const st=ideenSticker(state.ideen.length);
+  if(st&&st!==vorher)card.appendChild(el('p',null,'Neuer Sticker: <span class="ideenSticker">'+esc(st)+'</span> Du findest ihn im Fischbuch.'));
+  const noch=el('button','b alt','Noch eine Idee'),w=el('button','b go','Weiter spielen');
+  noch.onclick=showIdee;w.onclick=closeModal;
+  noch.disabled=w.disabled=true;setTimeout(()=>{noch.disabled=w.disabled=false;},600); // ein schnelles zweites Tippen landet nicht hier
+  const bt=el('div','btns');bt.append(noch,w);card.appendChild(bt);
+}
 
 /* ---- Tipps ---- */
 let lastTip='';
