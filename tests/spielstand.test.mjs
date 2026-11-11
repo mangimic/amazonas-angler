@@ -4207,7 +4207,7 @@ test('Angelina: am See mit der Grundrute kommt die Karte, +100 Ludins, Eimer und
   const txt = await page.textContent('#card');
   assert.match(txt, /52 kg/); assert.match(txt, /Schuppenkarpfen/);
   assert.equal((await page.textContent('#angelinaOk')).trim(), 'Zurück ins Wasser (+100 Ludins)');
-  const s = await weg(page);
+  const s = JSON.parse(await read(page)); // Karte noch offen, kein pagehide: schon beim Öffnen gespeichert
   assert.equal(s.angelina.n, 1); assert.equal(s.angelina.first, tag); assert.equal(s.angelina.day, tag);
   assert.equal(s.ludins, 445);
   assert.deepEqual(s.bucket, eimer);
@@ -4237,7 +4237,7 @@ test('Angelina: mit der Pose oder am Amazonas kommt sie nicht', async () => {
   await angelinaKarte(page);
   await page.locator('#card h2').waitFor({ timeout: 5000 });
   h = await page.textContent('#card h2');
-  assert.doesNotMatch(h, /Angelina/);
+  assert.match(h, /gefangen/); assert.doesNotMatch(h, /Angelina/);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -4285,6 +4285,7 @@ test('Angelina: Erinnerungs-Foto zeigt Namen sicher, ohne Namen „Du“', async
   assert.equal(await page.locator('#card .eingeschleust').count(), 0);
   assert.equal(await page.evaluate(() => window.__pwn), undefined);
   assert.match(await page.textContent('#card .angelinaName'), /<img/);
+  assert.deepEqual(errors, []);
   await ctx.close();
   ({ ctx, page, errors } = await angelinaSeite({ avatar: { ...ALT_V1.avatar, name: '' } }));
   await page.evaluate(() => window.__test.avatarName('')); // „Los geht's“ trägt sonst „Angler“ ein
