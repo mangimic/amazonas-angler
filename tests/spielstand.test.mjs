@@ -4200,6 +4200,7 @@ test('Angelina: am See mit der Grundrute kommt die Karte, +100 Ludins, Eimer und
   const eimer = Array.from({ length: 14 }, () => ({ id: 'hecht', cm: 60, value: 40 }));
   const { ctx, page, errors } = await angelinaSeite({ ludins: 345, bucket: eimer });
   const tag = await angHeute(page);
+  const vor = JSON.parse(await read(page)).heute || {};
   await angelinaKarte(page);
   await page.locator('#card h2').waitFor({ timeout: 5000 });
   assert.match(await page.textContent('#card h2'), /Angelina/);
@@ -4210,6 +4211,8 @@ test('Angelina: am See mit der Grundrute kommt die Karte, +100 Ludins, Eimer und
   const s = JSON.parse(await read(page)); // Karte noch offen, kein pagehide: schon beim Öffnen gespeichert
   assert.equal(s.angelina.n, 1); assert.equal(s.angelina.first, tag); assert.equal(s.angelina.day, tag);
   assert.equal(s.ludins, 445);
+  assert.equal((s.heute.fische || 0), (vor.fische || 0), 'heute.fische bleibt gleich');
+  assert.equal((s.heute.ludins || 0) - (vor.ludins || 0), 100, 'heute.ludins +100');
   assert.deepEqual(s.bucket, eimer);
   assert.deepEqual(s.book, ALT_V1.book);
   await page.click('#angelinaOk');
@@ -4240,6 +4243,25 @@ test('Angelina: mit der Pose oder am Amazonas kommt sie nicht', async () => {
   assert.match(h, /gefangen/); assert.doesNotMatch(h, /Angelina/);
   assert.deepEqual(errors, []);
   await ctx.close();
+});
+
+test('Angelina: am Flussplatz und im Hafen kommt sie nicht', async () => {
+  const rhein = flussplaetze().find(s => s.id === 'bw-rhein');
+  for (const extra of [
+    { flussAt: 'bw-rhein', where: { x: 0, z: -1800 - rhein.hw + 6, f: 0, boat: false } },
+    { city: { visited: true }, where: { x: -50, z: -3111.8, f: Math.PI, boat: false } }]) {
+    const { ctx, page, errors } = await newPage();
+    await seed(page, { [KEY]: stadtSeed({ book: {}, methods: { spin: false, grund: true }, method: 'grund', ...extra }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.evaluate(() => { Math.random = () => 0.01; });
+    await angelinaKarte(page);
+    await page.locator('#card h2').waitFor({ timeout: 5000 });
+    const h = await page.textContent('#card h2');
+    assert.match(h, /gefangen/); assert.doesNotMatch(h, /Angelina/);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
 });
 
 test('Angelina: einmal am Tag, am nächsten Tag wieder, beim zweiten Mal +20', async () => {

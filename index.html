@@ -240,7 +240,8 @@ button.bk:active{border-color:var(--ink)}
 .card .small{font-size:14px;color:var(--muted)}
 .card .tagesfisch{background:#fff3c4;border-radius:12px;padding:8px 12px;margin-bottom:0}
 .bookkopf{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.bookkopf .tagesfisch{flex:1 1 220px}
-.angelinaFoto{display:flex;align-items:center;justify-content:center;gap:14px;border:4px solid var(--gold);border-radius:18px;background:#fff;padding:10px}
+.angelinaFoto{display:flex;flex-direction:column;align-items:center;gap:8px;max-width:100%;box-sizing:border-box;border:4px solid var(--gold);border-radius:18px;background:#fff;padding:10px}
+.angelinaReihe{display:flex;align-items:center;justify-content:center;gap:14px;max-width:100%}
 .angelinaFoto .pface{flex-shrink:0}
 .angelinaName{font-weight:800;text-align:center}
 .ideenSticker{background:#fff;border:3px solid var(--gold);border-radius:999px;padding:4px 12px;font:800 17px var(--display);transform:rotate(-2deg);white-space:nowrap}
@@ -2157,15 +2158,14 @@ function showCatch(f,cm,value,isNew,extra){
   bt.append(keep,rel);card.appendChild(bt);
 }
 function showAngelina(){
-  const a=state.angelina,heute=todayKey();a.n++;a.day=heute;if(!a.first)a.first=heute;const n=a.n;
+  const d=new Date(),a=state.angelina,heute=todayKey(d);a.n++;a.day=heute;if(!a.first)a.first=heute;const n=a.n;
   earn(n===1?ANGELINA.first:ANGELINA.again);save();refreshHud(true); // schon beim Öffnen gespeichert: Neuladen verliert nichts und zählt nichts doppelt
   openModal();card.className='card catch angelina';card.innerHTML='';
   card.appendChild(el('h2',null,'🏆 Du hast <b>Angelina</b> gefangen!'));
   const foto=el('div','angelinaFoto');
   const face=el('div','pface');face.style.background=hexCol(state.avatar.skin,SKINS[1]);face.style.borderColor=hexCol(state.avatar.shirt,'#2f9e5b');
-  foto.append(face,fishPic(FISH_BY.karpfen));card.appendChild(foto);
-  const d=new Date();
-  card.appendChild(el('div','angelinaName',esc(state.avatar.name||'Du')+' · '+pad2(d.getDate())+'.'+pad2(d.getMonth()+1)+'.'+d.getFullYear()));
+  const reihe=el('div','angelinaReihe');reihe.append(face,fishPic(FISH_BY.karpfen));
+  foto.append(reihe,el('div','angelinaName',esc(state.avatar.name||'Du')+' · '+pad2(d.getDate())+'.'+pad2(d.getMonth()+1)+'.'+d.getFullYear()));card.appendChild(foto);
   card.appendChild(el('div','stats','<span class="stat">52 kg</span><span class="stat">Schuppenkarpfen</span>'));
   card.appendChild(el('p',null,'Die echte Angelina lebt in einem Angelsee in Ungarn. Im Oktober 2026 wog sie 52 Kilo – so viel wie zwei Kinder in deinem Alter. Sie wurde schon oft gefangen und wieder ins Wasser gesetzt.'));
   if(n>=2)card.appendChild(el('p',null,'Du hast sie schon '+n+'-mal gefangen!'));
