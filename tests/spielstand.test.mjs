@@ -4156,7 +4156,7 @@ test('Sicherheit: Fisch- und Platz-id „constructor“ findet nichts (SEC-006)'
 });
 
 test('Was ist neu v43: Ideen-Kiste', () => {
-  const n = newsListe()[0];
+  const n = newsListe().find(n => n.v === 43);
   assert.deepEqual({ v: n.v, day: n.day, ico: n.ico, t: n.t, d: n.d }, { v: 43, day: '05.11.2026', ico: '💡', t: 'Ideen-Kiste',
     d: 'Du hast eine Idee fürs Spiel? Tipp auf die Uhr und dann auf 💡. Ein Erwachsener schickt sie weiter.' });
 });
@@ -4294,4 +4294,27 @@ test('Angelina: Erinnerungs-Foto zeigt Namen sicher, ohne Namen „Du“', async
   assert.match((await page.textContent('#card .angelinaName')).trim(), /^Du/);
   assert.deepEqual(errors, []);
   await ctx.close();
+});
+
+test('Angelina: Sticker im Fischbuch erst nach dem ersten Fang', async () => {
+  for (const [n, soll] of [[0, null], [1, '🏆 Angelina: 1× gefangen'], [2, '🏆 Angelina: 2× gefangen']]) {
+    const { ctx, page, errors } = await newPage();
+    await seed(page, { [KEY]: stadtSeed({ angelina: { n, first: n ? '2026-11-01' : '', day: n ? '2026-11-01' : '' } }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.click('#btnBook');
+    await page.locator('#card h2:text-is("Fischbuch")').waitFor({ timeout: 5000 });
+    const st = page.locator('#card .angelinaSticker');
+    if (soll === null) assert.equal(await st.count(), 0, 'ohne Fang kein Sticker');
+    else assert.equal((await st.textContent()).trim(), soll, n + '× gefangen');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Angelina: NEWS v44 steht ganz oben', () => {
+  const n = newsListe()[0];
+  assert.equal(n.v, 44);
+  assert.equal(n.t, 'Riesen-Karpfen Angelina');
+  assert.equal(n.ico, '🏆');
 });

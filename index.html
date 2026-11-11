@@ -2203,6 +2203,7 @@ function showBook(){
   const tf=tagesfisch(todayKey());
   const kopf=el('div','bookkopf');kopf.appendChild(el('p','tagesfisch','⭐ Tagesfisch heute: <b>'+esc(tf.name)+'</b>'));
   const st=ideenSticker(state.ideen.length);if(st)kopf.appendChild(el('span','ideenSticker',esc(st))); // Sticker für deine Ideen
+  if(state.angelina.n>0)kopf.appendChild(el('span','ideenSticker angelinaSticker','🏆 Angelina: '+state.angelina.n+'× gefangen')); // Sticker nach dem ersten Fang
   card.appendChild(kopf);
   card.appendChild(el('p','small','Dafür zahlen Rosa und Fischer Hannes heute doppelt so viele Ludins. Jeden Tag gibt es einen neuen Tagesfisch.'));
   const parts=[['amazonas','Amazonas'],['see','Heimat-See'],['fluss','Flüsse in Deutschland'],['meer','Meer (Hafen von Hafenhausen)'],['hochsee','Offenes Meer']]; // wo du gerade bist, steht oben
@@ -4519,6 +4520,7 @@ $('#btnMap').onclick=()=>{audio();showMap();};
    Bei jedem neuen Teil oben einen Eintrag ergänzen und v um 1 erhöhen. Die neueste Version steht ganz oben.
    Nach einem Update geht die Seite einmal von selbst auf. */
 const NEWS=[
+ {v:44,day:'11.11.2026',ico:'🏆',t:'Riesen-Karpfen Angelina',d:'Im Heimat-See lebt Angelina, ein Riesen-Karpfen! Mit der Grundrute kannst du sie fangen – wenn du Glück hast.'},
  {v:43,day:'05.11.2026',ico:'💡',t:'Ideen-Kiste',d:'Du hast eine Idee fürs Spiel? Tipp auf die Uhr und dann auf 💡. Ein Erwachsener schickt sie weiter.'},
  {v:42,day:'28.10.2026',ico:'🛥️',t:'Luxusyacht',d:'Am Hafen gibt es jetzt einen Bootshafen. Kauf dir die schwarz-goldene Luxusyacht und fahr hinaus aufs Meer – zur Insel und zu den Seehunden!'},
  {v:41,day:'27.10.2026',ico:'📅',t:'Heute für dich',d:'Tipp auf die Uhr oben: Dort steht, was heute für dich ansteht – und was du schon geschafft hast.'},

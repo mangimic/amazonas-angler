@@ -18,6 +18,7 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
 - Man kann **angeln**, es gibt **viele Fische** (echte Amazonas-Fische)
 - **Heimat-See**: ein See wie in Deutschland, mit dem **Flugzeug** neben dem Dorf erreichbar.
   Dort beißen nur die 10 deutschen Fische (`home:'see'` in `FISH`). Verkauft werden sie bei Rosa oder am Stand von Fischer Hannes am See.
+  **Angelina** (Riesen-Karpfen, `ANGELINA`, `showAngelina`): beißt nur am Heimat-See mit der Grundrute, höchstens einmal am Tag (`state.angelina`: `n`, `first`, `day`). Keine Fischart, kein Eimer, keine cm. Erinnerungs-Foto, dann zurück ins Wasser (+100 Ludins, danach +20). Fakten: echter Schuppenkarpfen in Ungarn, 52 kg (2026).
 - **Ab 7 Jahren**: nichts Gruseliges, keine Gewalt, kein Blut
 - Eigener **Avatar** (Name, Haut, Haare, T-Shirt, Hose, Hut)
 - Fische **verkaufen** bei Händlerin Rosa
