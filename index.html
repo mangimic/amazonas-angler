@@ -240,6 +240,8 @@ button.bk:active{border-color:var(--ink)}
 .card .small{font-size:14px;color:var(--muted)}
 .card .tagesfisch{background:#fff3c4;border-radius:12px;padding:8px 12px;margin-bottom:0}
 .bookkopf{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.bookkopf .tagesfisch{flex:1 1 220px}
+.angelinaFoto{display:flex;align-items:center;justify-content:center;gap:14px;border:4px solid var(--gold);border-radius:18px;background:#fff;padding:10px}
+.angelinaName{font-weight:800;text-align:center}
 .ideenSticker{background:#fff;border:3px solid var(--gold);border-radius:999px;padding:4px 12px;font:800 17px var(--display);transform:rotate(-2deg);white-space:nowrap}
 .idee .themen{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
 .idee .themen .b{font-size:21px;white-space:nowrap}
@@ -528,7 +530,7 @@ const HATS=[['keiner','Keiner'],['stroh','Strohhut'],['kappe','Kappe'],['blumen'
 // 3. Wird ein Feld umbenannt oder umgebaut: SAVE_VERSION um 1 erhöhen und in migrate() einen Schritt anhängen.
 // 4. Nie Felder löschen, die alte Spielstände noch haben könnten.
 const KEY='amazonas-angler-1', BACKUP_KEY=KEY+'-backup', SAVE_VERSION=2;
-const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false,muetze:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],fluss:{},flussAt:'',nachbarn:{},aufgaben:[],museum:{},tag:{day:'',flasche:false},heute:{day:'',fische:0,ludins:0,arten:0},ideen:[],
+const state={v:SAVE_VERSION,ludins:0,bucket:[],book:{},rod:0,bait:'wurm',baits:{frucht:0,blinker:0},clothes:{anglerhut:false,weste:false,muetze:false},metTiago:false,visitedLake:false,newsSeen:0,reusen:0,traps:[],house:{w:{},r:{}},builtOnce:false,hasBoat:false,hasRod:false,hasBucket:false,hasMotor:false,hasYacht:false,hasSonar:false,sonarFound:false,usedBoat:false,playerId:'',playTime:{day:'',sec:0,extra:0},cardId:'',quiz:{ok:[]},angelschein:false,methods:{spin:false,grund:false},method:'pose',infoRead:[],fluss:{},flussAt:'',nachbarn:{},aufgaben:[],museum:{},tag:{day:'',flasche:false},heute:{day:'',fische:0,ludins:0,arten:0},ideen:[],angelina:{n:0,first:'',day:''},
   city:{visited:false,vehicles:{bike:true,roller:false,skate:false,truck:false},parked:{},riding:'',luxus:false,yachtAt:'hafen'},
   avatar:{name:'',skin:SKINS[1],hair:'kurz',hairColor:'#5a3720',shirt:'#2f9e5b',pants:'#2f4a7a',hat:'stroh'}};
 const isObj=o=>!!o&&typeof o==='object'&&!Array.isArray(o);
@@ -648,6 +650,7 @@ function cleanIdeen(v){
     text:i.text.replace(/[\u0000-\u0009\u000b-\u001f\u007f-\u009f\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069]/g,'').slice(0,200), // Steuer-, Richtungs- und Formatzeichen weg, nur \n und die Emoji-Verbinder U+200C/U+200D bleiben
     day:dayOk(i.day),gelesen:i.gelesen===true}));}
 state.ideen=cleanIdeen(state.ideen);
+{const a=state.angelina;state.angelina=isObj(a)?Object.assign(a,{n:num(a.n),first:dayOk(a.first),day:dayOk(a.day)}):{n:0,first:'',day:''};} // Angelina: n = wie oft gefangen, first/day = Tag des ersten/letzten Fangs
 const rodNow=()=>RODS[Math.min(RODS.length-1,state.rod|0)];
 // Sicherheitskopie: der Stand vom letzten Spielstart. Geht der Hauptstand kaputt, lädt das Spiel diese Kopie.
 if(loadedFrom==='main')lsSet(BACKUP_KEY,savedRaw);
@@ -1841,7 +1844,11 @@ function chooseFish(){
   let sum=0;pool.forEach(f=>sum+=wt(f));let r=Math.random()*sum;
   for(const f of pool){r-=wt(f);if(r<=0)return f;}return pool[0];
 }
+// Angelina: Riesen-Karpfen im Heimat-See. Beißt nur mit der Grundrute, höchstens einmal am Tag. Keine Fischart, kommt nie in Eimer oder Fischbuch.
+const ANGELINA={chance:0.04,first:100,again:20};
+function angelinaBeisst(){return atLake()&&fishing.method==='grund'&&state.angelina.day!==todayKey()&&Math.random()<ANGELINA.chance;}
 function catchFish(){
+  if(angelinaBeisst()){splash(fishing.target.x,fishing.target.z,true);sfxSplash();sfxCatch();stopFishing();showAngelina();return;}
   const f=chooseFish();const k=Math.random();
   const cm=Math.round(f.cm[0]+(f.cm[1]-f.cm[0])*k);const value=Math.max(1,Math.round(f.price*(0.85+k*0.4)));
   const sc=schoolAt(fishing.target.x,fishing.target.z);if(sc&&--sc.n<=0)placeSchool(sc);
@@ -2147,6 +2154,23 @@ function showCatch(f,cm,value,isNew,extra){
     if(state.bucket.length>=bucketMax())toast('Eimer voll! Bring die Fische zu '+sellTo()+'.');afterCatch();};
   const rel=el('button','b alt','Freilassen');rel.onclick=()=>{closeModal();splash(player.pos.x+Math.sin(player.facing)*3,player.pos.z+Math.cos(player.facing)*3);toast('Tschüss, '+({ein:'kleines',eine:'kleine'}[f.art]||'kleiner')+' '+f.name+'!');afterCatch();};
   bt.append(keep,rel);card.appendChild(bt);
+}
+function showAngelina(){
+  const a=state.angelina,heute=todayKey();a.n++;a.day=heute;if(!a.first)a.first=heute;const n=a.n;
+  earn(n===1?ANGELINA.first:ANGELINA.again);save();refreshHud(true); // schon beim Öffnen gespeichert: Neuladen verliert nichts und zählt nichts doppelt
+  openModal();card.className='card catch angelina';card.innerHTML='';
+  card.appendChild(el('h2',null,'🏆 Du hast <b>Angelina</b> gefangen!'));
+  const foto=el('div','angelinaFoto');
+  const face=el('div','pface');face.style.background=hexCol(state.avatar.skin,SKINS[1]);face.style.borderColor=hexCol(state.avatar.shirt,'#2f9e5b');
+  foto.append(face,fishPic(FISH_BY.karpfen));card.appendChild(foto);
+  const d=new Date();
+  card.appendChild(el('div','angelinaName',esc(state.avatar.name||'Du')+' · '+pad2(d.getDate())+'.'+pad2(d.getMonth()+1)+'.'+d.getFullYear()));
+  card.appendChild(el('div','stats','<span class="stat">52 kg</span><span class="stat">Schuppenkarpfen</span>'));
+  card.appendChild(el('p',null,'Die echte Angelina lebt in einem Angelsee in Ungarn. Im Oktober 2026 wog sie 52 Kilo – so viel wie zwei Kinder in deinem Alter. Sie wurde schon oft gefangen und wieder ins Wasser gesetzt.'));
+  if(n>=2)card.appendChild(el('p',null,'Du hast sie schon '+n+'-mal gefangen!'));
+  const bt=el('div','btns');const ok=el('button','b go','Zurück ins Wasser (+'+(n===1?ANGELINA.first:ANGELINA.again)+' Ludins)');ok.id='angelinaOk';
+  ok.onclick=()=>{closeModal();splash(player.pos.x+Math.sin(player.facing)*3,player.pos.z+Math.cos(player.facing)*3);toast('Tschüss, Angelina! Bis bald.');afterCatch();};
+  bt.appendChild(ok);card.appendChild(bt);
 }
 function showBucket(){
   openModal();card.className='card';card.innerHTML='';
@@ -4754,6 +4778,8 @@ updateWorldTime();
 if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);if(Number.isFinite(f))player.facing=f;player.y=groundY(x,z);player.root.position.set(x,player.y,z);updateWorldTime();saveWhere();},
   welt:()=>({phase:WT.phase,sky:'#'+SKY.getHexString(),stars:stars.visible,region:WT.region,laub:'#'+laubMat.color.getHexString(),wiese:'#'+wieseMat.color.getHexString(),laubFade:laubMat.userData.fade.value,wieseFade:wieseMat.userData.fade.value,
     fichten:(()=>{const f=[];scene.traverse(o=>{if(o.isInstancedMesh&&o.geometry===FICHTE)f.push(o.material===wieseMat);});return f.length>0&&f.every(Boolean);})(),blueten:bloomOn&&blooms.size>0&&[...blooms].every(p=>p.visible)}),
+  fang(){fishing.method=methodNow();const w=findWater();if(w){fishing.target.x=w.x;fishing.target.z=w.z;}catchFish();}, // einen Fang auslösen, wie nach dem Ziehen
+  avatarName(n){state.avatar.name=n;}, // Namen setzen (nach „Los geht's“)
   hoehe:(x,z)=>heightAt(x,z),
   bojen:()=>buoyList.map(b=>({x:b.x,z:b.z,farbe:b.farbe})), // Bojen auf dem Meer vor dem Hafen
   wo:()=>({atSea:atSea(),ride:player.ride,x:player.pos.x,z:player.pos.z,facing:player.facing,nebel:scene.fog.far}), // wo bin ich, worauf fahre ich (nebel: wie weit man sieht)
