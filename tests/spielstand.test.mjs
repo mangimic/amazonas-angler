@@ -4156,7 +4156,187 @@ test('Sicherheit: Fisch- und Platz-id „constructor“ findet nichts (SEC-006)'
 });
 
 test('Was ist neu v43: Ideen-Kiste', () => {
-  const n = newsListe()[0];
+  const n = newsListe().find(n => n.v === 43);
   assert.deepEqual({ v: n.v, day: n.day, ico: n.ico, t: n.t, d: n.d }, { v: 43, day: '05.11.2026', ico: '💡', t: 'Ideen-Kiste',
     d: 'Du hast eine Idee fürs Spiel? Tipp auf die Uhr und dann auf 💡. Ein Erwachsener schickt sie weiter.' });
+});
+
+// ---- Angelina: Riesen-Karpfen am Heimat-See ----
+const SEE_WURF = { x: 10, z: -940, f: 0, boat: false }; // Südufer, Blick auf den See
+const tagText = (page, tage) => page.evaluate(t => { const d = new Date(); d.setDate(d.getDate() + t); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }, tage);
+const angGestern = page => tagText(page, -1);
+const angHeute = page => tagText(page, 0);
+async function angelinaSeite(extra = {}) { // am See, Grundrute in der Hand, Zufall = Treffer
+  const { ctx, page, errors } = await newPage();
+  const ex = typeof extra === 'function' ? await extra(page) : extra;
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, methods: { spin: false, grund: true }, method: 'grund', where: SEE_WURF, ...ex }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.evaluate(() => { Math.random = () => 0.01; });
+  return { ctx, page, errors };
+}
+const angelinaKarte = async page => { await page.evaluate(() => window.__test.fang()); };
+
+test('Angelina: alter Spielstand bekommt den Startwert, kaputte Werte werden repariert', async () => {
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify(ALT_V1) });
+  await startGame(page);
+  await playAndLeave(page);
+  assert.deepEqual(JSON.parse(await read(page)).angelina, { n: 0, first: '', day: '' });
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, angelina: 'kaputt' }) });
+  await startGame(page);
+  await playAndLeave(page);
+  assert.deepEqual(JSON.parse(await read(page)).angelina, { n: 0, first: '', day: '' });
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, angelina: { n: 'viel', first: 5, day: '2026-13', extra: 'bleibt' } }) });
+  await startGame(page);
+  await playAndLeave(page);
+  const a = JSON.parse(await read(page)).angelina;
+  assert.equal(a.n, 0); assert.equal(a.first, ''); assert.equal(a.day, ''); assert.equal(a.extra, 'bleibt');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Angelina: am See mit der Grundrute kommt die Karte, +100 Ludins, Eimer und Fischbuch bleiben gleich', async () => {
+  const eimer = Array.from({ length: 14 }, () => ({ id: 'hecht', cm: 60, value: 40 }));
+  const { ctx, page, errors } = await angelinaSeite({ ludins: 345, bucket: eimer });
+  const tag = await angHeute(page);
+  const vor = JSON.parse(await read(page)).heute || {};
+  await angelinaKarte(page);
+  await page.locator('#card h2').waitFor({ timeout: 5000 });
+  assert.match(await page.textContent('#card h2'), /Angelina/);
+  assert.ok(await page.locator('#card .angelinaFoto').isVisible());
+  const txt = await page.textContent('#card');
+  assert.match(txt, /52 kg/); assert.match(txt, /Schuppenkarpfen/);
+  assert.equal((await page.textContent('#angelinaOk')).trim(), 'Zurück ins Wasser (+100 Ludins)');
+  const s = JSON.parse(await read(page)); // Karte noch offen, kein pagehide: schon beim Öffnen gespeichert
+  assert.equal(s.angelina.n, 1); assert.equal(s.angelina.first, tag); assert.equal(s.angelina.day, tag);
+  assert.equal(s.ludins, 445);
+  assert.equal((s.heute.fische || 0), (vor.fische || 0), 'heute.fische bleibt gleich');
+  assert.equal((s.heute.ludins || 0) - (vor.ludins || 0), 100, 'heute.ludins +100');
+  assert.deepEqual(s.bucket, eimer);
+  assert.deepEqual(s.book, ALT_V1.book);
+  await page.click('#angelinaOk');
+  assert.ok(await page.locator('#modal').isHidden());
+  assert.match(await page.textContent('#toast'), /Tschüss, Angelina!/);
+  assert.doesNotMatch(await page.textContent('#toast'), /Eimer voll/);
+  assert.deepEqual((await weg(page)).bucket, eimer);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Angelina: mit der Pose oder am Amazonas kommt sie nicht', async () => {
+  let { ctx, page, errors } = await angelinaSeite({ method: 'pose' });
+  await angelinaKarte(page);
+  await page.locator('#card h2').waitFor({ timeout: 5000 });
+  let h = await page.textContent('#card h2');
+  assert.match(h, /gefangen/); assert.doesNotMatch(h, /Angelina/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+  ({ ctx, page, errors } = await newPage());
+  await seed(page, { [KEY]: stadtSeed({ visitedLake: true, methods: { spin: false, grund: true }, method: 'grund' }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.evaluate(() => { Math.random = () => 0.01; });
+  await angelinaKarte(page);
+  await page.locator('#card h2').waitFor({ timeout: 5000 });
+  h = await page.textContent('#card h2');
+  assert.match(h, /gefangen/); assert.doesNotMatch(h, /Angelina/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Angelina: am Flussplatz und im Hafen kommt sie nicht', async () => {
+  const rhein = flussplaetze().find(s => s.id === 'bw-rhein');
+  for (const extra of [
+    { flussAt: 'bw-rhein', where: { x: 0, z: -1800 - rhein.hw + 6, f: 0, boat: false } },
+    { city: { visited: true }, where: { x: -50, z: -3111.8, f: Math.PI, boat: false } }]) {
+    const { ctx, page, errors } = await newPage();
+    await seed(page, { [KEY]: stadtSeed({ book: {}, methods: { spin: false, grund: true }, method: 'grund', ...extra }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.evaluate(() => { Math.random = () => 0.01; });
+    await angelinaKarte(page);
+    await page.locator('#card h2').waitFor({ timeout: 5000 });
+    const h = await page.textContent('#card h2');
+    assert.match(h, /gefangen/); assert.doesNotMatch(h, /Angelina/);
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Angelina: einmal am Tag, am nächsten Tag wieder, beim zweiten Mal +20', async () => {
+  let { ctx, page, errors } = await angelinaSeite(async p => { await p.goto(base + '/leer'); return { angelina: { n: 1, first: '2026-10-01', day: await angHeute(p) } }; });
+  await angelinaKarte(page);
+  await page.locator('#card h2').waitFor({ timeout: 5000 });
+  assert.doesNotMatch(await page.textContent('#card h2'), /Angelina/);
+  assert.equal((await weg(page)).angelina.n, 1);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+  ({ ctx, page, errors } = await angelinaSeite(async p => { await p.goto(base + '/leer'); return { ludins: 345, angelina: { n: 1, first: '2026-10-01', day: await angGestern(p) } }; }));
+  await angelinaKarte(page);
+  await page.locator('#angelinaOk').waitFor({ timeout: 5000 });
+  assert.match(await page.textContent('#angelinaOk'), /\(\+20 Ludins\)/);
+  assert.match(await page.textContent('#card'), /Du hast sie schon 2-mal gefangen!/);
+  const s = await weg(page);
+  assert.equal(s.ludins, 365); assert.equal(s.angelina.n, 2); assert.equal(s.angelina.first, '2026-10-01');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Angelina: Neuladen bei offener Karte zählt genau einmal', async () => {
+  const { ctx, page, errors } = await angelinaSeite({ ludins: 345 });
+  await angelinaKarte(page);
+  await page.locator('#angelinaOk').waitFor({ timeout: 5000 });
+  await page.reload();
+  await page.locator('#btnGo').waitFor({ state: 'visible', timeout: 30000 });
+  await page.click('#btnGo');
+  await page.evaluate(() => { Math.random = () => 0.01; });
+  const s = await weg(page);
+  assert.equal(s.ludins, 445); assert.equal(s.angelina.n, 1);
+  await angelinaKarte(page);
+  await page.locator('#card h2').waitFor({ timeout: 5000 });
+  assert.doesNotMatch(await page.textContent('#card h2'), /Angelina/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Angelina: Erinnerungs-Foto zeigt Namen sicher, ohne Namen „Du“', async () => {
+  let { ctx, page, errors } = await angelinaSeite({ avatar: { ...ALT_V1.avatar, name: '<img class="eingeschleust" src="x" onerror="window.__pwn=1">' } });
+  await angelinaKarte(page);
+  await page.locator('#angelinaOk').waitFor({ timeout: 5000 });
+  assert.equal(await page.locator('#card .eingeschleust').count(), 0);
+  assert.equal(await page.evaluate(() => window.__pwn), undefined);
+  assert.match(await page.textContent('#card .angelinaName'), /<img/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+  ({ ctx, page, errors } = await angelinaSeite({ avatar: { ...ALT_V1.avatar, name: '' } }));
+  await page.evaluate(() => window.__test.avatarName('')); // „Los geht's“ trägt sonst „Angler“ ein
+  await angelinaKarte(page);
+  await page.locator('#angelinaOk').waitFor({ timeout: 5000 });
+  assert.match((await page.textContent('#card .angelinaName')).trim(), /^Du/);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Angelina: Sticker im Fischbuch erst nach dem ersten Fang', async () => {
+  for (const [n, soll] of [[0, null], [1, '🏆 Angelina: 1× gefangen'], [2, '🏆 Angelina: 2× gefangen']]) {
+    const { ctx, page, errors } = await newPage();
+    await seed(page, { [KEY]: stadtSeed({ angelina: { n, first: n ? '2026-11-01' : '', day: n ? '2026-11-01' : '' } }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.click('#btnBook');
+    await page.locator('#card h2:text-is("Fischbuch")').waitFor({ timeout: 5000 });
+    const st = page.locator('#card .angelinaSticker');
+    if (soll === null) assert.equal(await st.count(), 0, 'ohne Fang kein Sticker');
+    else assert.equal((await st.textContent()).trim(), soll, n + '× gefangen');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
+test('Angelina: NEWS v44 steht ganz oben', () => {
+  const n = newsListe()[0];
+  assert.equal(n.v, 44);
+  assert.equal(n.t, 'Riesen-Karpfen Angelina');
+  assert.equal(n.ico, '🏆');
 });
