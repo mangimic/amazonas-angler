@@ -443,13 +443,13 @@ test('Spielzeit: Erwachsene stellen sie ein, danach macht das Spiel Pause', asyn
   assert.equal(JSON.parse(await read(page, KEY + '-spielzeit')).min, 30);
   await ctx.close();
 
-  // Fast die ganze Zeit ist schon verbraucht: nach einer Sekunde kommt die Pause
+  // Die ganze Zeit ist schon verbraucht: kein Wettlauf gegen 1 Sekunde. Die Zeit zählt schon auf dem Startbildschirm,
+  // die Pause kommt also gleich beim Laden (bei langsamen Rechnern vor dem Klick auf „Los geht's“, dann liegt #timeup darüber).
   const b = await newPage();
-  await seed(b.page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playTime: { day: heute(), sec: 15 * 60 - 1, extra: 0 } }),
+  await seed(b.page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], playTime: { day: heute(), sec: 15 * 60, extra: 0 } }),
     [KEY + '-spielzeit']: JSON.stringify({ min: 15 }) });
   await startGame(b.page);
-  await b.page.click('#btnGo');
-  await b.page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 10000 });
+  await b.page.locator('#timeup h2:has-text("Spielzeit ist um")').waitFor({ timeout: 30000 });
   await b.page.click('#btnMoreTime');
   await rechenaufgabe(b.page);
   await b.page.click('#timeup button:has-text("+ 15 Minuten")');
@@ -790,7 +790,8 @@ test('Flüsse in Deutschland: am Rhein beißen Rhein-Fische und zählen für den
 
 test('Fischer Hannes am Fluss: Fische verkaufen und Angelsachen kaufen', async () => {
   const neckar = flussplaetze().find(s => s.id === 'bw-neckar');
-  const { ctx, page, errors } = await newPage();
+  const TAG = '2026-06-21'; // festes Datum: der Tagesfisch (zahlt doppelt) hängt vom Datum ab
+  const { ctx, page, errors } = await startZeitSeite(TAG + 'T12:00:00+02:00');
   await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, ludins: 100, flussAt: 'bw-neckar',
     bucket: [{ id: 'barbe', cm: 50, value: 24 }, { id: 'zander', cm: 60, value: 55 }],
     where: { x: -6, z: -1800 - neckar.hw - 12.5, f: 0, boat: false } }) }); // neben dem Stand
@@ -800,9 +801,11 @@ test('Fischer Hannes am Fluss: Fische verkaufen und Angelsachen kaufen', async (
   await page.click('#btnCtx');
   await page.locator('#card h2:has-text("Fischer Hannes")').waitFor();
   assert.match(await page.textContent('#card'), /Grüß Gott/, 'in Baden-Württemberg sagt Hannes „Grüß Gott“');
-  await page.click('#card button:has-text("Alles verkaufen (+79 Ludins)")');
+  const tf = await page.evaluate(k => window.__test.tagesfisch(k), TAG);
+  const soll = 79 + (tf === 'barbe' ? 24 : tf === 'zander' ? 55 : 0);
+  await page.click(`#card button:has-text("Alles verkaufen (+${soll} Ludins)")`);
   let s = JSON.parse(await read(page));
-  assert.equal(s.ludins, 179);
+  assert.equal(s.ludins, 100 + soll);
   assert.deepEqual(s.bucket, []);
   assert.equal(await page.locator('#card .tabs button:text-is("Boot")').count(), 0, 'Boote gibt es nur bei Opa Tiago');
   await page.click('#card .tabs button:text-is("Köder")');
@@ -934,7 +937,8 @@ test('Europa: Hannes grüßt in der Landessprache, Schild und Tafel nennen das L
 });
 
 test('Fischer Hannes am Heimat-See: Fische gleich dort verkaufen', async () => {
-  const { ctx, page, errors } = await newPage();
+  const TAG = '2026-06-21'; // festes Datum: der Tagesfisch (zahlt doppelt) hängt vom Datum ab
+  const { ctx, page, errors } = await startZeitSeite(TAG + 'T12:00:00+02:00');
   await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, ludins: 10, visitedLake: true,
     bucket: [{ id: 'hecht', cm: 70, value: 60 }], where: { x: -8.5, z: -954, f: 0, boat: false } }) }); // neben dem Stand am See
   await startGame(page);
@@ -943,9 +947,10 @@ test('Fischer Hannes am Heimat-See: Fische gleich dort verkaufen', async () => {
   await page.click('#btnCtx');
   await page.locator('#card h2:has-text("Fischer Hannes")').waitFor();
   await page.click('#card .tabs button:text-is("🐟 Verkaufen")');
-  await page.click('#card button:has-text("Alles verkaufen (+60 Ludins)")');
+  const soll = (await page.evaluate(k => window.__test.tagesfisch(k), TAG)) === 'hecht' ? 120 : 60;
+  await page.click(`#card button:has-text("Alles verkaufen (+${soll} Ludins)")`);
   const s = JSON.parse(await read(page));
-  assert.equal(s.ludins, 70);
+  assert.equal(s.ludins, 10 + soll);
   assert.deepEqual(s.bucket, []);
   assert.deepEqual(errors, []);
   await ctx.close();
@@ -1291,7 +1296,9 @@ test('Hafenhausen: an der Kaimauer beißen Meeresfische', async () => {
 });
 
 test('Fischer Hannes am Hafen: Meeresfische verkaufen', async () => {
-  const { ctx, page, errors } = await newPage();
+  // Festes Datum: Der Tagesfisch hängt vom Datum ab (dayHash), und er zahlt doppelt. Der Soll-Wert kommt aus der Regel des Spiels.
+  const TAG = '2026-06-21';
+  const { ctx, page, errors } = await startZeitSeite(TAG + 'T12:00:00+02:00');
   await seed(page, { [KEY]: stadtSeed({ ludins: 10, bucket: [{ id: 'hering', cm: 25, value: 6 }], city: { visited: true },
     where: { x: -80, z: -3106, f: Math.PI, boat: false } }) }); // vor der Theke von Hannes an der Kaimauer
   await startGame(page);
@@ -1300,10 +1307,11 @@ test('Fischer Hannes am Hafen: Meeresfische verkaufen', async () => {
   await page.click('#btnCtx');
   await page.locator('#card h2:has-text("Fischer Hannes")').waitFor();
   assert.match(await page.textContent('#card'), /Moin/);
+  const soll = (await page.evaluate(k => window.__test.tagesfisch(k), TAG)) === 'hering' ? 12 : 6; // Tagesfisch zahlt doppelt
   await page.click('#card .tabs button:text-is("🐟 Verkaufen")');
-  await page.click('#card button:has-text("Alles verkaufen (+6 Ludins)")');
+  await page.click(`#card button:has-text("Alles verkaufen (+${soll} Ludins)")`);
   const s = JSON.parse(await read(page));
-  assert.equal(s.ludins, 16);
+  assert.equal(s.ludins, 10 + soll);
   assert.deepEqual(s.bucket, []);
   assert.deepEqual(errors, []);
   await ctx.close();
