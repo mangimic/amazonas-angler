@@ -2299,7 +2299,7 @@ function showHannes(){
   const sp=atDE()&&curSpot?curSpot:null,key=sp?sp.land||sp.bl:'',o=sp&&ortVon(sp),hi=atCity()?'Moin':GRUSS[key]||'Hallo',de=sp&&sp.land&&LAENDER[sp.land].heisst;
   const head=el('div','rosa');head.appendChild(el('div','face hannes'));
   head.appendChild(el('div',null,'<h2>Fischer Hannes</h2><p class="small">Offen '+SHOP_HOURS_TXT+'</p><p>'+hi+', '+esc(state.avatar.name||'du')+'! Ich kaufe deine Fische und habe Angelsachen für dich.</p>'+
-    (GRUSS[key]?'<p class="small">„'+esc(hi)+'“ sagt man oft '+esc(o.in)+'.'+(de?' Das heißt „'+esc(de)+'“.':'')+'</p>':atCity()?'<p class="small">„Moin“ sagt man oft an der Küste.</p>':'')));
+    (GRUSS[key]?'<p class="small">„'+esc(hi)+'“ sagt man '+(sp.land==='nl'?'höflich':'oft')+' '+esc(o.in)+'.'+(de?' Das heißt „'+esc(de)+'“.':'')+'</p>':atCity()?'<p class="small">„Moin“ sagt man oft an der Küste.</p>':'')));
   card.appendChild(head);
   const tabs=el('div','tabs four');[['verkaufen','🐟 Verkaufen']].concat(TIAGO_TABS.filter(([id])=>id!=='boot')).forEach(([id,lb])=>{const t=el('button',null,lb);t.setAttribute('aria-pressed',hannesTab===id);
     t.onclick=()=>{hannesTab=id;showHannes();};tabs.appendChild(t);});card.appendChild(tabs);
@@ -3142,7 +3142,7 @@ const BL={
  ni:{name:'Niedersachsen',hs:'Hannover',at:[9.73,52.37],lab:[9.15,52.8,'Nieder-\nsachsen']},
  nw:{name:'Nordrhein-Westfalen',hs:'Düsseldorf',at:[6.78,51.23],lab:[7.55,51.55,'Nordrhein-\nWestfalen']},
  rp:{name:'Rheinland-Pfalz',hs:'Mainz',at:[8.27,50.0],lab:[7.25,49.75,'Rheinland-\nPfalz']},
- sl:{name:'Saarland',hs:'Saarbrücken',at:[6.99,49.24],lab:[7.05,49.2,'Saar-\nland']},
+ sl:{name:'Saarland',in:'im Saarland',hs:'Saarbrücken',at:[6.99,49.24],lab:[7.05,49.2,'Saar-\nland']},
  sn:{name:'Sachsen',hs:'Dresden',at:[13.74,51.05],lab:[13.05,50.75,'Sachsen']},
  st:{name:'Sachsen-Anhalt',hs:'Magdeburg',at:[11.63,52.13],lab:[11.55,51.75,'Sachsen-\nAnhalt']},
  sh:{name:'Schleswig-Holstein',hs:'Kiel',at:[10.13,54.32],lab:[9.55,54.5,'Schleswig-\nHolstein']},
@@ -3157,7 +3157,7 @@ const LAENDER={
  cz:{name:'Tschechien',hs:'Prag',in:'in Tschechien',heisst:'Guten Tag'}};
 // Wo liegt ein Platz? Bundesland mit Landeshauptstadt oder Land mit Hauptstadt
 function ortVon(s){if(s.land){const l=LAENDER[s.land];return {art:'Land',name:l.name,hsArt:'Hauptstadt',hs:l.hs,in:l.in};}
-  const b=BL[s.bl];return {art:'Bundesland',name:b.name,hsArt:'Landeshauptstadt',hs:b.hs,in:'in '+b.name};}
+  const b=BL[s.bl];return {art:'Bundesland',name:b.name,hsArt:'Landeshauptstadt',hs:b.hs,in:b.in||'in '+b.name};}
 // Die Angelplätze. hw = halbe Flussbreite, hills = Berge am Tal, bend/k = Kurven, look = Wahrzeichen, ship = Schiffe fahren vorbei.
 // p = Text der Infotafel, q = Fluss-Rätsel (a = richtig, w = falsch). Die Antworten stehen alle auf der Tafel.
 const SPOTS=[
@@ -4312,7 +4312,7 @@ function showSpotInfo(s){const p=prog(s.id),o=ortVon(s);
   card.appendChild(el('h2',null,'🌊 '+esc(s.name)));
   if(!p.r){p.r=true;earn(INFO_LUDINS);save();refreshHud(true);card.appendChild(el('p','qe','📚 Neues Wissen! +'+INFO_LUDINS+' Ludins.'));}
   if(p.s)card.appendChild(el('div','rule','<b>🏅 Du hast den Fluss-Stempel!</b><p>Von hier geht es weiter: '+linksOf(s.id).map(k=>esc(SPOTS_BY[k.to].name)+' ('+esc(k.river)+')').join(', ')+'</p>'));
-  else card.appendChild(el('div','rule','<b>🏅 So bekommst du den Fluss-Stempel</b><p>🐟 Fang hier '+STAMP_FISH+' verschiedene Fischarten: <b>'+Math.min(p.f.length,STAMP_FISH)+' von '+STAMP_FISH+'</b><br>🧩 Löse das Fluss-Rätsel: <b>'+(p.q?'geschafft ✔':'noch nicht')+'</b></p><small>Mit dem Stempel darfst du dem Fluss '+(s.land?'weiter folgen':'ins nächste Bundesland folgen')+'.</small>'));
+  else card.appendChild(el('div','rule','<b>🏅 So bekommst du den Fluss-Stempel</b><p>🐟 Fang hier '+STAMP_FISH+' verschiedene Fischarten: <b>'+Math.min(p.f.length,STAMP_FISH)+' von '+STAMP_FISH+'</b><br>🧩 Löse das Fluss-Rätsel: <b>'+(p.q?'geschafft ✔':'noch nicht')+'</b></p><small>'+(s.land?(linksOf(s.id).some(k=>!spotOpen(k.to))?'Mit dem Stempel darfst du dem Fluss weiter folgen.':'Mit dem Stempel sammelst du ein Land für deine Europa-Karte.'):'Mit dem Stempel darfst du dem Fluss ins nächste Bundesland folgen.')+'</small>'));
   card.appendChild(el('p',null,'📍 '+o.art+': <b>'+esc(o.name)+'</b> · '+o.hsArt+': <b>'+esc(o.hs)+'</b>'));
   s.p.forEach(x=>card.appendChild(el('p',null,esc(x))));
   card.appendChild(el('h3','bookhead','Diese Fische leben hier'));
@@ -4423,6 +4423,7 @@ const EU_LAB={de:['DEUTSCHLAND',10.2,50.55],ch:['Schweiz',8.7,46.55],nl:['Nieder
 const EU_HS={ch:[7.45,46.95,7.45,47.2],nl:[4.9,52.37,4.75,52.62],at:[16.37,48.21,16.4,47.7],hu:[19.04,47.5,19.05,47.07],cz:[14.42,50.09,14.42,50.52]};
 const EU_NB_LAB=[['Frankreich',4.6,48.0],['Belgien',4.55,50.6],['Lux.',6.1,49.62],['Polen',18.6,52.3],['Slowakei',19.4,48.75],['Italien',11.3,45.6],
   ['Slowenien',14.8,46.12],['Kroatien',16.6,45.55],['Dänemark',9.3,55.25],['Rumänien',22.5,46.4],['Ukraine',22.75,48.95],['Serbien',20.2,45.25]];
+const EU_NUDGE={'bw-rhein':[7.63,48.03]}; // nur Europa-Karte (SPOTS bleibt, wie es ist)
 const EU_RIV_LAB=[['Rhein',7.95,49.45],['Donau',11.0,48.5],['Donau',18.55,46.3],['Elbe',11.8,52.55],['Moldau',13.75,49.4]];
 function drawEuropa(cv,W){const D=EUMAP,k=W/D.w,H=Math.round(D.h*k),c=hiDPI(cv,W,H),fs=Math.max(10,Math.round(W/50));
   const path=f=>{c.beginPath();for(let i=0;i<f.length;i+=2){const x=f[i]*k,y=f[i+1]*k;if(i)c.lineTo(x,y);else c.moveTo(x,y);}};
@@ -4443,10 +4444,11 @@ function drawEuropa(cv,W){const D=EUMAP,k=W/D.w,H=Math.round(D.h*k),c=hiDPI(cv,W
   // Wege über die Grenze: von welchem Platz aus man dem Fluss folgt
   const r=Math.max(12,Math.round(W/36)),hits=[];
   c.setLineDash([5,5]);c.strokeStyle='#c27c0e';c.lineWidth=2.5;
-  const ends=new Set();LINKS.forEach(([a,b2])=>{if(!SPOTS_BY[a].land&&!SPOTS_BY[b2].land)return;const A=P(...SPOTS_BY[a].at),B=P(...SPOTS_BY[b2].at);c.beginPath();c.moveTo(...A);c.lineTo(...B);c.stroke();
+  const euAt=id=>EU_NUDGE[id]||SPOTS_BY[id].at,ends=new Set(),endHits=[]; // Breisach liegt im vereinfachten Umriss in Frankreich: nur fürs Zeichnen etwas nach Osten
+  LINKS.forEach(([a,b2])=>{if(!SPOTS_BY[a].land&&!SPOTS_BY[b2].land)return;const A=P(...euAt(a)),B=P(...euAt(b2));c.beginPath();c.moveTo(...A);c.lineTo(...B);c.stroke();
     [a,b2].forEach(id=>{if(!SPOTS_BY[id].land)ends.add(id);});});
   c.setLineDash([]);
-  ends.forEach(id=>{const [x,y]=P(...SPOTS_BY[id].at),open=spotOpen(id),st=stamped(id);c.beginPath();c.arc(x,y,r*0.42,0,7);c.fillStyle=st?'#f6c13b':open?'#ffffff':'#a49e92';c.fill();c.lineWidth=2;c.strokeStyle=open?'#2f9e5b':'#6d675c';c.stroke();});
+  ends.forEach(id=>{const [x,y]=P(...euAt(id)),open=spotOpen(id),st=stamped(id);c.beginPath();c.arc(x,y,r*0.42,0,7);c.fillStyle=st?'#f6c13b':open?'#ffffff':'#a49e92';c.fill();c.lineWidth=2;c.strokeStyle=open?'#2f9e5b':'#6d675c';c.stroke();endHits.push({s:SPOTS_BY[id],x,y,rr:r});});
   SPOTS.filter(s=>s.land).forEach(s=>{const [x,y]=P(s.at[0],s.at[1]),open=spotOpen(s.id),st=stamped(s.id),me=atDE()&&curSpot===s;
     c.beginPath();c.arc(x,y,open?r:r*0.8,0,7);c.fillStyle=st?'#f6c13b':open?'#ffffff':'#a49e92';c.fill();c.lineWidth=me?4:2.5;c.strokeStyle=me?'#e2412b':open?'#2f9e5b':'#6d675c';c.stroke();
     drawIcon(c,st?'🏅':open?'🎣':'🔒',x,y,open?r*1.1:r*0.85);hits.push({s,x,y,rr:open?r:r*0.8});});
@@ -4459,7 +4461,7 @@ function drawEuropa(cv,W){const D=EUMAP,k=W/D.w,H=Math.round(D.h*k),c=hiDPI(cv,W
   // Norden und Maßstab
   const nx=W-26,ny=30;c.fillStyle='#1b2a20';c.beginPath();c.moveTo(nx,ny-16);c.lineTo(nx+8,ny+6);c.lineTo(nx,ny+1);c.lineTo(nx-8,ny+6);c.closePath();c.fill();txt('N',nx,ny+18,fs+3,'#1b2a20');
   const km=200/111*EUS*k,sx=14,sy=H-16;c.fillStyle='#1b2a20';c.fillRect(sx,sy,km,4);c.fillRect(sx,sy-5,2,9);c.fillRect(sx+km-2,sy-5,2,9);txt('200 km',sx+km/2,sy-10,fs,'#1b2a20');
-  return {k,H,hits};}
+  return {k,H,hits,endHits};}
 function showEuropa(mode){
   stopFishing();openModal();card.className='card mapcard';card.innerHTML='';
   card.appendChild(el('h2',null,mode==='fly'?'✈️ Wohin fliegst du? 🌍 Europa':'🌍 Europa-Karte'));
@@ -4481,8 +4483,9 @@ function showEuropa(mode){
   const W=Math.round(Math.min((card.clientWidth||600)-36,Math.max(260,innerHeight-370)*EUMAP.w/EUMAP.h,760));wrap.style.width=W+'px';card.scrollTop=0;
   const m=drawEuropa(cv,W);
   cv.onclick=e=>{const rc=cv.getBoundingClientRect(),x=(e.clientX-rc.left)*W/rc.width,y=(e.clientY-rc.top)*W/rc.width;
-    let best=null,bd=26;m.hits.forEach(h=>{const d=Math.hypot(h.x-x,h.y-y);if(d<bd){bd=d;best=h.s;}});
-    if(best){showSpotPreview(best,mode);return;}
+    let best=null,bd=26,deEnd=false;m.hits.forEach(h=>{const d=Math.hypot(h.x-x,h.y-y);if(d<bd){bd=d;best=h.s;deEnd=false;}});
+    m.endHits.forEach(h=>{const d=Math.hypot(h.x-x,h.y-y);if(d<bd){bd=d;best=h.s;deEnd=true;}}); // deutsches Ende eines Wegs: zur Deutschland-Karte
+    if(best){if(deEnd)showGermany(mode);else showSpotPreview(best,mode);return;}
     for(const id in EUMAP.lands)if(EUMAP.lands[id].some(r=>inPoly(r,x/m.k,y/m.k))){
       if(id==='de'){showGermany(mode);return;}
       const l=LAENDER[id];toast(l.name+' · Hauptstadt: '+l.hs+(landOpen(id)?'':' · noch nicht freigespielt'));return;}};}
@@ -5003,6 +5006,7 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
   // Hafenhausen: ist (x,z) auf dem Gehweg / der Straße, wie weit von den Schienen, und wie weit von jeder Haustür (Haus-Mitte + halbe Tiefe in Türrichtung)?
   stadtPunkt:(x,z)=>({walk:onWalk(x,z),road:onRoad(x,z),rail:railDist(x,z),tueren:cityHouses.map(h=>{const [tx,tz]=rotXZ(h.x,h.z,h.ry,0,-h.d/2);return Math.hypot(tx-x,tz-z);})}),
   fischInfo:id=>({fact:FISH_BY[id].fact,anzahl:FISH.length}),
+  ortVon:id=>ortVon(SPOTS_BY[id]).in, // „in …“-Text eines Platzes
   euPunkt:(lon,lat)=>{const g=eugeo(lon,lat);return [g[0]/EUMAP.w,g[1]/EUMAP.w];}, // Europa-Karte: wo liegt [Länge, Breite] (Anteil der Kartenbreite)
   alleIdeen:()=>alleIdeen(), // Ideen aller Spieler (wie in „Ideen der Kinder“)
   // Mensch k in Hafenhausen: wo er steht, sichtbar = wach (Schlafende sieht man nicht), ob er ein Kind ist, und wohin er gerade läuft (nächste Ecke)

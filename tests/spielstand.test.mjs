@@ -988,6 +988,15 @@ test('Europa: Stempel in Wien öffnet Ungarn und zeigt „Neues Land“', async 
   assert.equal((await weg(page)).fluss['at-donau'].s, true);
   await page.click('#card button:has-text("Weiter angeln")'); // der Knopf der Stempel-Karte
   await page.locator('#modal').waitFor({ state: 'hidden', timeout: 5000 });
+  // neu laden: der Stempel bleibt, Ungarn ist noch offen (Europa-Karte: 🌊 statt 🔒)
+  await page.reload();
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnMap').waitFor({ timeout: 20000 });
+  await page.click('#btnMap'); // im Ausland öffnet die Karte die Europa-Karte
+  await page.locator('#euMap').waitFor();
+  assert.equal((await weg(page)).fluss['at-donau'].s, true, 'Stempel nach dem Neuladen noch da');
+  assert.match(await page.textContent('[data-eu="hu-donau"]'), /^🌊 Donau in Budapest/, 'Ungarn bleibt nach dem Neuladen offen');
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -4698,4 +4707,26 @@ test('Angelina: NEWS v44 steht ganz oben', () => {
 
 test('Was ist neu v45: Europa', () => {
   assert.deepEqual(newsListe()[0], { v: 45, day: '20.11.2026', ico: '🌍', t: 'Europa', d: 'Folge den Flüssen über die Grenze! Mit einem Fluss-Stempel am Rhein, an der Donau oder an der Elbe schaltest du Länder in Europa frei.' });
+});
+
+test('Europa-Karte: der Breisach-Punkt liegt in Deutschland und führt zur Deutschland-Karte', async () => {
+  const { ctx, page, errors } = await europaStand({ 'bw-rhein': STEMPEL });
+  await page.click('#btnMap');
+  await page.locator('#deMap').waitFor();
+  await page.click('#btnEuropa');
+  await page.locator('#euMap').waitFor();
+  await page.mouse.click(...await euPunkt(page, 7.63, 48.03)); // der Punkt, wie ihn die Karte zeichnet
+  await page.locator('#deMap').waitFor();
+  assert.equal(await page.locator('#euMap').count(), 0);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Saarland: „im Saarland“ statt „in Saarland“', async () => {
+  const { ctx, page, errors } = await newPage();
+  await startGame(page);
+  const r = await page.evaluate(() => [window.__test.ortVon('sl-saar'), window.__test.ortVon('bw-rhein')]);
+  assert.deepEqual(r, ['im Saarland', 'in Baden-Württemberg']);
+  assert.deepEqual(errors, []);
+  await ctx.close();
 });
