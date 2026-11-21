@@ -4301,7 +4301,8 @@ function showStamp(s,res){
     res.spots.forEach(x=>{const lk=linksOf(s.id).find(k=>k.to===x.id);l.appendChild(el('div','item shopitem','<div class="shopicon">🌊</div><div class="t"><b>'+esc(x.name)+'</b><span>'+esc(ortVon(x).name)+(lk?' · '+esc(lk.why):'')+'</span></div><span></span>'));});
     card.appendChild(l);}
   else card.appendChild(el('p',null,'Die Nachbar-Plätze sind schon offen. Flieg weiter und sammle mehr Stempel!'));
-  const bt=el('div','btns');const mp=el('button','b','🗺️ Deutschland-Karte');mp.onclick=()=>showGermany('view');
+  const eu=s.land||(res.lands&&res.lands.length); // im Ausland oder neues Land: die Europa-Karte zeigt, wo es weitergeht
+  const bt=el('div','btns');const mp=el('button','b',eu?'🌍 Europa-Karte':'🗺️ Deutschland-Karte');mp.onclick=()=>eu?showEuropa('view'):showGermany('view');
   const ok=el('button','b go','Weiter angeln');ok.onclick=closeModal;bt.append(mp,ok);card.appendChild(bt);}
 function afterCatch(){if(!pendingStamp)return;const x=pendingStamp;pendingStamp=null;setTimeout(()=>showStamp(x.s,x.res),250);}
 /* ---- Die Infotafel am Flussplatz ---- */
@@ -4319,7 +4320,7 @@ function showSpotInfo(s){const p=prog(s.id),o=ortVon(s);
     d.appendChild(el('b',null,esc(f.name)+(p.f.includes(id)?' ✔':'')));g.appendChild(d);});card.appendChild(g);
   const bt=el('div','btns');
   if(!p.q){const rz=el('button','b go','🧩 Fluss-Rätsel');rz.id='btnRiddle';rz.onclick=()=>showRiddle(s);bt.appendChild(rz);}
-  const mp=el('button','b alt','🗺️ Karte');mp.onclick=()=>showGermany('view');const c=el('button','b','Fertig');c.onclick=closeModal;bt.append(mp,c);card.appendChild(bt);}
+  const mp=el('button','b alt','🗺️ Karte');mp.onclick=()=>s.land?showEuropa('view'):showGermany('view');const c=el('button','b','Fertig');c.onclick=closeModal;bt.append(mp,c);card.appendChild(bt);}
 function showRiddle(s,r){r=r||{i:0,right:0};const p=prog(s.id);
   openModal();card.className='card quiz info';card.innerHTML='';
   card.appendChild(el('div','infohead','🧩 Fluss-Rätsel'));
@@ -4418,7 +4419,7 @@ const EUS=EUMAP.h/(EUMAP.lat1-EUMAP.lat0),EUC=Math.cos((EUMAP.lat0+EUMAP.lat1)/2
   eugeo=(lon,lat)=>[(lon-EUMAP.lon0)*EUC*EUS,(EUMAP.lat1-lat)*EUS];
 const EU_COL={de:'#f3d36b',ch:'#a8d878',nl:'#f4b1a4',at:'#f4b1a4',cz:'#a8d878',hu:'#c7b6ee'};
 // Wo die Namen stehen: [Name, Länge, Breite]. Länder mit Platz: Name und Hauptstadt (hs = wo der Name der Hauptstadt steht)
-const EU_LAB={de:['DEUTSCHLAND',10.2,50.55],ch:['Schweiz',8.7,46.55],nl:['Niederlande',5.95,53.0],at:['Österreich',14.3,47.35],hu:['Ungarn',20.3,46.75],cz:['Tschechien',15.6,49.55]};
+const EU_LAB={de:['DEUTSCHLAND',10.2,50.55],ch:['Schweiz',8.7,46.55],nl:['Niederlande',5.95,53.0],at:['Österreich',14.3,47.35],hu:['Ungarn',20.3,46.75],cz:['Tschechien',15.75,49.45]};
 const EU_HS={ch:[7.45,46.95,7.45,47.2],nl:[4.9,52.37,4.75,52.62],at:[16.37,48.21,16.4,47.7],hu:[19.04,47.5,19.05,47.07],cz:[14.42,50.09,14.42,50.52]};
 const EU_NB_LAB=[['Frankreich',4.6,48.0],['Belgien',4.55,50.6],['Lux.',6.1,49.62],['Polen',18.6,52.3],['Slowakei',19.4,48.75],['Italien',11.3,45.6],
   ['Slowenien',14.8,46.12],['Kroatien',16.6,45.55],['Dänemark',9.3,55.25],['Rumänien',22.5,46.4],['Ukraine',22.75,48.95],['Serbien',20.2,45.25]];
@@ -4439,10 +4440,6 @@ function drawEuropa(cv,W){const D=EUMAP,k=W/D.w,H=Math.round(D.h*k),c=hiDPI(cv,W
   txt('Nordsee',...P(5.6,54.45),fs+1,'#1e5f8a','italic 800');txt('Ostsee',...P(13.3,54.85),fs+1,'#1e5f8a','italic 800');
   EU_RIV_LAB.forEach(([t,lo,la])=>{const [x,y]=P(lo,la);txt(t,x,y,fs-1,'#1d4fa8','italic 700');});
   for(const id in EU_LAB){const [t,lo,la]=EU_LAB[id];txt(t,...P(lo,la),id==='de'?fs+2:fs+1,'#1b2a20');}
-  // Hauptstädte: Punkt und Name, Berlin rot
-  const city=(lo,la,t,lx,ly,red)=>{const [x,y]=P(lo,la);c.fillStyle=red?'#e2412b':'#1b2a20';c.beginPath();c.arc(x,y,red?4.5:3,0,7);c.fill();txt(t,...P(lx,ly),fs,red?'#b3261e':'#1b2a20','700');};
-  city(13.40,52.52,'Berlin',13.4,52.78,true);
-  for(const id in EU_HS){const h=EU_HS[id];city(h[0],h[1],LAENDER[id].hs,h[2],h[3]);}
   // Wege über die Grenze: von welchem Platz aus man dem Fluss folgt
   const r=Math.max(12,Math.round(W/36)),hits=[];
   c.setLineDash([5,5]);c.strokeStyle='#c27c0e';c.lineWidth=2.5;
@@ -4452,7 +4449,13 @@ function drawEuropa(cv,W){const D=EUMAP,k=W/D.w,H=Math.round(D.h*k),c=hiDPI(cv,W
   ends.forEach(id=>{const [x,y]=P(...SPOTS_BY[id].at),open=spotOpen(id),st=stamped(id);c.beginPath();c.arc(x,y,r*0.42,0,7);c.fillStyle=st?'#f6c13b':open?'#ffffff':'#a49e92';c.fill();c.lineWidth=2;c.strokeStyle=open?'#2f9e5b':'#6d675c';c.stroke();});
   SPOTS.filter(s=>s.land).forEach(s=>{const [x,y]=P(s.at[0],s.at[1]),open=spotOpen(s.id),st=stamped(s.id),me=atDE()&&curSpot===s;
     c.beginPath();c.arc(x,y,open?r:r*0.8,0,7);c.fillStyle=st?'#f6c13b':open?'#ffffff':'#a49e92';c.fill();c.lineWidth=me?4:2.5;c.strokeStyle=me?'#e2412b':open?'#2f9e5b':'#6d675c';c.stroke();
-    drawIcon(c,st?'🏅':open?'🎣':'🔒',x,y,open?r*1.1:r*0.85);hits.push({s,x,y});});
+    drawIcon(c,st?'🏅':open?'🎣':'🔒',x,y,open?r*1.1:r*0.85);hits.push({s,x,y,rr:open?r:r*0.8});});
+  // Hauptstädte nach den Pins: Punkt und Name, Berlin rot. Liegt ein Pin darauf (Wien, Budapest, Prag), sitzt der Punkt am Pin-Rand zum Namen hin.
+  const city=(lo,la,t,lx,ly,red)=>{let [x,y]=P(lo,la);const [tx,ty]=P(lx,ly),pin=hits.find(h=>Math.hypot(h.x-x,h.y-y)<h.rr);
+    if(pin){const d=Math.hypot(tx-pin.x,ty-pin.y)||1;x=pin.x+(tx-pin.x)/d*pin.rr;y=pin.y+(ty-pin.y)/d*pin.rr;}
+    c.fillStyle='#ffffff';c.beginPath();c.arc(x,y,(red?4.5:3)+1.5,0,7);c.fill();c.fillStyle=red?'#e2412b':'#1b2a20';c.beginPath();c.arc(x,y,red?4.5:3,0,7);c.fill();txt(t,tx,ty,fs,red?'#b3261e':'#1b2a20','700');};
+  city(13.40,52.52,'Berlin',13.4,52.78,true);
+  for(const id in EU_HS){const h=EU_HS[id];city(h[0],h[1],LAENDER[id].hs,h[2],h[3]);}
   // Norden und Maßstab
   const nx=W-26,ny=30;c.fillStyle='#1b2a20';c.beginPath();c.moveTo(nx,ny-16);c.lineTo(nx+8,ny+6);c.lineTo(nx,ny+1);c.lineTo(nx-8,ny+6);c.closePath();c.fill();txt('N',nx,ny+18,fs+3,'#1b2a20');
   const km=200/111*EUS*k,sx=14,sy=H-16;c.fillStyle='#1b2a20';c.fillRect(sx,sy,km,4);c.fillRect(sx,sy-5,2,9);c.fillRect(sx+km-2,sy-5,2,9);txt('200 km',sx+km/2,sy-10,fs,'#1b2a20');
@@ -4467,8 +4470,9 @@ function showEuropa(mode){
   const side=el('div','flylist');row.appendChild(side);card.appendChild(row);
   side.appendChild(el('h3','maphead','Angelplätze in Europa'));
   eu.forEach(s=>{const open=spotOpen(s.id),me=atDE()&&curSpot===s;
-    const b=el('button','b'+(open?'':' alt'),(stamped(s.id)?'🏅 ':open?'🌊 ':'🔒 ')+esc(s.name)+' · '+esc(LAENDER[s.land].name)+(me?' (hier bist du)':''));
-    b.dataset.eu=s.id;b.onclick=()=>showSpotPreview(s,mode);side.appendChild(b);});
+    const b=el('button','b'+(open&&!(me&&mode==='fly')?'':' alt'),(stamped(s.id)?'🏅 ':open?'🌊 ':'🔒 ')+esc(s.name)+' · '+esc(LAENDER[s.land].name)+(me?' (hier bist du)':''));
+    if(me&&mode==='fly')b.disabled=true;else b.onclick=()=>showSpotPreview(s,mode); // wie in der Fliegen-Liste der Deutschland-Karte
+    b.dataset.eu=s.id;side.appendChild(b);});
   if(mode!=='fly'){side.appendChild(el('p',null,atDE()&&curSpot?'Du bist am Fluss <b>'+esc(curSpot.river)+'</b> <b>'+esc(ortVon(curSpot).in)+'</b>. Der rote Rand zeigt das Land.':'Mit dem Flugzeug ✈️ fliegst du zu den Flüssen.'));
     side.appendChild(el('span',null,'• Hauptstadt · 🔴 Berlin, die Hauptstadt von Deutschland · 〰️ Flüsse'));}
   card.appendChild(el('p','small','Kartendaten: Natural Earth (gemeinfrei).'));
@@ -4635,7 +4639,7 @@ function label(c,t,x,y,size,align){c.font='800 '+size+'px system-ui,sans-serif';
   c.lineWidth=4;c.lineJoin='round';c.strokeStyle='rgba(251,243,223,.95)';c.strokeText(t,x,y);c.fillStyle='#1b2a20';c.fillText(t,x,y);}
 function showMap(){
   if(atCity()){showCityMap();return;}
-  if(atDE()){showGermany('view');return;}
+  if(atDE()){if(curSpot&&curSpot.land)showEuropa('view');else showGermany('view');return;} // im Ausland die Europa-Karte
   stopFishing();openModal();card.className='card mapcard';card.innerHTML='';
   card.appendChild(el('h2',null,'Karte'));
   const where=atLake()?'Du bist am <b>Heimat-See</b>.':'Du bist am <b>Amazonas</b>, '+(Math.abs(player.pos.z)<60?'im Dorf.':Math.round(player.pos.z)+' m '+(player.pos.z>0?'flussaufwärts':'flussabwärts')+' vom Dorf.');

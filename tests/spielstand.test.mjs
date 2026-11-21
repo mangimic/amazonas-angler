@@ -984,6 +984,7 @@ test('Europa: Stempel in Wien öffnet Ungarn und zeigt „Neues Land“', async 
   const text = await page.textContent('#card');
   assert.match(text, /Neues Land: Ungarn/);
   assert.match(text, /Donau in Budapest/);
+  assert.equal(await page.locator('#card button:has-text("🌍 Europa-Karte")').count(), 1, 'Stempel im Ausland: Knopf zur Europa-Karte');
   assert.equal((await weg(page)).fluss['at-donau'].s, true);
   await page.click('#card button:has-text("Weiter angeln")'); // der Knopf der Stempel-Karte
   await page.locator('#modal').waitFor({ state: 'hidden', timeout: 5000 });
@@ -1120,9 +1121,30 @@ test('Europa-Karte: am eigenen Platz kein Hinfliegen', async () => {
   await page.locator('#euMap').waitFor();
   const hier = page.locator('[data-eu="at-donau"]');
   assert.match(await hier.textContent(), /\(hier bist du\)/);
-  await hier.click();
+  assert.equal(await hier.isDisabled(), true, 'gesperrt wie in der Fliegen-Liste der Deutschland-Karte');
+  // der Pin auf der Karte öffnet die Vorschau, aber ohne Hinfliegen
+  await page.mouse.click(...await euPunkt(page, 16.41, 48.22));
   await page.locator('#card h2:has-text("Donau in Wien")').waitFor();
   assert.equal(await page.locator('#btnFlyHere').count(), 0, 'kein Hinfliegen zum eigenen Platz');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Europa-Karte: im Ausland öffnen die kleine Karte und die Infotafel die Europa-Karte', async () => {
+  const wien = flussplaetze().find(s => s.id === 'at-donau');
+  const { ctx, page, errors } = await europaStand({ 'by-donau': STEMPEL }, 'at-donau');
+  await page.click('#btnMap');
+  await page.locator('#euMap').waitFor();
+  assert.match(await page.textContent('#card'), /Du bist am Fluss Donau in Österreich/);
+  assert.equal(await page.locator('#deMap').count(), 0);
+  await page.click('#card button:has-text("Fertig")');
+  await page.locator('#modal').waitFor({ state: 'hidden', timeout: 5000 });
+  await page.evaluate(z => window.__test.warp(-2.8, z), -1800 - wien.hw - 9); // vor die Infotafel
+  await page.locator('#btnCtx:has-text("Infotafel")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Donau in Wien")').waitFor();
+  await page.click('#card button:has-text("🗺️ Karte")');
+  await page.locator('#euMap').waitFor();
   assert.deepEqual(errors, []);
   await ctx.close();
 });
