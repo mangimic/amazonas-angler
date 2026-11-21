@@ -705,7 +705,7 @@ const landeplatz = (s, dx = 4, dz = -11) => ({ x: dx, z: -1800 - s.hw + dz, f: 0
 
 test('Flüsse in Deutschland: ein Stempel öffnet den nächsten Fluss, der Ort bleibt gespeichert', async () => {
   const spots = flussplaetze(), rhein = spots.find(s => s.id === 'bw-rhein');
-  assert.equal(spots.length, 18);
+  assert.equal(spots.filter(s => !s.land).length, 18);
   assert.ok(spots.every(s => s.q.length >= 2 && s.fish.length >= 6), 'jeder Platz hat Rätsel und Fische');
   const { ctx, page, errors } = await newPage();
   await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], visitedLake: true,
@@ -827,6 +827,110 @@ test('Flussplätze: Hannes und die Infotafel stehen überall an Land (auch an de
   }
   assert.deepEqual(errors, []);
   await ctx.close();
+});
+
+// Europa: 5 Plätze im Ausland, am Ende von SPOTS (buildSpot würfelt mit SPOTS.indexOf, die alten 18 bleiben, wie sie sind)
+const DE_IDS = ['bw-neckar', 'bw-rhein', 'bw-donau', 'by-donau', 'rp-rhein', 'sl-saar', 'he-main', 'nw-rhein', 'ni-weser', 'hb-weser',
+  'th-saale', 'st-elbe', 'sn-elbe', 'mv-elbe', 'hh-elbe', 'sh-elbe', 'bb-spree', 'be-spree'];
+const EU_PLAETZE = [
+  { id: 'ch-rhein', name: 'Rhein am Rheinfall', land: 'ch', river: 'Rhein', look: 'rheinfall', at: [8.615, 47.678] },
+  { id: 'nl-rhein', name: 'Lek bei Kinderdijk', land: 'nl', river: 'Rhein', look: 'kinderdijk', at: [4.635, 51.884] },
+  { id: 'at-donau', name: 'Donau in Wien', land: 'at', river: 'Donau', look: 'wien', at: [16.41, 48.22] },
+  { id: 'hu-donau', name: 'Donau in Budapest', land: 'hu', river: 'Donau', look: 'budapest', at: [19.046, 47.507] },
+  { id: 'cz-moldau', name: 'Moldau in Prag', land: 'cz', river: 'Moldau', look: 'prag', at: [14.411, 50.086] }];
+
+test('Europa: die 5 Plätze sind vollständig und stimmen mit den Daten überein', () => {
+  const spots = flussplaetze(), heim = fischHeime();
+  assert.equal(spots.length, 23);
+  assert.deepEqual(spots.slice(0, 18).map(s => s.id), DE_IDS, 'die 18 deutschen Plätze bleiben in derselben Reihenfolge');
+  const eu = spots.slice(18);
+  assert.deepEqual(eu.map(s => s.id), EU_PLAETZE.map(s => s.id));
+  for (const [i, s] of eu.entries()) {
+    const soll = EU_PLAETZE[i];
+    for (const k of ['name', 'land', 'river', 'look']) assert.equal(s[k], soll[k], s.id + ': ' + k);
+    assert.deepEqual(s.at, soll.at, s.id + ': at');
+    assert.ok(!('bl' in s), s.id + ' hat kein Bundesland');
+    assert.ok(s.p.length >= 2 && s.p.length <= 3, s.id + ': 2–3 Absätze');
+    assert.equal(s.q.length, 2, s.id + ': 2 Rätsel');
+    const text = s.p.join(' ').toLowerCase();
+    for (const q of s.q) {
+      assert.equal(q.w.length, 2, s.id + ': 2 falsche Antworten');
+      assert.ok(text.includes(q.a.toLowerCase()), s.id + ': „' + q.a + '“ steht auf der Tafel');
+    }
+    assert.ok(s.fish.length >= 6 && s.fish.length <= 9, s.id + ': 6–9 Fische');
+    assert.equal(new Set(s.fish).size, s.fish.length, s.id + ': kein Fisch doppelt');
+    for (const id of s.fish) assert.ok(heim[id], s.id + ': ' + id + ' gibt es in FISH');
+  }
+});
+
+test('Europa: Deutschland-Karte bleibt bei 16 Bundesländern und 18 Plätzen', async () => {
+  const spots = flussplaetze(), rhein = spots.find(s => s.id === 'bw-rhein'), schweiz = spots.find(s => s.id === 'ch-rhein');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [],
+    fluss: { 'bw-rhein': { f: ['barbe', 'nase', 'doebel'], q: true, s: true, r: true } }, flussAt: 'bw-rhein',
+    where: landeplatz(rhein, 10, -13.5) }) }); // gleich neben dem Flugzeug
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#deMap').waitFor();
+  let text = await page.textContent('#card');
+  assert.match(text, /von 16/);
+  assert.match(text, /von 18/);
+  assert.equal(await page.locator('[data-dest="ch-rhein"]').count(), 0, 'die Schweiz kommt erst mit Task 2 in die Liste');
+  // mitten auf die Karte tippen geht ohne Fehler
+  const box = await page.locator('#deMap').boundingBox();
+  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(300);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+  // am Platz in der Schweiz: die Deutschland-Karte geht auf, ohne roten Ring und ohne Absturz
+  // (ohne LINKS ist der Platz noch nicht offen, darum baut ihn die Test-Hilfe __test.platz)
+  const b = await newPage();
+  await seed(b.page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+  await startGame(b.page);
+  await b.page.click('#btnGo');
+  const l = landeplatz(schweiz, 10, -13.5);
+  assert.equal(await b.page.evaluate(l => window.__test.platz('ch-rhein', l.x, l.z), l), true);
+  await b.page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+  await b.page.click('#btnCtx');
+  await b.page.locator('#deMap').waitFor();
+  text = await b.page.textContent('#card');
+  assert.match(text, /von 16/);
+  assert.match(text, /von 18/);
+  assert.deepEqual(b.errors, []);
+  await b.ctx.close();
+});
+
+test('Europa: Hannes grüßt in der Landessprache, Schild und Tafel nennen das Land', async () => {
+  const spots = flussplaetze();
+  for (const [id, gruss, land, hs] of [['ch-rhein', 'Grüezi', 'Schweiz', 'Bern'], ['hu-donau', 'Jó napot', 'Ungarn', 'Budapest']]) {
+    const s = spots.find(x => x.id === id);
+    const { ctx, page, errors } = await newPage();
+    await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    const l = landeplatz(s, -6, -12.5); // neben dem Stand von Hannes
+    assert.equal(await page.evaluate(([id, l]) => window.__test.platz(id, l.x, l.z), [id, l]), true);
+    await page.locator('#btnCtx:has-text("Fischer Hannes")').waitFor({ timeout: 20000 });
+    await page.click('#btnCtx');
+    await page.locator('#card h2:has-text("Fischer Hannes")').waitFor();
+    let text = await page.textContent('#card');
+    assert.ok(text.includes(gruss), id + ': Hannes sagt „' + gruss + '“');
+    assert.doesNotMatch(text, /Grüß Gott|Hallo,/, id + ': nicht wie in Deutschland');
+    assert.ok(text.includes(land), id + ': Hannes nennt das Land');
+    await page.click('#card button:has-text("Tschüss")');
+    await page.evaluate(z => window.__test.warp(-2.8, z), -1800 - s.hw - 9); // vor die Infotafel
+    await page.locator('#btnCtx:has-text("Infotafel")').waitFor({ timeout: 20000 });
+    await page.click('#btnCtx');
+    await page.locator('#card h2', { hasText: s.name }).waitFor();
+    text = await page.textContent('#card');
+    assert.ok(text.includes('Land: ' + land), id + ': Tafel nennt das Land');
+    assert.ok(text.includes('Hauptstadt: ' + hs), id + ': Tafel nennt die Hauptstadt');
+    assert.doesNotMatch(text, /Bundesland:/, id + ': kein Bundesland');
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
 });
 
 test('Fischer Hannes am Heimat-See: Fische gleich dort verkaufen', async () => {

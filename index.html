@@ -2289,16 +2289,17 @@ function sellList(again,bye){
 }
 
 // Fischer Hannes an den Flüssen: Fische verkaufen wie bei Rosa, Angelsachen kaufen wie bei Opa Tiago (ohne Boote)
-const GRUSS={bw:'Grüß Gott',by:'Servus',hh:'Moin',sh:'Moin',hb:'Moin',ni:'Moin',mv:'Moin'};
+const GRUSS={bw:'Grüß Gott',by:'Servus',hh:'Moin',sh:'Moin',hb:'Moin',ni:'Moin',mv:'Moin',
+  ch:'Grüezi',nl:'Goedendag',at:'Servus',hu:'Jó napot',cz:'Dobrý den'}; // Bundesländer und Länder in Europa (LAENDER)
 let hannesTab='verkaufen';
 // Welcher Stand ist in der Nähe? (am Flussplatz oder am Heimat-See)
 const hannesNear=()=>{const h=atCity()?(cityBuilt&&hannesHafen):atDE()?(curSpot&&hannes):atLake()?hannesSee:null;return h&&Math.hypot(player.pos.x-h.x,player.pos.z-h.z)<4.2;};
 function showHannes(){
   openModal();card.className='card';card.innerHTML='';
-  const bl=atDE()&&curSpot?curSpot.bl:'',b=BL[bl],hi=atCity()?'Moin':GRUSS[bl]||'Hallo';
+  const sp=atDE()&&curSpot?curSpot:null,key=sp?sp.land||sp.bl:'',o=sp&&ortVon(sp),hi=atCity()?'Moin':GRUSS[key]||'Hallo',de=sp&&sp.land&&LAENDER[sp.land].heisst;
   const head=el('div','rosa');head.appendChild(el('div','face hannes'));
   head.appendChild(el('div',null,'<h2>Fischer Hannes</h2><p class="small">Offen '+SHOP_HOURS_TXT+'</p><p>'+hi+', '+esc(state.avatar.name||'du')+'! Ich kaufe deine Fische und habe Angelsachen für dich.</p>'+
-    (GRUSS[bl]?'<p class="small">„'+hi+'“ sagt man oft in '+esc(b.name)+'.</p>':atCity()?'<p class="small">„Moin“ sagt man oft an der Küste.</p>':'')));
+    (GRUSS[key]?'<p class="small">„'+esc(hi)+'“ sagt man oft '+esc(o.in)+'.'+(de?' Das heißt „'+esc(de)+'“.':'')+'</p>':atCity()?'<p class="small">„Moin“ sagt man oft an der Küste.</p>':'')));
   card.appendChild(head);
   const tabs=el('div','tabs four');[['verkaufen','🐟 Verkaufen']].concat(TIAGO_TABS.filter(([id])=>id!=='boot')).forEach(([id,lb])=>{const t=el('button',null,lb);t.setAttribute('aria-pressed',hannesTab===id);
     t.onclick=()=>{hannesTab=id;showHannes();};tabs.appendChild(t);});card.appendChild(tabs);
@@ -3143,6 +3144,17 @@ const BL={
  st:{name:'Sachsen-Anhalt',hs:'Magdeburg',at:[11.63,52.13],lab:[11.55,51.75,'Sachsen-\nAnhalt']},
  sh:{name:'Schleswig-Holstein',hs:'Kiel',at:[10.13,54.32],lab:[9.55,54.5,'Schleswig-\nHolstein']},
  th:{name:'Thüringen',hs:'Erfurt',at:[11.03,50.98],lab:[10.75,50.62,'Thüringen']}};
+// Europa: Länder mit einem Angelplatz (Platz hat dann land statt bl). hs = Hauptstadt, in = „in der Schweiz“ (für Sätze),
+// heisst = was der Gruß von Hannes auf Deutsch heißt
+const LAENDER={
+ ch:{name:'Schweiz',hs:'Bern',in:'in der Schweiz'},
+ nl:{name:'Niederlande',hs:'Amsterdam',in:'in den Niederlanden',heisst:'Guten Tag'},
+ at:{name:'Österreich',hs:'Wien',in:'in Österreich'},
+ hu:{name:'Ungarn',hs:'Budapest',in:'in Ungarn',heisst:'Guten Tag'},
+ cz:{name:'Tschechien',hs:'Prag',in:'in Tschechien',heisst:'Guten Tag'}};
+// Wo liegt ein Platz? Bundesland mit Landeshauptstadt oder Land mit Hauptstadt
+function ortVon(s){if(s.land){const l=LAENDER[s.land];return {art:'Land',name:l.name,hsArt:'Hauptstadt',hs:l.hs,in:l.in};}
+  const b=BL[s.bl];return {art:'Bundesland',name:b.name,hsArt:'Landeshauptstadt',hs:b.hs,in:'in '+b.name};}
 // Die Angelplätze. hw = halbe Flussbreite, hills = Berge am Tal, bend/k = Kurven, look = Wahrzeichen, ship = Schiffe fahren vorbei.
 // p = Text der Infotafel, q = Fluss-Rätsel (a = richtig, w = falsch). Die Antworten stehen alle auf der Tafel.
 const SPOTS=[
@@ -3270,8 +3282,45 @@ const SPOTS=[
    'Der Fernsehturm ist 368 Meter hoch. Er ist das höchste Bauwerk in Deutschland.',
    'Die Spree fließt mitten durch die Stadt und mündet in Berlin-Spandau in die Havel.'],
   q:[{q:'Was ist die Hauptstadt von Deutschland?',a:'Berlin',w:['Bonn','Hamburg']},
-   {q:'Wie hoch ist der Berliner Fernsehturm?',a:'368 Meter',w:['36 Meter','3.680 Meter']}]}];
+   {q:'Wie hoch ist der Berliner Fernsehturm?',a:'368 Meter',w:['36 Meter','3.680 Meter']}]},
+ // Europa: neue Plätze nur hier unten anhängen (buildSpot würfelt mit SPOTS.indexOf). Quellen: docs/fakten-quellen.md, „Europa (v45)“
+ {id:'ch-rhein',land:'ch',river:'Rhein',name:'Rhein am Rheinfall',at:[8.615,47.678],hw:14,hills:12,bend:6,k:0.02,look:'rheinfall',
+  fish:['aesche','forelle','barbe','doebel','nase','hecht','barsch','rotauge'],
+  p:['Du bist in der Schweiz. Die Hauptstadt ist Bern. Die Schweizer nennen sie Bundesstadt.',
+   'Der Rhein entspringt in den Alpen in der Schweiz. Er fließt durch den Bodensee und dann nach Westen bis Basel. Dort biegt er nach Norden ab.',
+   'Hier stürzt der Rhein über Felsen in die Tiefe: Das ist der Rheinfall. Er ist etwa 150 Meter breit und 23 Meter hoch. Er ist einer der größten Wasserfälle in Europa. Hier leben Äschen. Sie mögen kühles Wasser, das schnell fließt.'],
+  q:[{q:'Wie heißt die Hauptstadt der Schweiz?',a:'Bern',w:['Zürich','Genf']},
+   {q:'Wie hoch ist der Rheinfall ungefähr?',a:'23 Meter',w:['2 Meter','230 Meter']}]},
+ {id:'nl-rhein',land:'nl',river:'Rhein',name:'Lek bei Kinderdijk',at:[4.635,51.884],hw:16,hills:0,bend:3,k:0.015,look:'kinderdijk',ship:'fracht',
+  fish:['brachse','zander','aal','rotauge','barsch','hecht','karpfen'],
+  p:['Du bist in den Niederlanden. Die Hauptstadt ist Amsterdam. Etwa ein Viertel vom Land liegt tiefer als das Meer. Deiche schützen es vor dem Wasser.',
+   'Der Rhein kommt aus Deutschland. In den Niederlanden teilt er sich in mehrere Arme. Einer davon heißt Lek. Er fließt zur Nordsee.',
+   'In Kinderdijk stehen 19 alte Windmühlen. Sie sind fast 300 Jahre alt. Früher pumpten sie das Wasser von den Wiesen in den Fluss. So blieb das Land trocken.'],
+  q:[{q:'Wie heißt der Rheinarm bei Kinderdijk?',a:'Lek',w:['Moldau','Spree']},
+   {q:'Wie viele alte Windmühlen stehen in Kinderdijk?',a:'19',w:['3','500']}]},
+ {id:'at-donau',land:'at',river:'Donau',name:'Donau in Wien',at:[16.41,48.22],hw:15,hills:2,bend:4,k:0.015,look:'wien',ship:'fracht',
+  fish:['barbe','nase','zander','wels','rapfen','brachse','doebel','hecht','karpfen'],
+  p:['Du bist in Österreich. Die Hauptstadt ist Wien. Wien ist auch die größte Stadt im Land.',
+   'Die Donau kommt aus Deutschland. Hinter Passau fließt sie nach Österreich. Von Wien fließt sie weiter nach Osten, in die Slowakei und nach Ungarn.',
+   'Im Prater, einem großen Park, steht das Riesenrad. Es ist über 120 Jahre alt und etwa 65 Meter hoch. In der Donau bei Wien leben Barben und Nasen. Sie mögen Wasser, das schnell fließt.'],
+  q:[{q:'Wie heißt die Hauptstadt von Österreich?',a:'Wien',w:['Salzburg','Graz']},
+   {q:'Wo steht das Wiener Riesenrad?',a:'Im Prater',w:['Auf einer Insel','Auf einem Berg']}]},
+ {id:'hu-donau',land:'hu',river:'Donau',name:'Donau in Budapest',at:[19.046,47.507],hw:17,hills:6,bend:3,k:0.015,look:'budapest',ship:'fracht',
+  fish:['wels','zander','karpfen','brachse','rapfen','barbe','hecht'],
+  p:['Du bist in Ungarn. Die Hauptstadt ist Budapest. Sie entstand 1873 aus mehreren Städten. Die zwei größten hießen Buda und Pest. Buda liegt am Westufer der Donau, Pest am Ostufer.',
+   'Die Donau kommt aus Österreich und der Slowakei. In Budapest fließt sie mitten durch die Stadt. Dann fließt sie nach Süden und später bis ins Schwarze Meer.',
+   'Das Parlament steht in Pest direkt an der Donau. Es ist etwa 268 Meter lang. Seine Kuppel ist 96 Meter hoch.'],
+  q:[{q:'Wie hießen die zwei größten Städte, aus denen Budapest wurde?',a:'Buda und Pest',w:['Wien und Prag','Bonn und Berlin']},
+   {q:'Welches große Gebäude steht in Budapest an der Donau?',a:'Das Parlament',w:['Ein Leuchtturm','Eine Windmühle']}]},
+ {id:'cz-moldau',land:'cz',river:'Moldau',name:'Moldau in Prag',at:[14.411,50.086],hw:10,hills:6,bend:5,k:0.02,look:'prag',ship:'dampfer',
+  fish:['karpfen','wels','zander','hecht','doebel','brachse','barbe','rotauge','barsch'],
+  p:['Du bist in Tschechien. Die Hauptstadt ist Prag. Prag liegt an der Moldau, nicht an der Elbe.',
+   'Die Moldau ist der längste Fluss in Tschechien. Sie entspringt im Böhmerwald und fließt nach Norden. Bei Mělník mündet sie in die Elbe. Die Elbe fließt weiter nach Deutschland.',
+   'Die Karlsbrücke ist eine alte Steinbrücke. Ihr Bau begann 1357 unter Kaiser Karl IV. Auf der Brücke stehen 30 Figuren, und an beiden Enden stehen Brückentürme.'],
+  q:[{q:'In welchen Fluss mündet die Moldau?',a:'In die Elbe',w:['In den Rhein','In die Donau']},
+   {q:'Wie heißt die alte Steinbrücke in Prag?',a:'Karlsbrücke',w:['Basteibrücke','Rheinbrücke']}]}];
 const SPOTS_BY=Object.create(null);SPOTS.forEach(s=>SPOTS_BY[s.id]=s);
+const deSpots=()=>SPOTS.filter(s=>!s.land); // nur die 18 Plätze in Deutschland (für die Deutschland-Karte)
 // Wege zwischen den Plätzen: [Platz, Platz, Fluss, warum]. Hat man an einem Ende den Stempel, öffnet sich das andere.
 const LINKS=[
  ['bw-neckar','bw-rhein','Neckar','Der Neckar fließt bei Mannheim in den Rhein.'],
@@ -3300,6 +3349,7 @@ const STAMP_FISH=3,STAMP_LUDINS=25;
 
 /* ---- Der Flussplatz in 3D: Tal, Bäume, Steg, Flugzeug, Infotafel, Wahrzeichen, Schiffe ---- */
 let deGroup=null,curSpot=null,deShip=null,spotBloom=null;
+const deSpin=[]; // Dinge am Flussplatz, die sich langsam drehen oder sanft bewegen (Windmühlen, Riesenrad, Gischt). Neu bei jedem buildSpot.
 const deBoard={id:'de',x:0,z:0,ico:'🌊',title:''};
 const PAPPEL=merge([part(new THREE.CylinderGeometry(0.2,0.3,3,6),'#6b5a44',M(0,1.5,0)),part(new THREE.IcosahedronGeometry(1.3,0),'#4f7f2f',M(0,6,0,0,0,0,1,3,1))]);
 const WEIDE=merge([part(new THREE.CylinderGeometry(0.35,0.45,2.2,6),'#6b5a44',M(0,1.1,0)),part(new THREE.IcosahedronGeometry(2.2,0),'#8aab5a',M(0,3.4,0,0,0,0,1.2,0.8,1.2))]);
@@ -3439,21 +3489,79 @@ const LOOKS={
   const bz=riverZ(-30),b=new THREE.Group();g.add(b);bx(b,2.4,0.3,2*deP.hw+6,'#8a6340',-30,1.6,bz);for(const s of[-1,1])bx(b,0.15,0.9,2*deP.hw+6,'#6b4a2e',-30+s*1.1,1.9,bz);deCols.push({x:-30,z:sbz(-30,1),r:1.6});},
  berlin(g,R,noTree){const x=10,z=nbz(10,55),t=grp(g,x,z,-0.5);cy(t,1,1.7,26,'#d9d9d6',0,0,0,12);ball(t,3.2,'#b9bec4',0,29,0);cy(t,3.3,3.3,0.5,'#8a9096',0,28.7,0,20);
   cy(t,0.6,0.7,4,'#d9d9d6',0,32,0);for(let i=0;i<5;i++)cy(t,0.2,0.25,1.8,i%2?'#f4f4f0':'#d23a2a',0,36+i*1.8,0,8);noTree.push({x,z,r:10});
-  town(g,R,-95,-6,1,6,noTree);town(g,R,26,95,1,6,noTree);}};
+  town(g,R,-95,-6,1,6,noTree);town(g,R,26,95,1,6,noTree);},
+ // ---- Europa ----
+ rheinfall(g,R,noTree){const fx=48,fz=riverZ(fx),ry=-Math.atan(deP.bend*deP.k*Math.cos(fx*deP.k)),c=Math.cos(ry),sn=Math.sin(ry);
+  const W=(lx,lz)=>[fx+lx*c+lz*sn,fz-lx*sn+lz*c]; // Punkt quer zum Fluss (lz) an der Fallkante in der Welt
+  const f=new THREE.Group();f.position.set(fx,0,fz);f.rotation.y=ry;g.add(f);
+  // die weiße Wasserfall-Stufe: vorne schäumt es, dahinter liegt die Kante etwas tiefer
+  for(let lz=-deP.hw-1;lz<=deP.hw+1;lz+=2.4){const h=Math.max(1.2,3.6-Math.abs(lz)/deP.hw*1.6)+R()*0.6;
+    bx(f,1.8,h+0.6,2.6,R()<0.5?'#f4f8fa':'#e6f2f7',0,-0.6,lz);bx(f,1.6,h,2.6,'#cfe6f0',1.6,-0.6,lz);}
+  // Gischt unten am Fall: weiche, halb durchsichtige Wolken, die sanft atmen
+  const spray=new THREE.MeshLambertMaterial({color:'#ffffff',transparent:true,opacity:0.5,depthWrite:false}),mist=new THREE.MeshLambertMaterial({color:'#ffffff',transparent:true,opacity:0.3,depthWrite:false});
+  for(let lz=-deP.hw;lz<=deP.hw;lz+=3){for(const [lx,y,r,op] of[[-2.2,0.4,1.6,1],[-4.5,1.6,2.2,0.6]]){
+    const m=new THREE.Mesh(new THREE.SphereGeometry(r+R()*0.6,10,8),op<1?mist:spray);m.userData.tex=true;
+    m.position.set(lx-R(),y,lz+R());const sy=op<1?0.8:0.45;m.scale.set(1.2,sy,1);f.add(m);deSpin.push({o:m,puff:true,ph:R()*6,sx:1.2,sy,sz:1});}}
+  // Felsen im Fluss, auf dem größten weht die Schweizer Fahne
+  const [rx,rz]=W(0.8,-1.5),top=rock(g,rx,rz,2.6,12.5,'#7d776c');
+  for(const [lx,lz,r,h] of[[0.5,-deP.hw*0.55,1.8,8.5],[1.2,deP.hw*0.45,2,9.5],[-1,deP.hw*0.15,1.2,6.5]]){const [x,z]=W(lx,lz);rock(g,x,z,r,h,'#8a8478');}
+  cy(g,0.06,0.06,3,'#e8e8e8',rx,top-0.2,rz,6);
+  const cv=document.createElement('canvas');cv.width=cv.height=64;const cx=cv.getContext('2d');cx.fillStyle='#d52b1e';cx.fillRect(0,0,64,64);cx.fillStyle='#ffffff';cx.fillRect(26,12,12,40);cx.fillRect(12,26,40,12);
+  const fl=new THREE.Mesh(new THREE.PlaneGeometry(1.3,1.3),new THREE.MeshBasicMaterial({map:new THREE.CanvasTexture(cv),side:THREE.DoubleSide}));fl.userData.tex=true;fl.position.set(rx+0.7,top+2.1,rz);g.add(fl);
+  town(g,R,-95,-12,1,10,noTree);},
+ kinderdijk(g,R,noTree){
+  // der Deich am Nordufer: ein langer grüner Wall
+  for(let x=-104;x<104;x+=16){const z=nbz(x,8),m=gable(g,9,2.6,16.6,'#6f9a45',x,heightAt(x,z)-0.6,z);m.rotation.y=-Math.atan(deP.bend*deP.k*Math.cos(x*deP.k));}
+  for(const x of[-64,-34,22,52]){const z=nbz(x,8),m=grp(g,x,z,1.6);
+    cy(m,3.4,3.6,1.4,'#7a4a35',0,0,0,8);cy(m,2.1,3.3,9,'#5a5248',0,1.4,0,8);cn(m,2.4,2.6,'#3f3a33',0,10.4,0,8); // Sockel, Körper mit Reet, Kappe
+    bx(m,0.9,1.6,0.1,'#5e4128',0,0,-3.4);
+    const s=new THREE.Group();s.position.set(0,9.6,-2.7);m.add(s);cy(s,0.35,0.35,0.6,'#3f3a33',0,-0.3,0,8).rotation.x=Math.PI/2;
+    for(let i=0;i<4;i++){const a=new THREE.Group();a.rotation.z=i*Math.PI/2+0.4;s.add(a);
+      bx(a,0.22,8.6,0.14,'#6b4a2e',0,0.3,0);bx(a,1.5,6.6,0.06,'#ece4d0',0.85,2.2,0.05);}
+    deSpin.push({o:s,ax:'z',sp:0.35+R()*0.15});deCols.push({x,z,r:3.8});noTree.push({x,z,r:8});}
+  town(g,R,-100,-76,1,16,noTree);town(g,R,64,100,1,16,noTree);},
+ wien(g,R,noTree){const x=24,z=nbz(24,28),t=grp(g,x,z,-0.3),Rr=11,H=13.5;
+  const beam=(x1,y1,z1,x2,y2,z2,r,col)=>{const d=new THREE.Vector3(x2-x1,y2-y1,z2-z1),m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,d.length(),6),mat(col));
+    m.position.set((x1+x2)/2,(y1+y2)/2,(z1+z2)/2);m.quaternion.setFromUnitVectors(new THREE.Vector3(0,1,0),d.normalize());t.add(m);return m;};
+  for(const sz of[-1.6,1.6])for(const sx of[-6,6])beam(sx,0,sz*2,0,H,sz,0.35,'#4f5a52'); // die Beine
+  bx(t,10,2.4,5,'#e9c9a0',0,0,6);gable(t,5.4,1.6,10.4,'#8a3b2a',0,2.4,6); // Kassenhaus
+  const w=new THREE.Group();w.position.set(0,H,0);t.add(w);cy(w,0.5,0.5,3.6,'#3f4a44',0,-1.8,0,8).rotation.x=Math.PI/2;
+  for(const sz of[-0.9,0.9]){const rim=new THREE.Mesh(new THREE.TorusGeometry(Rr,0.25,6,40),mat('#4f5a52'));rim.position.z=sz;w.add(rim);
+    for(let i=0;i<12;i++){const a=i/12*Math.PI*2,sp=new THREE.Mesh(new THREE.BoxGeometry(0.12,Rr,0.12),mat('#6a756d'));sp.position.set(Math.cos(a)*Rr/2,Math.sin(a)*Rr/2,sz);sp.rotation.z=a-Math.PI/2;w.add(sp);}}
+  const keep=[];for(let i=0;i<10;i++){const a=i/10*Math.PI*2,k=new THREE.Group();k.position.set(Math.cos(a)*Rr,Math.sin(a)*Rr,0);w.add(k);
+    bx(k,1.7,1.3,1.4,'#c2402f',0,-1.6,0);bx(k,1.9,0.2,1.6,'#f2efe6',0,-0.3,0);bx(k,1.72,0.5,1.42,'#bfe6f2',0,-1.0,0);keep.push(k);}
+  deSpin.push({o:w,ax:'z',sp:0.06,keep});deCols.push({x,z,r:7});noTree.push({x,z,r:16});
+  town(g,R,-95,-12,1,8,noTree);town(g,R,48,95,1,8,noTree);},
+ budapest(g,R,noTree){const x=8,z=nbz(8,16),c=grp(g,x,z,-0.5),W='#f1ede2',RF='#8a3b2a',D='#a5452f';
+  bx(c,52,11,10,W,0,0,0);gable(c,10.6,3,52.4,RF,0,11,0); // langer Hauptbau
+  for(const sx of[-1,1]){bx(c,7,13,12,W,sx*29,0,0);gable(c,12.6,3.6,7.4,RF,sx*29,13,0);} // Seitenflügel
+  for(let i=0;i<20;i++)for(const fy of[3,7])bx(c,1,2,0.1,'#6b7b88',-23.75+i*2.5,fy,-5.03); // Fenster zum Fluss
+  for(let i=-4;i<=4;i++){if(!i)continue;const tx=i*6;bx(c,1.1,14,1.1,W,tx,0,-5.3);cn(c,0.75,2.6,W,tx,14,-5.3,4,Math.PI/4);} // kleine Türmchen
+  cy(c,5.4,5.6,5,W,0,11,0,16);ball(c,5.2,D,0,16.5,0,1,1.25,1);cy(c,0.9,1.1,2.6,W,0,22.4,0,8);cn(c,0.9,4.5,D,0,25,0,8); // Kuppel
+  for(const sx of[-9,9]){bx(c,2.6,20,2.6,W,sx,0,-4);cn(c,1.8,5.5,D,sx,20,-4,4,Math.PI/4);}
+  for(const dx of[-26,0,26])deCols.push({x:x+dx,z,r:8});noTree.push({x,z,r:36});
+  town(g,R,-95,-30,1,8,noTree);town(g,R,48,95,1,8,noTree);},
+ prag(g,R,noTree){const X=-45,Y=7.2,b=bridge(g,X,Y,'#b9a98a',{piers:6,w:7}),L=b.z1-b.z0;
+  for(let i=1;i<16;i++){if(i===8)continue;const zz=b.z0+L*i/16;for(const s of[-1,1]){cy(b.c,0.35,0.4,1.4,'#8f8577',X+s*3.1,Y+1,zz,6);ball(b.c,0.32,'#4a4540',X+s*3.1,Y+2.7,zz,1,1.6,1);}} // Figuren auf der Brücke
+  for(const zt of[b.z0+2.5,b.z1-2.5]){const t=grp(g,X,zt,-0.6),y0=heightAt(X,zt)-0.6,top=Y+15-y0;
+    bx(t,9.4,top,6,'#4a4540',0,0,0);cn(t,6.4,7,'#2e2b28',0,top,0,4,Math.PI/4);bx(t,7.2,4.6,6.3,'#1e1b18',0,Y+1-y0,0); // Turm, spitzes Dach, Tor
+    for(const s of[-1,1])bx(t,1.2,1.6,0.1,'#1e1b18',s*2.4,top-4,-3.05);
+    deCols.push({x:X,z:zt,r:4.6});noTree.push({x:X,z:zt,r:9});}
+  town(g,R,-25,95,1,8,noTree);town(g,R,-95,-58,1,8,noTree);}};
 let fachMat=null;
 function disposeGroup(g){g.traverse(o=>{if(!o.isMesh)return;if(!o.userData.shared&&o.geometry)o.geometry.dispose();
   if(o.userData.tex){if(o.material.map)o.material.map.dispose();o.material.dispose();}});}
 // Den Flussplatz id bauen (der alte wird weggeräumt)
 function buildSpot(id){const s=SPOTS_BY[id];if(!s)return false;
   if(deGroup){scene.remove(deGroup);disposeGroup(deGroup);}
-  deCols.length=0;deP={hw:s.hw,hills:s.hills,bend:s.bend,k:s.k};curSpot=s;state.flussAt=id;
+  deCols.length=0;deSpin.length=0;deP={hw:s.hw,hills:s.hills,bend:s.bend,k:s.k};curSpot=s;state.flussAt=id;
   DDOCK.z0=DE.z-s.hw-6;DDOCK.z1=DE.z-s.hw+Math.min(7,s.hw*0.6);
   const g=new THREE.Group();deGroup=g;scene.add(g);const R=rng(9000+SPOTS.indexOf(s)*131);
   // Boden: Wasser, Kies, Wiese, Wald auf den Bergen, Felsen
   const tg=new THREE.PlaneGeometry(DE.w*2,DE.l*2,140,140);tg.rotateX(-Math.PI/2);tg.translate(0,0,DE.z);
   const tp=tg.attributes.position;for(let i=0;i<tp.count;i++)tp.setY(i,deHeight(tp.getX(i),tp.getZ(i)));
   const geo=tg.toNonIndexed();tg.dispose();geo.computeVertexNormals();
-  const P=geo.attributes.position,N=geo.attributes.normal,cols=new Float32Array(P.count*3),c=new THREE.Color(),GR=['#5a8f3a','#649a40','#4f8535','#6fa046'],rocky=['loreley','bastei','sigmaringen'].includes(s.look);
+  const P=geo.attributes.position,N=geo.attributes.normal,cols=new Float32Array(P.count*3),c=new THREE.Color(),GR=['#5a8f3a','#649a40','#4f8535','#6fa046'],rocky=['loreley','bastei','sigmaringen','rheinfall'].includes(s.look);
   for(let i=0;i<P.count;i+=3){const cx=(P.getX(i)+P.getX(i+1)+P.getX(i+2))/3,cyy=(P.getY(i)+P.getY(i+1)+P.getY(i+2))/3,cz=(P.getZ(i)+P.getZ(i+1)+P.getZ(i+2))/3;
     const n=hash(Math.round(cx*3),Math.round(cz*3)),steep=N.getY(i)<0.75;
     c.set(cyy<-0.4?'#4f5a3a':cyy<0.4?(n<.5?'#b9a77a':'#a9976c'):rocky&&steep&&cyy>3?(n<.5?'#a8987a':'#988a6e'):cyy>6?(n<.5?'#3f7a34':'#477f37'):GR[Math.floor(n*4)]);
@@ -3465,7 +3573,7 @@ function buildSpot(id){const s=SPOTS_BY[id];if(!s)return false;
   for(let i=0;i<=4;i++)for(const sd of[-1,1])cy(g,0.13,0.13,3.2,'#5e4128',sd*1.3,-2.6,DDOCK.z0+0.2+i*len/4.2,6);
   // Flugzeug, Schild, Infotafel
   const pz=DE.z-s.hw-16;Object.assign(PLANES[2],{x:12,z:pz,land:{x:3,z:DE.z-s.hw-13,f:0}});PLANES[2].mesh=makePlane(12,pz,-Math.PI/2,g,deCols);
-  makeSign(s.river,BL[s.bl].name,6.5,DE.z-s.hw-9,'#2f7fd8',g,deCols,Math.PI);
+  makeSign(s.river,ortVon(s).name,6.5,DE.z-s.hw-9,'#2f7fd8',g,deCols,Math.PI);
   Object.assign(deBoard,{x:-2.8,z:landZ(-2.8,DE.z-s.hw-6.5,4),title:s.name});makeBoard(deBoard,-2.8,DE.z,g,deCols);
   buildHannes(g,-9,landZ(-9,DE.z-s.hw-10,5));
   const noTree=[{x:2,z:DE.z-s.hw-12,r:20}];
@@ -4154,41 +4262,48 @@ function updatePeople(dt,t){if(!people.length||!atCity())return;
 function updateDeShip(dt){if(!deShip)return;deShip.g.visible=atDE();if(!deShip.g.visible)return;
   deShip.x+=deShip.sp*dt;if(deShip.x>DE.w+12)deShip.x=-DE.w-12;const x=deShip.x;
   deShip.g.position.set(x,0.05,riverZ(x)+deP.hw*deShip.lane);deShip.g.rotation.y=-Math.atan(deP.bend*deP.k*Math.cos(x*deP.k));}
+// Windmühlen-Flügel und Riesenrad drehen sich langsam (die Gondeln bleiben gerade), die Gischt am Rheinfall atmet sanft
+function updateDeSpin(dt,t){if(!deSpin.length||!atDE())return;
+  for(const e of deSpin){if(e.sp){e.o.rotation[e.ax]+=e.sp*dt;if(e.keep)for(const k of e.keep)k.rotation.z=-e.o.rotation.z;}
+    if(e.puff){const q=1+0.1*Math.sin(t*1.4+e.ph);e.o.scale.set(e.sx*q,e.sy*q,e.sz*q);}}}
 
 /* ---- Fortschritt: Stempel und freigespielte Plätze ---- */
 const prog=id=>state.fluss[id]||(state.fluss[id]={f:[],q:false,s:false,r:false});
 const stamped=id=>!!(state.fluss[id]&&state.fluss[id].s);
 const spotOpen=id=>START_SPOTS.includes(id)||LINKS.some(l=>(l[0]===id&&stamped(l[1]))||(l[1]===id&&stamped(l[0])));
-const blOpen=b=>SPOTS.some(s=>s.bl===b&&spotOpen(s.id));
+const blOpen=b=>deSpots().some(s=>s.bl===b&&spotOpen(s.id));
+const landOpen=k=>SPOTS.some(s=>s.land===k&&spotOpen(s.id)); // Land in Europa mit einem offenen Platz
 const linksOf=id=>LINKS.filter(l=>l[0]===id||l[1]===id).map(l=>({to:l[0]===id?l[1]:l[0],river:l[2],why:l[3]}));
 let pendingStamp=null;
-// Stempel geben, wenn alles geschafft ist. Gibt zurück, welche Plätze und Bundesländer dadurch neu offen sind.
+// Stempel geben, wenn alles geschafft ist. Gibt zurück, welche Plätze, Bundesländer und Länder dadurch neu offen sind.
 function tryStamp(id){const p=prog(id);if(p.s||p.f.length<STAMP_FISH||!p.q)return null;
-  const before=SPOTS.filter(x=>spotOpen(x.id)).map(x=>x.id),blBefore=Object.keys(BL).filter(blOpen);
+  const before=SPOTS.filter(x=>spotOpen(x.id)).map(x=>x.id),blBefore=Object.keys(BL).filter(blOpen),landBefore=Object.keys(LAENDER).filter(landOpen);
   p.s=true;earn(STAMP_LUDINS);save();refreshHud(true);
-  return {spots:SPOTS.filter(x=>spotOpen(x.id)&&!before.includes(x.id)),bls:Object.keys(BL).filter(b=>blOpen(b)&&!blBefore.includes(b))};}
+  return {spots:SPOTS.filter(x=>spotOpen(x.id)&&!before.includes(x.id)),bls:Object.keys(BL).filter(b=>blOpen(b)&&!blBefore.includes(b)),
+    lands:Object.keys(LAENDER).filter(k=>landOpen(k)&&!landBefore.includes(k))};}
 function showStamp(s,res){
   openModal();card.className='card catch';card.innerHTML='';sfxCatch();
   card.appendChild(el('div','stampbig','🏅'));
   card.appendChild(el('h2',null,'Fluss-Stempel!'));
   card.appendChild(el('p',null,'Du hast den Stempel für <b>'+esc(s.name)+'</b>. <b>+'+STAMP_LUDINS+' Ludins</b>'));
   if(res.bls.length)card.appendChild(el('p','qe','🎉 Neues Bundesland: <b>'+res.bls.map(b=>esc(BL[b].name)).join(', ')+'</b>!'));
+  if(res.lands&&res.lands.length)card.appendChild(el('p','qe','🎉 Neues Land: <b>'+res.lands.map(k=>esc(LAENDER[k].name)).join(', ')+'</b>!'));
   if(res.spots.length){card.appendChild(el('p',null,'Jetzt kannst du dem Fluss folgen. Mit dem Flugzeug ✈️ kommst du hin:'));const l=el('div','list');
-    res.spots.forEach(x=>{const lk=linksOf(s.id).find(k=>k.to===x.id);l.appendChild(el('div','item shopitem','<div class="shopicon">🌊</div><div class="t"><b>'+esc(x.name)+'</b><span>'+esc(BL[x.bl].name)+(lk?' · '+esc(lk.why):'')+'</span></div><span></span>'));});
+    res.spots.forEach(x=>{const lk=linksOf(s.id).find(k=>k.to===x.id);l.appendChild(el('div','item shopitem','<div class="shopicon">🌊</div><div class="t"><b>'+esc(x.name)+'</b><span>'+esc(ortVon(x).name)+(lk?' · '+esc(lk.why):'')+'</span></div><span></span>'));});
     card.appendChild(l);}
   else card.appendChild(el('p',null,'Die Nachbar-Plätze sind schon offen. Flieg weiter und sammle mehr Stempel!'));
   const bt=el('div','btns');const mp=el('button','b','🗺️ Deutschland-Karte');mp.onclick=()=>showGermany('view');
   const ok=el('button','b go','Weiter angeln');ok.onclick=closeModal;bt.append(mp,ok);card.appendChild(bt);}
 function afterCatch(){if(!pendingStamp)return;const x=pendingStamp;pendingStamp=null;setTimeout(()=>showStamp(x.s,x.res),250);}
 /* ---- Die Infotafel am Flussplatz ---- */
-function showSpotInfo(s){const p=prog(s.id),b=BL[s.bl];
+function showSpotInfo(s){const p=prog(s.id),o=ortVon(s);
   openModal();card.className='card info';card.innerHTML='';
   card.appendChild(el('div','infohead','ℹ️ Infotafel'));
   card.appendChild(el('h2',null,'🌊 '+esc(s.name)));
   if(!p.r){p.r=true;earn(INFO_LUDINS);save();refreshHud(true);card.appendChild(el('p','qe','📚 Neues Wissen! +'+INFO_LUDINS+' Ludins.'));}
   if(p.s)card.appendChild(el('div','rule','<b>🏅 Du hast den Fluss-Stempel!</b><p>Von hier geht es weiter: '+linksOf(s.id).map(k=>esc(SPOTS_BY[k.to].name)+' ('+esc(k.river)+')').join(', ')+'</p>'));
-  else card.appendChild(el('div','rule','<b>🏅 So bekommst du den Fluss-Stempel</b><p>🐟 Fang hier '+STAMP_FISH+' verschiedene Fischarten: <b>'+Math.min(p.f.length,STAMP_FISH)+' von '+STAMP_FISH+'</b><br>🧩 Löse das Fluss-Rätsel: <b>'+(p.q?'geschafft ✔':'noch nicht')+'</b></p><small>Mit dem Stempel darfst du dem Fluss ins nächste Bundesland folgen.</small>'));
-  card.appendChild(el('p',null,'📍 Bundesland: <b>'+esc(b.name)+'</b> · Landeshauptstadt: <b>'+esc(b.hs)+'</b>'));
+  else card.appendChild(el('div','rule','<b>🏅 So bekommst du den Fluss-Stempel</b><p>🐟 Fang hier '+STAMP_FISH+' verschiedene Fischarten: <b>'+Math.min(p.f.length,STAMP_FISH)+' von '+STAMP_FISH+'</b><br>🧩 Löse das Fluss-Rätsel: <b>'+(p.q?'geschafft ✔':'noch nicht')+'</b></p><small>Mit dem Stempel darfst du dem Fluss '+(s.land?'weiter folgen':'ins nächste Bundesland folgen')+'.</small>'));
+  card.appendChild(el('p',null,'📍 '+o.art+': <b>'+esc(o.name)+'</b> · '+o.hsArt+': <b>'+esc(o.hs)+'</b>'));
   s.p.forEach(x=>card.appendChild(el('p',null,esc(x))));
   card.appendChild(el('h3','bookhead','Diese Fische leben hier'));
   const g=el('div','catches');s.fish.forEach(id=>{const f=FISH_BY[id];if(!f)return;const d=el('div');d.appendChild(fishImg(f,'cimg'));
@@ -4234,7 +4349,7 @@ function drawGermany(cv,W){const D=DEMAP,k=W/D.w,H=Math.round(D.h*k),c=hiDPI(cv,
   c.fillStyle='#a9d6ea';c.fillRect(0,0,W,H);
   for(const iso in D.nb)D.nb[iso].forEach(r=>{path(r);c.closePath();c.fillStyle='#efe8d2';c.fill();c.strokeStyle='#cbbf9f';c.lineWidth=1;c.stroke();});
   for(const id in D.states)D.states[id].forEach(r=>{path(r);c.closePath();c.fillStyle=blOpen(id)?BL_PAL[BL_COL[id]]:'#d9d3c3';c.fill();c.strokeStyle='#1b2a20';c.lineWidth=1;c.stroke();});
-  const here=atDE()&&curSpot?curSpot.bl:null;if(here)D.states[here].forEach(r=>{path(r);c.closePath();c.strokeStyle='#e2412b';c.lineWidth=3;c.stroke();});
+  const here=atDE()&&curSpot&&!curSpot.land?curSpot.bl:null;if(here)D.states[here].forEach(r=>{path(r);c.closePath();c.strokeStyle='#e2412b';c.lineWidth=3;c.stroke();});
   for(const n in D.lakes)D.lakes[n].forEach(r=>{path(r);c.closePath();c.fillStyle='#3d93b8';c.fill();});
   c.strokeStyle='#2f6fd8';c.lineWidth=Math.max(1.6,W/300);c.lineJoin=c.lineCap='round';for(const n in D.rivers)D.rivers[n].forEach(l=>{path(l);c.stroke();});
   NB_LAB.forEach(([t,lo,la])=>{const [x,y]=P(lo,la);txt(t,x,y,fs,'#8a7f66','italic 700');});
@@ -4244,10 +4359,10 @@ function drawGermany(cv,W){const D=DEMAP,k=W/D.w,H=Math.round(D.h*k),c=hiDPI(cv,
     const [lx,ly]=P(b.lab[0],b.lab[1]);txt(b.lab[2],lx,ly,fs,'#1b2a20');}
   // Wege zu den Plätzen, die man als Nächstes freispielen kann
   c.setLineDash([5,5]);c.strokeStyle='#c27c0e';c.lineWidth=2.5;
-  LINKS.forEach(([a,b2])=>{if(spotOpen(a)===spotOpen(b2))return;const A=P(...SPOTS_BY[a].at),B=P(...SPOTS_BY[b2].at);c.beginPath();c.moveTo(...A);c.lineTo(...B);c.stroke();});
+  LINKS.forEach(([a,b2])=>{if(spotOpen(a)===spotOpen(b2)||SPOTS_BY[a].land||SPOTS_BY[b2].land)return;const A=P(...SPOTS_BY[a].at),B=P(...SPOTS_BY[b2].at);c.beginPath();c.moveTo(...A);c.lineTo(...B);c.stroke();}); // nur Wege in Deutschland
   c.setLineDash([]);
   const r=Math.max(12,Math.round(W/34)),hits=[];
-  SPOTS.forEach(s=>{const [x,y]=P(s.at[0],s.at[1]),open=spotOpen(s.id),st=stamped(s.id),me=atDE()&&curSpot===s;
+  deSpots().forEach(s=>{const [x,y]=P(s.at[0],s.at[1]),open=spotOpen(s.id),st=stamped(s.id),me=atDE()&&curSpot===s;
     c.beginPath();c.arc(x,y,open?r:r*0.8,0,7);c.fillStyle=st?'#f6c13b':open?'#ffffff':'#a49e92';c.fill();c.lineWidth=me?4:2.5;c.strokeStyle=me?'#e2412b':open?'#2f9e5b':'#6d675c';c.stroke();
     drawIcon(c,st?'🏅':open?'🎣':'🔒',x,y,open?r*1.1:r*0.85);hits.push({s,x,y});});
   // Norden und Maßstab
@@ -4257,8 +4372,8 @@ function drawGermany(cv,W){const D=DEMAP,k=W/D.w,H=Math.round(D.h*k),c=hiDPI(cv,
 function showGermany(mode){
   stopFishing();openModal();card.className='card mapcard';card.innerHTML='';
   card.appendChild(el('h2',null,mode==='fly'?'✈️ Wohin fliegst du?':'🗺️ Deutschland-Karte'));
-  const nOpen=Object.keys(BL).filter(blOpen).length,nSt=SPOTS.filter(s=>stamped(s.id)).length;
-  card.appendChild(el('p',null,'Freigespielt: <b>'+nOpen+' von 16</b> Bundesländern · Fluss-Stempel: <b>'+nSt+' von '+SPOTS.length+'</b>'));
+  const de=deSpots(),nOpen=Object.keys(BL).filter(blOpen).length,nSt=de.filter(s=>stamped(s.id)).length;
+  card.appendChild(el('p',null,'Freigespielt: <b>'+nOpen+' von 16</b> Bundesländern · Fluss-Stempel: <b>'+nSt+' von '+de.length+'</b>'));
   card.appendChild(el('p','small','Tippe auf einen Angelplatz oder ein Bundesland. 🎣 offen · 🏅 Stempel geschafft · 🔒 noch zu. Die gestrichelten Linien zeigen, wohin du als Nächstes kannst. Norden ist oben.'));
   const row=el('div','maprow'),wrap=el('div','mapwrap'),cv=el('canvas');cv.id='deMap';wrap.appendChild(cv);row.appendChild(wrap);
   const side=el('div','flylist');row.appendChild(side);card.appendChild(row);
@@ -4270,11 +4385,11 @@ function showGermany(mode){
     go('🏙️ Hafenhausen'+(here==='city'?' (hier bist du)':''),'city',here==='city');
     side.appendChild(el('h3','maphead','Flüsse in Deutschland'));
     // nach Bundesländern sortiert, das Bundesland, in dem du bist, steht oben
-    const bls=[...new Set(SPOTS.filter(s=>spotOpen(s.id)).map(s=>s.bl))];
+    const bls=[...new Set(de.filter(s=>spotOpen(s.id)).map(s=>s.bl))];
     if(here==='de'&&curSpot&&bls.includes(curSpot.bl))bls.unshift(bls.splice(bls.indexOf(curSpot.bl),1)[0]);
     bls.forEach(bl=>{side.appendChild(el('span','flybl',esc(BL[bl].name)));
-      SPOTS.filter(s=>s.bl===bl&&spotOpen(s.id)).forEach(s=>go((stamped(s.id)?'🏅 ':'🌊 ')+s.name+(here==='de'&&curSpot===s?' (hier bist du)':''),s.id,here==='de'&&curSpot===s));});}
-  else{side.appendChild(el('p',null,atDE()&&curSpot?'Du bist am Fluss <b>'+esc(curSpot.river)+'</b> in <b>'+esc(BL[curSpot.bl].name)+'</b>. Der rote Ring zeigt, wo.':'Mit dem Flugzeug ✈️ fliegst du zu den Flüssen.'));
+      de.filter(s=>s.bl===bl&&spotOpen(s.id)).forEach(s=>go((stamped(s.id)?'🏅 ':'🌊 ')+s.name+(here==='de'&&curSpot===s?' (hier bist du)':''),s.id,here==='de'&&curSpot===s));});}
+  else{side.appendChild(el('p',null,atDE()&&curSpot?'Du bist am Fluss <b>'+esc(curSpot.river)+'</b> <b>'+esc(ortVon(curSpot).in)+'</b>.'+(curSpot.land?'':' Der rote Ring zeigt, wo.'):'Mit dem Flugzeug ✈️ fliegst du zu den Flüssen.'));
     [['•','Landeshauptstadt'],['🔴','Berlin, die Hauptstadt von Deutschland'],['〰️','Flüsse'],['🎣','Angelplatz, offen'],['🏅','Stempel geschafft'],['🔒','Noch nicht freigespielt']].forEach(([i,t])=>side.appendChild(el('span',null,i+' '+t)));}
   card.appendChild(el('p','small','Kartendaten: Natural Earth (gemeinfrei).'));
   const bt=el('div','btns');const cl=el('button','b alt',mode==='fly'?'Hierbleiben':'Fertig');cl.onclick=closeModal;bt.appendChild(cl);card.appendChild(bt);
@@ -4284,10 +4399,10 @@ function showGermany(mode){
     let best=null,bd=26;m.hits.forEach(h=>{const d=Math.hypot(h.x-x,h.y-y);if(d<bd){bd=d;best=h.s;}});
     if(best){showSpotPreview(best,mode);return;}
     for(const id in DEMAP.states)if(DEMAP.states[id].some(r=>inPoly(r,x/m.k,y/m.k))){const b=BL[id];toast(b.name+' · Landeshauptstadt: '+b.hs+(blOpen(id)?'':' · noch nicht freigespielt'));return;}};}
-function showSpotPreview(s,mode){const b=BL[s.bl],open=spotOpen(s.id),here=atDE()&&curSpot===s;
+function showSpotPreview(s,mode){const o=ortVon(s),open=spotOpen(s.id),here=atDE()&&curSpot===s;
   openModal();card.className='card';card.innerHTML='';
   card.appendChild(el('h2',null,(stamped(s.id)?'🏅 ':open?'🌊 ':'🔒 ')+esc(s.name)));
-  card.appendChild(el('p',null,'📍 Bundesland: <b>'+esc(b.name)+'</b> · Landeshauptstadt: <b>'+esc(b.hs)+'</b>'));
+  card.appendChild(el('p',null,'📍 '+o.art+': <b>'+esc(o.name)+'</b> · '+o.hsArt+': <b>'+esc(o.hs)+'</b>'));
   card.appendChild(el('p',null,esc(s.p[0])));
   const g=el('div','catches');s.fish.forEach(id=>{const f=FISH_BY[id];if(!f)return;const d=el('div');d.appendChild(fishImg(f,'cimg'));d.appendChild(el('b',null,esc(f.name)));g.appendChild(d);});card.appendChild(g);
   if(!open){const ls=linksOf(s.id);card.appendChild(el('div','rule','<b>🔒 Noch nicht freigespielt</b><p>Hol dir den Fluss-Stempel an einem dieser Plätze und folge dem Fluss hierher:</p><p>'+
@@ -4307,7 +4422,7 @@ function flyTo(dest){const s=SPOTS_BY[dest];if(s&&!spotOpen(dest))return;
     else if(dest==='see'){l=PLANES[1].land;state.visitedLake=true;}else l=PLANES[0].land;
     player.inBoat=false;player.pos.set(l.x,0,l.z);player.facing=l.f;player.y=groundY(l.x,l.z);camYaw=l.f+Math.PI;if(s||dest==='city')camPitch=0.1;updateChunks(player.pos.z,true);saveWhere();updateWorldTime();},900);
   setTimeout(()=>{ov.hidden=true;mode='play';ctxAction='x';updateCtx();
-    toast(s?'Willkommen: '+s.name+'! Du bist in '+BL[s.bl].name+'.'+(stamped(dest)?'':' Lies die Infotafel!'):dest==='city'?'Willkommen in Hafenhausen! '+(bikeAway()?'Dein Fahrrad steht noch da, wo du es abgestellt hast.':'Dein Fahrrad steht am Flugplatz.'):dest==='see'?'Willkommen am Heimat-See! Hier leben Fische wie in Deutschland. Verkaufen kannst du sie bei Fischer Hannes am Stand.':'Willkommen zurück am Amazonas!');},1900);}
+    toast(s?'Willkommen: '+s.name+'! Du bist '+ortVon(s).in+'.'+(stamped(dest)?'':' Lies die Infotafel!'):dest==='city'?'Willkommen in Hafenhausen! '+(bikeAway()?'Dein Fahrrad steht noch da, wo du es abgestellt hast.':'Dein Fahrrad steht am Flugplatz.'):dest==='see'?'Willkommen am Heimat-See! Hier leben Fische wie in Deutschland. Verkaufen kannst du sie bei Fischer Hannes am Stand.':'Willkommen zurück am Amazonas!');},1900);}
 
 /* ---- Reusen im Wasser ---- */
 const trapMeshes=[];
@@ -4720,7 +4835,7 @@ function loop(){
   {const fd=focusZ<DE.zone,meer=cityBuilt&&focusZ<SEA.z0+30; // am Fluss sieht man weiter, auf dem Meer noch weiter (vom Hafen bis zur Insel)
     scene.fog.near=meer?120:fd?70:45;scene.fog.far=meer?420:fd?260:150;
     const cf=meer?450:400;if(camera.far!==cf){camera.far=cf;camera.updateProjectionMatrix();}}
-updateFoam(dt,t);updateTraps(t);updateDeShip(dt);updatePeople(dt,t);rapidSound(player.pos.x,player.pos.z);
+updateFoam(dt,t);updateTraps(t);updateDeShip(dt);updateDeSpin(dt,t);updatePeople(dt,t);rapidSound(player.pos.x,player.pos.z);
   if(mode==='play'){updateTram(dt);updatePlayer(dt,t);updateFishing(dt,t);updateTow(dt,t);
     slowT+=dt;if(slowT>0.2){slowT=0;updateCtx();updateTip();drawMini();}
     whereT+=dt;if(whereT>3){whereT=0;saveWhere();}}
@@ -4810,6 +4925,8 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
   tipps:()=>TIPPS_STADT.map(tippText), // alle Tipps der Nachbarn, so wie sie heute klingen
   begehbar:(x,z)=>walkable(x,z), // kann man an (x,z) stehen? (an Land, kein Baum, kein Haus)
   reuse:(home,n)=>Array.from({length:n},()=>trapFish(home).id),
+  // Flussplatz id bauen (auch wenn er noch nicht freigespielt ist) und dort bei (x,z) hinstellen, Blick nach f
+  platz(id,x,z,f){if(!buildSpot(id))return false;f=Number.isFinite(f)?f:0;window.__test.warp(x,z,f);camYaw=f+Math.PI;camPitch=0.1;updateChunks(z,true);return true;},
   // jeden Flussplatz bauen: wie hoch stehen Hannes und die Infotafel? (unter 0 = im Wasser)
   ufer(){const was=curSpot&&curSpot.id,fa=state.flussAt,r=SPOTS.map(s=>{buildSpot(s.id);return {id:s.id,hannes:heightAt(hannes.x,hannes.z),tafel:heightAt(deBoard.x,deBoard.z)};});if(was)buildSpot(was);state.flussAt=fa;return r;}};
 player.root.position.set(player.pos.x,player.y,player.pos.z);
