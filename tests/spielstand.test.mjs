@@ -985,8 +985,8 @@ test('Europa: Stempel in Wien öffnet Ungarn und zeigt „Neues Land“', async 
   assert.match(text, /Neues Land: Ungarn/);
   assert.match(text, /Donau in Budapest/);
   assert.equal((await weg(page)).fluss['at-donau'].s, true);
-  await page.click('#card button:has-text("Weiter"), #card .btns button');
-  await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 }).catch(() => {});
+  await page.click('#card button:has-text("Weiter angeln")'); // der Knopf der Stempel-Karte
+  await page.locator('#modal').waitFor({ state: 'hidden', timeout: 5000 });
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -2179,6 +2179,7 @@ test('Verkehr: Truck steht auf dem Rad und kann trotzdem wegfahren', async () =>
 
 // Nachbarn in Hafenhausen: Namen, reden (+1 pro Tag), Aufgaben (Fisch bringen: 2 × Preis + 10 Ludins, +3 Freundschaft)
 const SAMSTAG = '2026-10-31T10:00:00+01:00'; // Samstagvormittag: fast alle sind unterwegs, auch die Kinder
+const SAMSTAG_TAG = SAMSTAG.slice(0, 10); // der Tag der Spieluhr in diesen Tests (aus SAMSTAG, nicht von Hand)
 function fischPreis(id) {
   const html = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
   const m = html.match(new RegExp("\\{id:'" + id + "'[^}]*price:(\\d+)"));
@@ -2194,15 +2195,19 @@ async function stadtSeite(extra, iso = SAMSTAG, fest = false) {
   return { ctx, page, errors };
 }
 // zu Mensch k gehen (1,5 m vor ihn auf seinen Weg) und „Reden“ antippen. Er läuft, darum schnell klicken (solange die Karte offen ist, bleibt er stehen).
+// Der Klick selbst kann lange dauern: im Hafen malt der Browser ohne Grafikkarte so langsam, dass ein Klick über 2 s braucht.
+// Läuft die Zeit ab, ist das Gespräch trotzdem schon offen. Darum großzügig warten und vor jedem neuen Versuch nachsehen, ob die Karte schon da ist.
+const redeOffen = page => page.locator('#card h2:has-text("💬")').isVisible();
 async function redeMit(page, k) {
   for (let tries = 0; tries < 6; tries++) {
+    if (await redeOffen(page)) return;
     await page.waitForFunction(k => window.__test.nachbar(k).sichtbar, k, { timeout: 20000 });
     const p = await page.evaluate(k => window.__test.nachbar(k), k);
     const l = Math.hypot(p.ziel.x - p.x, p.ziel.z - p.z) || 1, d = Math.min(1.5, l);
     await page.evaluate(([x, z]) => window.__test.warp(x, z), [p.x + (p.ziel.x - p.x) / l * d, p.z + (p.ziel.z - p.z) / l * d]);
     try {
-      await page.locator('#btnCtx:has-text("💬 Reden mit")').click({ timeout: 2000 });
-      await page.locator('#card h2:has-text("💬")').waitFor({ timeout: 2000 });
+      await page.locator('#btnCtx:has-text("💬 Reden mit")').click({ timeout: 15000 });
+      await page.locator('#card h2:has-text("💬")').waitFor({ timeout: 5000 });
       return;
     } catch { /* er ist schon weitergelaufen: noch einmal hingehen */ }
   }
@@ -2225,7 +2230,7 @@ test('Nachbarn: reden, Aufgabe, Fisch bringen, Belohnung', async () => {
   assert.equal(s.aufgaben.length, 1);
   const A = s.aufgaben[0];
   assert.equal(A.n, 'n0');
-  assert.match(A.day, /^2026-10-31$/);
+  assert.equal(A.day, SAMSTAG_TAG);
   assert.ok(['hering', 'makrele', 'scholle', 'hornhecht', 'rotauge', 'rotfeder', 'barsch', 'karausche', 'doebel', 'schleie', 'karpfen', 'forelle', 'zander', 'hecht'].includes(A.fish), A.fish);
   assert.equal(s.nachbarn.n0.f, 1, 'erstes Gespräch heute: +1');
   // noch einmal fragen: keine zweite Aufgabe von derselben Person
@@ -2274,7 +2279,7 @@ test('Nachbarn: einmal pro Tag +1', async () => {
   await redeMit(page, 0);
   const s = await weg(page);
   assert.equal(s.nachbarn.n0.f, 1);
-  assert.equal(s.nachbarn.n0.talk, '2026-10-31');
+  assert.equal(s.nachbarn.n0.talk, SAMSTAG_TAG);
   assert.deepEqual(errors, []);
   await ctx.close();
 });
@@ -2343,7 +2348,7 @@ test('Nachbarn: Bester Freund schenkt einmal die Mütze', async () => {
   assert.match(await page.textContent('#card'), /❤️❤️❤️/, 'drei Herzen: Bester Freund');
   const s = await weg(page);
   assert.equal(s.clothes.muetze, true);
-  assert.equal(s.nachbarn.n0.gift, '2026-10-31');
+  assert.equal(s.nachbarn.n0.gift, SAMSTAG_TAG);
   assert.equal(s.nachbarn.n0.f, 21);
   assert.ok(s.baits.frucht === 3 || (s.ludins >= 10 && s.ludins <= 30), 'dazu Früchte oder Ludins');
   await page.click('#card button:has-text("Tschüss!")');
@@ -3109,7 +3114,7 @@ test('Klarere Texte: Nachbar-Karte zeigt, wie viele Herzen bis Freund fehlen', a
   assert.equal((await page.locator('#card p.small').first().textContent()).trim(), '❤️ Bekannt · noch 2 Herzen bis Freund');
   assert.deepEqual(errors, []);
   await ctx.close();
-  ({ ctx, page, errors } = await stadtSeite({ nachbarn: { n0: { f: 30, talk: '2026-10-31', gift: '2026-10-31' } } }));
+  ({ ctx, page, errors } = await stadtSeite({ nachbarn: { n0: { f: 30, talk: SAMSTAG_TAG, gift: SAMSTAG_TAG } } }));
   await redeMit(page, 0);
   assert.equal((await page.locator('#card p.small').first().textContent()).trim(), '❤️❤️❤️ Bester Freund');
   assert.deepEqual(errors, []);

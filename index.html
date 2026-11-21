@@ -4935,8 +4935,6 @@ if(navigator.webdriver===true)window.__test={warp(x,z,f){player.pos.set(x,0,z);i
   tipps:()=>TIPPS_STADT.map(tippText), // alle Tipps der Nachbarn, so wie sie heute klingen
   begehbar:(x,z)=>walkable(x,z), // kann man an (x,z) stehen? (an Land, kein Baum, kein Haus)
   reuse:(home,n)=>Array.from({length:n},()=>trapFish(home).id),
-  // Flussplatz id bauen (auch wenn er noch nicht freigespielt ist) und dort bei (x,z) hinstellen, Blick nach f
-  platz(id,x,z,f){if(!buildSpot(id))return false;f=Number.isFinite(f)?f:0;window.__test.warp(x,z,f);camYaw=f+Math.PI;camPitch=0.1;updateChunks(z,true);return true;},
   // jeden Flussplatz bauen: wie hoch stehen Hannes und die Infotafel? (unter 0 = im Wasser)
   ufer(){const was=curSpot&&curSpot.id,fa=state.flussAt,r=SPOTS.map(s=>{buildSpot(s.id);return {id:s.id,hannes:heightAt(hannes.x,hannes.z),tafel:heightAt(deBoard.x,deBoard.z)};});if(was)buildSpot(was);state.flussAt=fa;return r;}};
 player.root.position.set(player.pos.x,player.y,player.pos.z);
