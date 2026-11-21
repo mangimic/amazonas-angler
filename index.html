@@ -3343,7 +3343,13 @@ const LINKS=[
  ['sn-elbe','bb-spree','Spree','Die Spree entspringt in Sachsen.'],
  ['bb-spree','be-spree','Spree','Die Spree fließt vom Spreewald nach Berlin.'],
  ['be-spree','st-elbe','Havel','Die Havel fließt von Berlin zur Elbe.'],
- ['be-spree','mv-elbe','Havel','Die Havel kommt aus Mecklenburg-Vorpommern.']];
+ ['be-spree','mv-elbe','Havel','Die Havel kommt aus Mecklenburg-Vorpommern.'],
+ // Europa: die Flüsse führen über die Grenze
+ ['bw-rhein','ch-rhein','Rhein','Der Rhein kommt aus der Schweiz. Flussaufwärts liegt der Rheinfall.'],
+ ['nw-rhein','nl-rhein','Rhein','Der Rhein fließt in die Niederlande und dort in die Nordsee.'],
+ ['by-donau','at-donau','Donau','Hinter Passau fließt die Donau nach Österreich.'],
+ ['at-donau','hu-donau','Donau','Die Donau fließt von Wien weiter nach Ungarn.'],
+ ['sn-elbe','cz-moldau','Elbe','Die Elbe kommt aus Tschechien. Dort fließt die Moldau in die Elbe.']];
 const START_SPOTS=['bw-neckar','bw-rhein','bw-donau']; // Baden-Württemberg: hier geht es los
 const STAMP_FISH=3,STAMP_LUDINS=25;
 
@@ -4388,7 +4394,11 @@ function showGermany(mode){
     const bls=[...new Set(de.filter(s=>spotOpen(s.id)).map(s=>s.bl))];
     if(here==='de'&&curSpot&&bls.includes(curSpot.bl))bls.unshift(bls.splice(bls.indexOf(curSpot.bl),1)[0]);
     bls.forEach(bl=>{side.appendChild(el('span','flybl',esc(BL[bl].name)));
-      de.filter(s=>s.bl===bl&&spotOpen(s.id)).forEach(s=>go((stamped(s.id)?'🏅 ':'🌊 ')+s.name+(here==='de'&&curSpot===s?' (hier bist du)':''),s.id,here==='de'&&curSpot===s));});}
+      de.filter(s=>s.bl===bl&&spotOpen(s.id)).forEach(s=>go((stamped(s.id)?'🏅 ':'🌊 ')+s.name+(here==='de'&&curSpot===s?' (hier bist du)':''),s.id,here==='de'&&curSpot===s));});
+    // Europa: offene Plätze im Ausland
+    const eu=SPOTS.filter(s=>s.land&&spotOpen(s.id));
+    if(eu.length){side.appendChild(el('h3','maphead','Europa'));
+      eu.forEach(s=>go((stamped(s.id)?'🏅 ':'🌊 ')+s.name+' · '+LAENDER[s.land].name+(here==='de'&&curSpot===s?' (hier bist du)':''),s.id,here==='de'&&curSpot===s));}}
   else{side.appendChild(el('p',null,atDE()&&curSpot?'Du bist am Fluss <b>'+esc(curSpot.river)+'</b> <b>'+esc(ortVon(curSpot).in)+'</b>.'+(curSpot.land?'':' Der rote Ring zeigt, wo.'):'Mit dem Flugzeug ✈️ fliegst du zu den Flüssen.'));
     [['•','Landeshauptstadt'],['🔴','Berlin, die Hauptstadt von Deutschland'],['〰️','Flüsse'],['🎣','Angelplatz, offen'],['🏅','Stempel geschafft'],['🔒','Noch nicht freigespielt']].forEach(([i,t])=>side.appendChild(el('span',null,i+' '+t)));}
   card.appendChild(el('p','small','Kartendaten: Natural Earth (gemeinfrei).'));

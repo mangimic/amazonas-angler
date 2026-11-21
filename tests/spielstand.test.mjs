@@ -880,7 +880,7 @@ test('Europa: Deutschland-Karte bleibt bei 16 Bundesländern und 18 Plätzen', a
   let text = await page.textContent('#card');
   assert.match(text, /von 16/);
   assert.match(text, /von 18/);
-  assert.equal(await page.locator('[data-dest="ch-rhein"]').count(), 0, 'die Schweiz kommt erst mit Task 2 in die Liste');
+  assert.equal(await page.locator('[data-dest="ch-rhein"]').count(), 1, 'der Stempel in Breisach öffnet die Schweiz (Europa-Liste)');
   // mitten auf die Karte tippen geht ohne Fehler
   const box = await page.locator('#deMap').boundingBox();
   await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
@@ -888,13 +888,12 @@ test('Europa: Deutschland-Karte bleibt bei 16 Bundesländern und 18 Plätzen', a
   assert.deepEqual(errors, []);
   await ctx.close();
   // am Platz in der Schweiz: die Deutschland-Karte geht auf, ohne roten Ring und ohne Absturz
-  // (ohne LINKS ist der Platz noch nicht offen, darum baut ihn die Test-Hilfe __test.platz)
   const b = await newPage();
-  await seed(b.page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+  await seed(b.page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [],
+    fluss: { 'bw-rhein': { f: ['barbe', 'nase', 'doebel'], q: true, s: true, r: true } }, flussAt: 'ch-rhein',
+    where: landeplatz(schweiz, 10, -13.5) }) });
   await startGame(b.page);
   await b.page.click('#btnGo');
-  const l = landeplatz(schweiz, 10, -13.5);
-  assert.equal(await b.page.evaluate(l => window.__test.platz('ch-rhein', l.x, l.z), l), true);
   await b.page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
   await b.page.click('#btnCtx');
   await b.page.locator('#deMap').waitFor();
@@ -910,11 +909,12 @@ test('Europa: Hannes grüßt in der Landessprache, Schild und Tafel nennen das L
   for (const [id, gruss, land, hs] of [['ch-rhein', 'Grüezi', 'Schweiz', 'Bern'], ['hu-donau', 'Jó napot', 'Ungarn', 'Budapest']]) {
     const s = spots.find(x => x.id === id);
     const { ctx, page, errors } = await newPage();
-    await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [] }) });
+    const nachbar = id === 'ch-rhein' ? 'bw-rhein' : 'at-donau';
+    await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [],
+      fluss: { [nachbar]: { f: ['barbe', 'nase', 'doebel'], q: true, s: true, r: true } }, flussAt: id,
+      where: landeplatz(s, -6, -12.5) }) }); // neben dem Stand von Hannes
     await startGame(page);
     await page.click('#btnGo');
-    const l = landeplatz(s, -6, -12.5); // neben dem Stand von Hannes
-    assert.equal(await page.evaluate(([id, l]) => window.__test.platz(id, l.x, l.z), [id, l]), true);
     await page.locator('#btnCtx:has-text("Fischer Hannes")').waitFor({ timeout: 20000 });
     await page.click('#btnCtx');
     await page.locator('#card h2:has-text("Fischer Hannes")').waitFor();
@@ -934,6 +934,104 @@ test('Europa: Hannes grüßt in der Landessprache, Schild und Tafel nennen das L
     assert.deepEqual(errors, []);
     await ctx.close();
   }
+});
+
+test('Europa: ohne Stempel kein Ausland, Stempel in Breisach öffnet die Schweiz', async () => {
+  const rhein = flussplaetze().find(s => s.id === 'bw-rhein');
+  const oeffnen = async (fluss) => {
+    const { ctx, page, errors } = await newPage();
+    await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], fluss, flussAt: 'bw-rhein',
+      where: landeplatz(rhein, 10, -13.5) }) });
+    await startGame(page);
+    await page.click('#btnGo');
+    await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+    await page.click('#btnCtx');
+    await page.locator('#deMap').waitFor();
+    const n = async id => page.locator('[data-dest="' + id + '"]').count();
+    return { ctx, errors, n };
+  };
+  let o = await oeffnen({});
+  for (const id of ['ch-rhein', 'nl-rhein', 'at-donau', 'hu-donau', 'cz-moldau']) assert.equal(await o.n(id), 0, id + ' ist noch zu');
+  assert.deepEqual(o.errors, []);
+  await o.ctx.close();
+  o = await oeffnen({ 'bw-rhein': { f: ['barbe', 'nase', 'doebel'], q: true, s: true, r: true } });
+  assert.equal(await o.n('ch-rhein'), 1, 'die Schweiz ist offen');
+  for (const id of ['nl-rhein', 'at-donau', 'hu-donau', 'cz-moldau']) assert.equal(await o.n(id), 0, id + ' ist noch zu');
+  assert.match(await o.ctx.pages()[0].textContent('#card'), /Europa/);
+  assert.deepEqual(o.errors, []);
+  await o.ctx.close();
+});
+
+test('Europa: Stempel in Wien öffnet Ungarn und zeigt „Neues Land“', async () => {
+  const wien = flussplaetze().find(s => s.id === 'at-donau');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [],
+    fluss: { 'bw-donau': { f: [], q: false, s: false, r: false }, 'by-donau': { f: ['barbe', 'nase', 'doebel'], q: true, s: true, r: true },
+      'at-donau': { f: wien.fish.slice(0, 3), q: false, s: false, r: true } }, flussAt: 'at-donau',
+    where: { x: -2.8, z: -1800 - wien.hw - 9, f: 0, boat: false } }) }); // vor der Infotafel
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Infotafel")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#card h2:has-text("Donau in Wien")').waitFor();
+  await page.click('#btnRiddle');
+  for (const q of wien.q) {
+    await page.locator('#card .qq', { hasText: q.q }).waitFor();
+    await page.click(`#card button.qa:text-is("${q.a}")`);
+    await page.click('#card button:has-text("Weiter")');
+  }
+  await page.locator('#card h2:has-text("Fluss-Stempel")').waitFor();
+  const text = await page.textContent('#card');
+  assert.match(text, /Neues Land: Ungarn/);
+  assert.match(text, /Donau in Budapest/);
+  assert.equal((await weg(page)).fluss['at-donau'].s, true);
+  await page.click('#card button:has-text("Weiter"), #card .btns button');
+  await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 }).catch(() => {});
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Europa: im Fliegen-Modus am Auslands-Platz steht „(hier bist du)“, Prag zum Hinfliegen und Neuladen', async () => {
+  const spots = flussplaetze(), elbe = spots.find(s => s.id === 'sn-elbe'), prag = spots.find(s => s.id === 'cz-moldau');
+  const { ctx, page, errors } = await newPage();
+  await seed(page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [],
+    fluss: { 'st-elbe': { f: ['barbe', 'nase', 'doebel'], q: true, s: true, r: true }, // öffnet Sachsen
+      'sn-elbe': { f: ['barbe', 'nase', 'doebel'], q: true, s: true, r: true } }, flussAt: 'sn-elbe',
+    where: landeplatz(elbe, 10, -13.5) }) });
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#deMap').waitFor();
+  const knopf = page.locator('[data-dest="cz-moldau"]');
+  assert.equal(await knopf.count(), 1);
+  assert.match(await knopf.textContent(), /Moldau in Prag · Tschechien/);
+  await knopf.click();
+  await page.waitForFunction(k => JSON.parse(localStorage.getItem(k)).flussAt === 'cz-moldau', KEY, { timeout: 15000 });
+  await page.locator('#flight').waitFor({ state: 'hidden', timeout: 15000 });
+  await page.waitForFunction(() => /in Tschechien/.test(document.querySelector('#toast').textContent), null, { timeout: 8000 });
+  const s = await weg(page);
+  assert.equal(s.flussAt, 'cz-moldau');
+  // neu laden: man steht wieder in Prag, Hannes grüßt auf Tschechisch
+  await startGame(page);
+  await page.click('#btnGo');
+  await page.waitForTimeout(500);
+  assert.ok(await page.evaluate(() => window.__test.wo().z) < -1700, 'am Flussplatz');
+  await page.evaluate(([x, z]) => window.__test.warp(x, z), [-6, -1800 - prag.hw - 12.5]);
+  await page.locator('#btnCtx:has-text("Fischer Hannes")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  assert.ok((await page.textContent('#card')).includes('Dobrý den'));
+  await page.click('#card button:has-text("Tschüss")');
+  // Fliegen-Liste am Auslands-Platz: „(hier bist du)“, gesperrt
+  await page.evaluate(([x, z]) => window.__test.warp(x, z), [10, -1800 - prag.hw - 13.5]);
+  await page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+  await page.click('#btnCtx');
+  await page.locator('#deMap').waitFor();
+  const hier = page.locator('[data-dest="cz-moldau"]');
+  assert.match(await hier.textContent(), /\(hier bist du\)/);
+  assert.equal(await hier.isDisabled(), true);
+  assert.deepEqual(errors, []);
+  await ctx.close();
 });
 
 test('Fischer Hannes am Heimat-See: Fische gleich dort verkaufen', async () => {
