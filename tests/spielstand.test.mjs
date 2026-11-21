@@ -1034,6 +1034,124 @@ test('Europa: im Fliegen-Modus am Auslands-Platz steht „(hier bist du)“, Pra
   await ctx.close();
 });
 
+// Europa-Karte: Stand am Rhein bei Breisach (gleich neben dem Flugzeug), mit den Stempeln aus fluss
+async function europaStand(fluss, flussAt = 'bw-rhein', opts) {
+  const s = flussplaetze().find(x => x.id === flussAt);
+  const p = await newPage(opts);
+  await seed(p.page, { [KEY]: JSON.stringify({ ...ALT_V1, v: 2, newsSeen: 999, bucket: [], fluss, flussAt,
+    where: landeplatz(s, 10, -13.5) }) });
+  await startGame(p.page);
+  await p.page.click('#btnGo');
+  await p.page.locator('#btnCtx:has-text("Fliegen")').waitFor({ timeout: 20000 });
+  return p;
+}
+const STEMPEL = { f: ['barbe', 'nase', 'doebel'], q: true, s: true, r: true };
+// Pixel auf der Europa-Karte für [Länge, Breite] (so, wie das Spiel sie zeichnet)
+async function euPunkt(page, lon, lat) {
+  const box = await page.locator('#euMap').boundingBox();
+  const [x, y] = await page.evaluate(([lo, la]) => window.__test.euPunkt(lo, la), [lon, lat]);
+  return [box.x + x * box.width, box.y + y * box.width];
+}
+
+test('Europa-Karte: öffnet sich von der Deutschland-Karte und zählt die Länder', async () => {
+  const { ctx, page, errors } = await europaStand({ 'bw-rhein': STEMPEL, 'ch-rhein': STEMPEL });
+  await page.click('#btnMap'); // am Flussplatz öffnet die Karte die Deutschland-Karte
+  await page.locator('#deMap').waitFor();
+  await page.click('#btnEuropa');
+  await page.locator('#euMap').waitFor();
+  const text = await page.textContent('#card');
+  assert.match(text, /Freigespielt: 1 von 5 Ländern/);
+  assert.match(text, /Fluss-Stempel: 1 von 5/);
+  assert.match(text, /Kartendaten: Natural Earth/);
+  assert.match(text, /Norden ist oben/);
+  assert.equal(await page.locator('[data-eu]').count(), 5, 'alle 5 Plätze in der Liste');
+  assert.match(await page.textContent('[data-eu="ch-rhein"]'), /🏅 Rhein am Rheinfall · Schweiz/);
+  assert.match(await page.textContent('[data-eu="hu-donau"]'), /🔒 Donau in Budapest · Ungarn/);
+  // Land antippen: Name und Hauptstadt
+  await page.mouse.click(...await euPunkt(page, 7.6, 46.75));
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Schweiz · Hauptstadt: Bern'), null, { timeout: 5000 });
+  assert.doesNotMatch(await page.textContent('#toast'), /noch nicht/);
+  await page.mouse.click(...await euPunkt(page, 20.6, 46.9));
+  await page.waitForFunction(() => document.querySelector('#toast').textContent.includes('Ungarn · Hauptstadt: Budapest · noch nicht freigespielt'), null, { timeout: 5000 });
+  // Deutschland antippen führt zur Deutschland-Karte, der Knopf auch
+  await page.mouse.click(...await euPunkt(page, 10.4, 51.3));
+  await page.locator('#deMap').waitFor();
+  await page.click('#btnEuropa');
+  await page.locator('#euMap').waitFor();
+  await page.click('#btnDeutschland');
+  await page.locator('#deMap').waitFor();
+  assert.equal(await page.locator('#euMap').count(), 0);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Europa-Karte: Platz antippen öffnet die Vorschau, im Fliegen-Modus mit Hinfliegen', async () => {
+  const { ctx, page, errors } = await europaStand({ 'by-donau': STEMPEL });
+  await page.click('#btnCtx');
+  await page.locator('#deMap').waitFor();
+  await page.click('#btnEuropa');
+  await page.locator('#euMap').waitFor();
+  assert.match(await page.textContent('#card h2'), /Wohin fliegst du/);
+  await page.click('[data-eu="at-donau"]');
+  await page.locator('#card h2:has-text("Donau in Wien")').waitFor();
+  assert.match(await page.textContent('#card'), /Land: Österreich/);
+  assert.equal(await page.locator('#btnFlyHere').count(), 1);
+  await page.click('#card button:has-text("Zurück zur Karte")'); // Auslands-Platz: zurück zur Europa-Karte
+  await page.locator('#euMap').waitFor();
+  await page.click('[data-eu="hu-donau"]');
+  await page.locator('#card h2:has-text("Donau in Budapest")').waitFor();
+  assert.match(await page.textContent('#card'), /Noch nicht freigespielt/);
+  assert.equal(await page.locator('#btnFlyHere').count(), 0);
+  await page.click('#card button:has-text("Zurück zur Karte")');
+  await page.locator('#euMap').waitFor();
+  // den Pin auf der Karte antippen geht auch
+  await page.mouse.click(...await euPunkt(page, 16.41, 48.22));
+  await page.locator('#card h2:has-text("Donau in Wien")').waitFor();
+  assert.equal(await page.locator('#btnFlyHere').count(), 1);
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Europa-Karte: am eigenen Platz kein Hinfliegen', async () => {
+  const { ctx, page, errors } = await europaStand({ 'by-donau': STEMPEL }, 'at-donau');
+  await page.click('#btnCtx');
+  await page.locator('#deMap').waitFor();
+  await page.click('#btnEuropa');
+  await page.locator('#euMap').waitFor();
+  const hier = page.locator('[data-eu="at-donau"]');
+  assert.match(await hier.textContent(), /\(hier bist du\)/);
+  await hier.click();
+  await page.locator('#card h2:has-text("Donau in Wien")').waitFor();
+  assert.equal(await page.locator('#btnFlyHere').count(), 0, 'kein Hinfliegen zum eigenen Platz');
+  assert.deepEqual(errors, []);
+  await ctx.close();
+});
+
+test('Europa-Karte: passt aufs iPad', async () => {
+  for (const [width, height] of [[820, 1180], [1180, 820]]) {
+    const { ctx, page, errors } = await europaStand({ 'bw-rhein': STEMPEL, 'by-donau': STEMPEL }, 'bw-rhein', { viewport: { width, height } });
+    await page.click('#btnMap');
+    await page.locator('#deMap').waitFor();
+    await page.click('#btnEuropa');
+    await page.locator('#euMap').waitFor();
+    await page.locator('#euMap').scrollIntoViewIfNeeded();
+    const box = await page.locator('#euMap').boundingBox(), card = await page.locator('#card').boundingBox();
+    const wo = width + '×' + height + ': ';
+    assert.ok(box.width > 300, wo + 'die Karte ist groß genug');
+    assert.ok(box.x >= card.x && box.x + box.width <= card.x + card.width + 0.5, wo + 'Karte liegt in der Karte (Card)');
+    assert.ok(box.x >= 0 && box.x + box.width <= width + 0.5, wo + 'Karte liegt im Fenster (Breite)');
+    assert.ok(box.y >= -0.5 && box.y + box.height <= height + 0.5, wo + 'Karte liegt im Fenster (Höhe)');
+    const breit = await page.evaluate(() => ['html', 'body', '#modal', '#card'].map(q => { const e = document.querySelector(q); return Math.max(0, e.scrollWidth - e.clientWidth); }));
+    assert.deepEqual(breit, [0, 0, 0, 0], wo + 'keine Scrollleiste zur Seite');
+    for (const sel of ['#btnDeutschland', '[data-eu="ch-rhein"]', '#card .btns button:has-text("Fertig")']) {
+      const b = await page.locator(sel).boundingBox();
+      assert.ok(b.height >= 60, wo + sel + ' ist mindestens 60 px hoch');
+    }
+    assert.deepEqual(errors, []);
+    await ctx.close();
+  }
+});
+
 test('Fischer Hannes am Heimat-See: Fische gleich dort verkaufen', async () => {
   const TAG = '2026-06-21'; // festes Datum: der Tagesfisch (zahlt doppelt) hängt vom Datum ab
   const { ctx, page, errors } = await startZeitSeite(TAG + 'T12:00:00+02:00');

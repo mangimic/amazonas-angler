@@ -130,3 +130,15 @@ Entwicklungsumgebung nicht abrufbar. Darum vorsichtig formuliert („etwa“, �
 **Wahrzeichen in 3D** (`LOOKS`): vereinfacht und kleiner als in echt (Riesenrad, Parlament, Brückentürme). Auf dem großen Felsen im Rheinfall
 weht in echt eine Schweizer Fahne (Schwäbische Zeitung „Der Rheinfall ist alles andere als ein Reinfall“, https://www.schwaebische.de/panorama/der-rheinfall-ist-alles-andere-als-ein-reinfall-349278); im Spiel auch. Für den Fluss-Stempel gibt es an jedem Platz mindestens drei häufige Fische
 (z. B. Rotauge, Barsch, Barbe, Brachse, Döbel, Karpfen).
+
+### Europa-Karte (`EUMAP`, `showEuropa`)
+| Was auf der Karte | Beleg |
+|---|---|
+| Grenzen der Länder (Deutschland, Schweiz, Niederlande, Österreich, Ungarn, Tschechien und Nachbarländer) | Natural Earth, „Admin 0 – Countries“ 1:50m (`ne_50m_admin_0_countries.geojson`), gemeinfrei (https://www.naturalearthdata.com/about/terms-of-use/), GitHub-Spiegel `nvkelso/natural-earth-vector` (Ordner `geojson`) |
+| Flüsse Rhein (mit Waal, Nederrijn und Lek bis zur Nordsee), Donau, Elbe, Moldau | Natural Earth „Rivers + lake centerlines“ 1:10m (`ne_10m_rivers_lake_centerlines.geojson`; 1:50m hat keine Moldau/Vltava), gemeinfrei |
+| Seen: Bodensee, Genfer See, Balaton, IJsselmeer | Natural Earth „Lakes + Reservoirs“ 1:50m (`ne_50m_lakes.geojson`), gemeinfrei |
+| Hauptstädte Berlin, Bern, Amsterdam, Wien, Budapest, Prag (Lage gerundet) | Allgemeinwissen (Atlas); Bern als Bundesstadt siehe `ch-rhein` oben |
+
+Vorbereitet im November 2026 mit einem kleinen Python-Skript (nicht im Repo): Ausschnitt Länge 2,5–23,5 und Breite 45–55,5,
+Projektion wie bei der Deutschland-Karte (gleichabständig, Länge mal cos(50,25°)), 48 Pixel pro Breitengrad (645 × 504 Pixel),
+auf ganze Pixel gerundet und vereinfacht (Douglas-Peucker, 0,6 Pixel; Seen 0,3 Pixel). Nichts wird zur Laufzeit geladen.
