@@ -4690,8 +4690,12 @@ test('Angelina: Sticker im Fischbuch erst nach dem ersten Fang', async () => {
 });
 
 test('Angelina: NEWS v44 steht ganz oben', () => {
-  const n = newsListe()[0];
+  const n = newsListe().find(n => n.v === 44);
   assert.equal(n.v, 44);
   assert.equal(n.t, 'Riesen-Karpfen Angelina');
   assert.equal(n.ico, '🏆');
+});
+
+test('Was ist neu v45: Europa', () => {
+  assert.deepEqual(newsListe()[0], { v: 45, day: '20.11.2026', ico: '🌍', t: 'Europa', d: 'Folge den Flüssen über die Grenze! Mit einem Fluss-Stempel am Rhein, an der Donau oder an der Elbe schaltest du Länder in Europa frei.' });
 });
