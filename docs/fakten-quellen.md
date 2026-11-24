@@ -75,3 +75,70 @@ ob er nur tags oder nur nachts beißt.
 
 Größen im Spiel (`cm`) bewusst im üblichen Bereich, nicht beim Rekord: Köhler 40–90 cm, Steinbutt 30–70 cm, Roter Thun 100–250 cm
 (er kann noch viel größer werden).
+
+## Europa (v45): 5 Angelplätze im Ausland (`SPOTS` mit `land`, `LAENDER`)
+
+Gesammelt beim Einbau (Stand November 2026). Geprüft über Suchergebnisse (WebSearch); viele Seiten selbst waren aus der
+Entwicklungsumgebung nicht abrufbar. Darum vorsichtig formuliert („etwa“, „einer der größten“). Länder und Hauptstädte sind Allgemeinwissen
+(Atlas); Bern ist offiziell „Bundesstadt“, das steht auch auf der Tafel.
+
+**Grüße von Hannes** (`GRUSS`): „Grüezi“ (Deutschschweiz), „Goedendag“ (Niederländisch, „Guten Tag“), „Servus“ (Österreich, wie in Bayern),
+„Jó napot“ (Ungarisch, kurz für „Jó napot kívánok“, „Guten Tag“), „Dobrý den“ (Tschechisch, „Guten Tag“). Allgemeines Sprachwissen.
+
+### `ch-rhein` – Rhein am Rheinfall (Schweiz, Hauptstadt Bern)
+| Fakt im Spiel | Beleg |
+|---|---|
+| Bern ist die Hauptstadt, die Schweizer sagen „Bundesstadt“ | swissinfo: „Warum die Schweiz keine Hauptstadt hat“ (https://www.swissinfo.ch/ger/ungewohnliche-schweiz/warum-die-schweiz-keine-hauptstadt-hat/89021621), Bundesstadt seit 1848 (https://www.swissinfo.ch/ger/geschichte_warum-bern-vor-170-jahren-hauptstadt-der-schweiz-wurde/44572964) |
+| Rhein entspringt in den Alpen der Schweiz, fließt durch den Bodensee, dann nach Westen bis Basel, dort nach Norden | Skill `sachkunde-grundschule` (Quelle Graubünden); Hochrhein Bodensee–Basel, Rheinfall ganz auf Schweizer Gebiet: Lernhelfer „Schweizerische Eidgenossenschaft“ (https://www.lernhelfer.de/schuelerlexikon/geografie/artikel/schweizerische-eidgenossenschaft); Britannica „Rhine River“ (https://www.britannica.com/place/Rhine-River) |
+| Rheinfall etwa 150 m breit, 23 m hoch, einer der größten Wasserfälle Europas | Historisches Lexikon der Schweiz (https://hls-dhs-dss.ch/de/articles/016145), Zürich Tourismus „Rheinfall – Der grösste Wasserfall Europas“ (https://www.zuerich.com/de/besuchen/natur/rheinfall), MySwitzerland (https://www.myswitzerland.com/de-at/erlebnisse/der-rheinfall/). „Größter“ gilt nur nach Breite und Wassermenge, darum im Spiel „einer der größten“. |
+| Äschen leben hier, mögen kühles, schnell fließendes Wasser | BAFU, Fischaufstieg am Hochrhein: Strecke zwischen Kraftwerk Schaffhausen und Rheinfall ist wichtiges Laichgebiet und Larvenhabitat der Äsche (https://www.bafu.admin.ch/dam/de/sd-web/FXwEOKWm6xoe/fischaufstieg_amhochrhein.pdf); SRF Kids zur Äsche im Rhein (https://www.srf.ch/kids/srf-kids-in-der-schule-vom-aussterben-bedroht-ueberlebt-die-aesche-im-rhein) |
+| Fische: Äsche, Forelle, Barbe, Döbel, Nase, Hecht, Barsch, Rotauge | Kanton Aargau, Hochrhein: historisch Barbe, Nase, Äsche; Status-Tabelle mit Alet (Döbel), Äsche, Bachforelle, Barbe (https://www.ag.ch/umwelt-aargau/pdf/UAG_43_33.pdf); IKSR-Bericht: am Hochrhein dominieren Rotauge, Brachsen, Döbel, Flussbarsch; Rückgang von Äsche und Nase (https://www.iksr.org/fileadmin/user_upload/DKDM/Dokumente/Fachberichte/DE/rp_De_0279.pdf); Angelportal Rhein bei Schaffhausen: Barbe, Hecht, Döbel (https://www.alleangeln.de/gewaesser/rhein-schaffhausen). Kein Aal: der Rheinfall ist für Wanderfische ein Hindernis. |
+
+### `nl-rhein` – Lek bei Kinderdijk (Niederlande, Hauptstadt Amsterdam)
+| Fakt im Spiel | Beleg |
+|---|---|
+| Etwa ein Viertel des Landes liegt tiefer als das Meer, Deiche schützen es | Planet Wissen „Niederlande“ (https://www.planet-wissen.de/kultur/westeuropa/niederlande_land_und_leute/index.html), fluter (https://www.fluter.de/sites/default/files/aqua_planning.pdf). Angaben schwanken zwischen einem Viertel und knapp einem Drittel, darum „etwa ein Viertel“. |
+| Der Rhein teilt sich in mehrere Arme (Waal, Nederrijn/Lek, IJssel); der Lek fließt zur Nordsee | bpb „Das Tor zur Welt“ (https://www.bpb.de/themen/europaeische-geschichte/geschichte-im-fluss/135700/das-tor-zur-welt); IKSR „Delta Rhein“ (https://www.iksr.org/en/topics/rhine/sub-basins/delta-rhine); Wikipedia „Lek (river)“ (https://en.wikipedia.org/wiki/Lek_(river)) |
+| In Kinderdijk stehen 19 alte Windmühlen, fast 300 Jahre alt (gebaut 1738 und 1740); sie pumpten das Wasser aus den Poldern in große Speicherbecken (Boezems), von dort floss es in den Lek; UNESCO-Welterbe seit 1997 | kinderdijk.com „Windmills & pumps“ (https://kinderdijk.com/about-kinderdijk/story/windmills-pumps) und „Kinderdijk history“ (https://kinderdijk.com/about-kinderdijk/story/kinderdijk-history); Wikipedia „Kinderdijk windmills“ (https://en.wikipedia.org/wiki/Kinderdijk_windmills), National Geographic (https://www.nationalgeographic.com/travel/article/holland-kinderdijk-windmills-unesco-world-heritage-site), Austria-Forum „Kinderdijk“ (https://austria-forum.org/af/AustriaWiki/Kinderdijk) |
+| Fische: Brachse, Zander, Aal, Rotauge, Barsch, Hecht, Karpfen | WUR/Rijkswaterstaat „Vismonitoring Rijkswateren t/m 2020“: im Unterlauf dominieren Blankvoorn (Rotauge), Brasem (Brachse), Snoekbaars (Zander); Baars (Barsch) nimmt zu; Karper unter den zehn häufigsten Arten; Snoek (Hecht) in pflanzenreichen Seitengewässern (https://edepot.wur.nl/558192, https://open.rijkswaterstaat.nl/publish/pages/113507/vismonitor_rijkswateren_tm_2020_deel_i_toestand_en_trends_dl_2.pdf); Paling (Aal) mit Reusen überwacht, auch im Lek (https://open.rijkswaterstaat.nl/publish/pages/94997/jaarrapportage_passieve_vismonitoring_zoete_rijkswateren-fuik-en_zalmsteekregistraties_in_2010.pdf); Kinderstuben für Flussfische in Nederrijn und Lek (https://open.rijkswaterstaat.nl/publish/pages/37568/kraamkamers_voor_riviervissen_in_de_uiterwaardwateren_in_de_nederrijn_en_lek.pdf) |
+
+### `at-donau` – Donau in Wien (Österreich, Hauptstadt Wien)
+| Fakt im Spiel | Beleg |
+|---|---|
+| Wien ist Hauptstadt und größte Stadt Österreichs | Allgemeinwissen (Atlas) |
+| Donau kommt aus Deutschland, hinter Passau nach Österreich, von Wien weiter nach Osten in die Slowakei und nach Ungarn | Skill `sachkunde-grundschule` (Donau, 10 Länder); Britannica „Danube River“ (https://www.britannica.com/place/Danube-River) |
+| Riesenrad im Prater, über 120 Jahre alt (eröffnet 1897), etwa 65 m hoch (64,75 m) | Austria-Forum „Wiener Riesenrad“ (https://austria-forum.org/af/AustriaWiki/Wiener_Riesenrad), austria.info (https://www.austria.info/de-at/locations/riesenrad/), wien.info Fun Facts (https://www.wien.info/de/sehen-erleben/prater/riesenrad-fun-facts-356718) |
+| Barben und Nasen mögen schnell fließendes Wasser | „Im Hauptstrom dominieren die klassischen Flußfischarten (Barbe, Nase, Hasel …)“: Nationalpark Donau-Auen (https://infothek.donauauen.at/files/3_GeschichteNPDA/32_GeschichteNPDAabErricht/321_GeschichteNPDAGmbHMedien/3211_Managementplaene/32111_NOEManagementplaene/03_00580_vonaalbiszander_1999.pdf); NÖ „Vorkommen flusstypischer Fischarten“ (https://www.noe.gv.at/noe/Wasser/Vorkommen_flusstypischer_Fischarten.pdf) |
+| Fische: Barbe, Nase, Zander, Wels, Rapfen, Brachse, Döbel, Hecht, Karpfen | Wiener Fischereimanagementplan Nationalpark Donau-Auen 2022–2028 (Fangbeschränkungen für Karpfen, Zander, Hecht, Wels, Schied = Rapfen; Schonzeiten Barbe, Brachse) (https://www.ris.bka.gv.at/Dokumente/Gemeinderecht/GEMRE_WI_90101_L490_020_2022/GEMRE_WI_90101_L490_020_2022.pdf); Stadt Wien, Laichhilfen Wienfluss 2023 (Aitel = Döbel, Zander, Wels) (https://www.wien.gv.at/spezial/studien/ma45/laichhilfenwienfluss2023.pdf); „Von Aal bis Zander“ (Link oben) |
+
+### `hu-donau` – Donau in Budapest (Ungarn, Hauptstadt Budapest)
+| Fakt im Spiel | Beleg |
+|---|---|
+| Budapest entstand 1873 aus mehreren Städten (Buda, Óbuda, Pest); Buda am Westufer, Pest am Ostufer | Britannica „Budapest“ (https://www.britannica.com/place/Budapest/The-modern-city), Austria-Forum „Budapest“ (https://austria-forum.org/af/AustriaWiki/Budapest), bpb „Ein Fluss und seine Stadt“ (https://www.bpb.de/themen/europaeische-geschichte/geschichte-im-fluss/159502/ein-fluss-und-seine-stadt/) |
+| Donau kommt aus Österreich und der Slowakei, fließt durch Budapest, dann nach Süden und bis ins Schwarze Meer | Britannica „Danube River“ (Link oben); bpb (Link oben) |
+| Parlament in Pest direkt an der Donau, etwa 268 m lang, Kuppel 96 m hoch | Parlamentsbibliothek „House of Parliament“ (https://konyvtar.parlament.hu/web/visitors/house-of-parliament), Structurae (https://structurae.net/de/bauwerke/parlamentsgebaeude-budapest), Wikipedia „Hungarian Parliament Building“ (https://en.wikipedia.org/wiki/Hungarian_Parliament_Building) |
+| Fische: Wels, Zander, Karpfen, Brachse, Rapfen, Barbe, Hecht | Hungaricana (ungarischer Donauabschnitt, typisch: Sterlet, Karpfen, Hecht, Wels, Barbe, Brachse) (https://library.hungaricana.hu/en/view/VACV_Sk_04/?pg=19); Angelführer Budapest: Karpfen, Hecht, Rapfen, Wels, Zander, Brachse (https://fishingbooker.com/destinations/location/hu/budapest); ungarische Besatzzahlen 2023 für Zander, Wels, Hecht, Rapfen, Barbe, Karpfen (https://halaszat.kormany.hu/akadalymentes/download/2/5a/73000/Cikk%202024%20Halászat%20téli%20szám_végleges.pdf) |
+
+### `cz-moldau` – Moldau in Prag (Tschechien, Hauptstadt Prag)
+| Fakt im Spiel | Beleg |
+|---|---|
+| Prag liegt an der Moldau, nicht an der Elbe | Spec „Europa freischalten“, VisitCzechia (https://www.visitczechia.com/de-de/news/2025/05/n-year-of-the-vltava-river) |
+| Moldau längster Fluss Tschechiens (etwa 430 km), entspringt im Böhmerwald, fließt nach Norden, mündet bei Mělník in die Elbe; Elbe fließt weiter nach Deutschland | Britannica „Vltava River“ (https://www.britannica.com/place/Vltava-River), Wikipedia „Vltava“ (https://en.wikipedia.org/wiki/Vltava), bpb „Deutscher Fluss, tschechischer Fluss“ (https://www.bpb.de/themen/europaeische-geschichte/geschichte-im-fluss/160210/deutscher-fluss-tschechischer-fluss/); Skill `sachkunde-grundschule` (Elbe) |
+| Karlsbrücke: alte Steinbrücke, Bau ab 1357 unter Kaiser Karl IV. (fertig 1402), 30 Figuren (Heiligenstatuen), Brückentürme an beiden Enden | prague.eu „Karlsbrücke“ (https://www.prague.eu/de/objekt/orte/93/karlsbrucke), VisitCzechia „Karlsbrücke und Brückentürme“ (https://www.visitczechia.com/de-DE/things-to-do/places/landmarks/urban-architecture/c-prague-charles-bridge-and-bridge-towers), Britannica „Charles Bridge“ (https://www.britannica.com/place/Charles-Bridge) |
+| Fische: Karpfen, Wels, Zander, Hecht, Döbel, Brachse, Barbe, Rotauge, Barsch | Pražský deník (Angler in Prag: Karpfen, Schleie, Zander, Wels, Hecht) (https://prazsky.denik.cz/zpravy-region/rybar20090417/); Studie zur Kormoran-Nahrung an der Moldau: Rotauge, Brachse, Döbel, Barsch (https://bioone.org/journals/folia-zoologica/volume-60/issue-2/fozo.v60.i2.a7.2011/Winter-diet-of-great-cormorant-Phalacrocorax-carbo-on-the-River/10.25225/fozo.v60.i2.a7.2011.full); Fishbrain Moldau / Mündung der Berounka in Prag: Karpfen, Rotauge, Barsch, Brachse, Barbe (https://fishbrain.com/fishing-waters/JOJeYj3t/vltava, https://fishbrain.com/fishing-waters/SdTCrqHO/soutok-berounky-a-vltavy); Živa „Ichtyofauna pražských vod“ (https://www.ziva.avcr.cz/files/ziva/pdf/ichtyofauna-prazskych-vod-a-jeji-zmeny.pdf) |
+
+**Wahrzeichen in 3D** (`LOOKS`): vereinfacht und kleiner als in echt (Riesenrad, Parlament, Brückentürme). Auf dem großen Felsen im Rheinfall
+weht in echt eine Schweizer Fahne (Schwäbische Zeitung „Der Rheinfall ist alles andere als ein Reinfall“, https://www.schwaebische.de/panorama/der-rheinfall-ist-alles-andere-als-ein-reinfall-349278); im Spiel auch. Für den Fluss-Stempel gibt es an jedem Platz mindestens drei häufige Fische
+(z. B. Rotauge, Barsch, Barbe, Brachse, Döbel, Karpfen).
+
+### Europa-Karte (`EUMAP`, `showEuropa`)
+| Was auf der Karte | Beleg |
+|---|---|
+| Grenzen der Länder (Deutschland, Schweiz, Niederlande, Österreich, Ungarn, Tschechien und Nachbarländer) | Natural Earth, „Admin 0 – Countries“ 1:50m (`ne_50m_admin_0_countries.geojson`), gemeinfrei (https://www.naturalearthdata.com/about/terms-of-use/), GitHub-Spiegel `nvkelso/natural-earth-vector` (Ordner `geojson`) |
+| Flüsse Rhein (mit Waal, Nederrijn und Lek bis zur Nordsee), Donau, Elbe, Moldau | Natural Earth „Rivers + lake centerlines“ 1:10m (`ne_10m_rivers_lake_centerlines.geojson`; 1:50m hat keine Moldau/Vltava), gemeinfrei |
+| Seen: Bodensee, Genfer See, Balaton, IJsselmeer | Natural Earth „Lakes + Reservoirs“ 1:50m (`ne_50m_lakes.geojson`), gemeinfrei |
+| Hauptstädte Berlin, Bern, Amsterdam, Wien, Budapest, Prag (Lage gerundet) | Allgemeinwissen (Atlas); Bern als Bundesstadt siehe `ch-rhein` oben |
+
+Vorbereitet im November 2026 mit einem kleinen Python-Skript (nicht im Repo): Ausschnitt Länge 2,5–23,5 und Breite 45–55,5,
+Projektion wie bei der Deutschland-Karte (gleichabständig, Länge mal cos(50,25°)), 48 Pixel pro Breitengrad (645 × 504 Pixel),
+auf ganze Pixel gerundet und vereinfacht (Douglas-Peucker, 0,6 Pixel; Seen 0,3 Pixel). Nichts wird zur Laufzeit geladen.

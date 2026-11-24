@@ -56,6 +56,10 @@ Das Kind hat sich das Spiel ausgedacht. Seine Ideen haben Vorrang.
   so folgt man dem Fluss ins nächste Bundesland. `state.fluss` (pro Platz `f`,`q`,`s`,`r`), `state.flussAt`. **`SPOTS`-ids nie ändern.**
   12 Flussfische (`home:'fluss'`). Aal, Lachs, Stör und Huchen sind „seltene Fische“ und werden immer zurückgesetzt (`RULES` mit `selten`).
   Der Flussplatz liegt in der Welt bei z um −1800 (`DE`) und wird beim Hinfliegen neu gebaut (`buildSpot`). Kartendaten: Natural Earth (gemeinfrei).
+  **Europa** (5 Plätze im Ausland: `ch-rhein`, `nl-rhein`, `at-donau`, `hu-donau`, `cz-moldau`): ids nie ändern, neue Plätze nur **am Ende von `SPOTS`** anhängen
+  (`buildSpot` würfelt mit dem Platz-Index). Sie haben `land` statt `bl` (Tabelle `LAENDER`); Texte für Bundesland/Land und Hauptstadt über `ortVon(s)`,
+  nur Deutschland meint `deSpots()`. Freigeschaltet über `LINKS` (z. B. Stempel am Rhein in Baden-Württemberg öffnet die Schweiz).
+  Europa-Karte `showEuropa(mode)` mit `EUMAP` (Natural Earth, gemeinfrei, ins Spiel eingebaut), erreichbar über „🌍 Europa“ auf der Deutschland-Karte.
   An jedem Flussplatz und am Heimat-See (`hannesSee`) steht der Stand von **Fischer Hannes** (`buildHannes`, `showHannes`): Fische verkaufen (wie bei Rosa, `sellList`)
   und Angelsachen kaufen (Opa Tiagos Waren ohne Boote, `buyList`). Er grüßt wie im Bundesland (`GRUSS`, z. B. „Grüß Gott“, „Moin“).
 - **Stadtwelt Hafenhausen** (Angeln geht dort nur im Hafen und draußen auf dem Meer): Mit dem Flugzeug erreichbar, liegt in der Welt bei z um −3000

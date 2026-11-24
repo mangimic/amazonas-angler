@@ -5,7 +5,7 @@ on:
     branches: [main]
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04 # Playwright 1.56 kennt ubuntu-latest (26.04) noch nicht
     defaults:
       run:
         working-directory: tests

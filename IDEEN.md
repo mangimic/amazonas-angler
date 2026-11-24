@@ -40,6 +40,7 @@ Hier schreibst du auf, was als Nächstes ins Spiel soll. Fertiges abhaken.
 - [ ] Ampeln und Verkehrsregeln
 - [ ] Goldschürfen
 - [ ] Mehr Menschen in der Angelwelt
+- [ ] Fischtreppe an der Elz (Wunsch vom 20.11.2026; das Kind kennt eine echte)
 - [ ] Luxusyacht-Feinschliff: Bojen dichter am Rumpf, Nebel weich wechseln, Schnur vom Bug, seltene Fische im Museum anzeigen
 - [ ] 
 - [ ] 
